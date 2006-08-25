@@ -1,5 +1,70 @@
+ehfx.o: _mod_gwgammamatrix _mod_gwtransq _mod_gwghostint
+ehfx.o = ehfx.o $(_mod_gwgammamatrix) $(_mod_gwtransq) $(_mod_gwghostint)
+_mod_gwehfx: ehfx.o
+_mod_gwehfx = $(ehfx.o)
+
+epsinv.o: _mod_gwpolar
+epsinv.o = epsinv.o $(_mod_gwpolar)
+_mod_gwepsinv: epsinv.o
+_mod_gwepsinv = $(epsinv.o)
+
+gamma.o:
+gamma.o = gamma.o
+_mod_gwgamma: gamma.o
+_mod_gwgamma = $(gamma.o)
+
+gammamat.o: _mod_gwshortrange _mod_gwgamma _mod_simplealgebra _mod_gwlongrange
+gammamat.o = gammamat.o $(_mod_gwshortrange) $(_mod_gwgamma) $(_mod_simplealgebra) $(_mod_gwlongrange)
+_mod_gwgammamatrix: gammamat.o
+_mod_gwgammamatrix = $(gammamat.o)
+
+gammo.o: _mod_simplealgebra _mod_gwshortrange _mod_gwgamma _mod_gwlongrange
+gammo.o = gammo.o $(_mod_simplealgebra) $(_mod_gwshortrange) $(_mod_gwgamma) $(_mod_gwlongrange)
+_mod_gwgammo: gammo.o
+_mod_gwgammo = $(gammo.o)
+
+ghostint.o:
+ghostint.o = ghostint.o
+_mod_gwghostint: ghostint.o
+_mod_gwghostint = $(ghostint.o)
+
+gw_drv.o: _mod_gwselfcor _mod_gwgammo _mod_gwehfx _mod_gwepsinv _mod_gwppmreal assert.h
+gw_drv.o = gw_drv.o $(_mod_gwselfcor) $(_mod_gwgammo) $(_mod_gwehfx) $(_mod_gwepsinv) $(_mod_gwppmreal) $(assert.h)
+_mod_gwdriver: gw_drv.o
+_mod_gwdriver = $(gw_drv.o)
+
 gw_input.o: _mod_accuracy allocate.h _mod_slaterkosterdata
 gw_input.o = gw_input.o $(_mod_accuracy) $(allocate.h) $(_mod_slaterkosterdata)
 _mod_gwinput: gw_input.o
 _mod_gwinput = $(gw_input.o)
+
+long_range.o:
+long_range.o = long_range.o
+_mod_gwlongrange: long_range.o
+_mod_gwlongrange = $(long_range.o)
+
+polar.o: _mod_gwtransq
+polar.o = polar.o $(_mod_gwtransq)
+_mod_gwpolar: polar.o
+_mod_gwpolar = $(polar.o)
+
+ppm_real.o:
+ppm_real.o = ppm_real.o
+_mod_gwppmreal: ppm_real.o
+_mod_gwppmreal = $(ppm_real.o)
+
+selfcor.o: _mod_gwtransq
+selfcor.o = selfcor.o $(_mod_gwtransq)
+_mod_gwselfcor: selfcor.o
+_mod_gwselfcor = $(selfcor.o)
+
+short_range.o: _mod_gwgamma
+short_range.o = short_range.o $(_mod_gwgamma)
+_mod_gwshortrange: short_range.o
+_mod_gwshortrange = $(short_range.o)
+
+transq.o:
+transq.o = transq.o
+_mod_gwtransq: transq.o
+_mod_gwtransq = $(transq.o)
 
