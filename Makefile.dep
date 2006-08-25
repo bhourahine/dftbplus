@@ -1,0 +1,5 @@
+gw_input.o: _mod_accuracy allocate.h _mod_slaterkosterdata
+gw_input.o = gw_input.o $(_mod_accuracy) $(allocate.h) $(_mod_slaterkosterdata)
+_mod_gwinput: gw_input.o
+_mod_gwinput = $(gw_input.o)
+
