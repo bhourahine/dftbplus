@@ -28,8 +28,8 @@ ghostint.o = ghostint.o
 _mod_gwghostint: ghostint.o
 _mod_gwghostint = $(ghostint.o)
 
-gw_drv.o: _mod_gwselfcor _mod_gwgammo _mod_gwehfx _mod_gwepsinv _mod_gwppmreal assert.h
-gw_drv.o = gw_drv.o $(_mod_gwselfcor) $(_mod_gwgammo) $(_mod_gwehfx) $(_mod_gwepsinv) $(_mod_gwppmreal) $(assert.h)
+gw_drv.o: _mod_gwselfcor allocate.h _mod_gwgammo _mod_gwehfx _mod_gwepsinv _mod_gwppmreal assert.h
+gw_drv.o = gw_drv.o $(_mod_gwselfcor) $(allocate.h) $(_mod_gwgammo) $(_mod_gwehfx) $(_mod_gwepsinv) $(_mod_gwppmreal) $(assert.h)
 _mod_gwdriver: gw_drv.o
 _mod_gwdriver = $(gw_drv.o)
 

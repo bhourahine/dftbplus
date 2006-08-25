@@ -1,4 +1,5 @@
 module GWDriver
+#include "allocate.h"  
 #include "assert.h"
   use GWGammo
   use GWEpsInv
@@ -8,7 +9,7 @@ module GWDriver
   implicit none
   private
 
-  public :: gw_drv
+  public :: calculateGW
 
   
   !     Conversion hartree -> eV 
@@ -25,13 +26,64 @@ module GWDriver
 
 contains
 
-  !!!     Dimension of GW matrices
-  !!  lind(1) = 0
-  !!  do j = 1,nn 
-  !!    izpj = izp(j)
-  !!    lind(j+1) = lind(j)+lmax(izpj)
-  !!  end do
-  !!  nang = lind(nn+1)
+
+  subroutine calculateGW(nAtom, nOrb, mAngAtom, mAngSpecie, mmAng, HSqrReal, &
+      &eigen, SSqrReal, &
+      &filling, coord0, latVecs, tPeriodic, HSqrReal2, specie0, nSpecie, nEl, &
+      &q0Specie, hubbU, xtab, etab, ceri, mass, iAtomStart)
+    integer, intent(in) :: nAtom
+    integer, intent(in) :: nOrb
+    integer, intent(in) :: mAngAtom(:)
+    integer, intent(in) :: mAngSpecie(:)
+    integer, intent(in) :: mmAng
+    real(8), intent(in) :: HSqrReal(:,:)
+    real(8), intent(in) :: eigen(:)
+    real(8), intent(in) :: SSqrReal(:,:)
+    real(8), intent(in) :: filling(:)
+    real(8), intent(in) :: coord0(:,:)
+    real(8), intent(in) :: latVecs(:,:)
+    logical, intent(in) :: tPeriodic
+    real(8), intent(in) :: HSqrReal2(:,:)
+    integer, intent(in) :: specie0(:)
+    integer, intent(in) :: nSpecie
+    real(8), intent(in) :: nEl
+    real(8), intent(in) :: q0Specie(:)
+    real(8), intent(in) :: hubbU(:)
+    real(8), intent(in) :: xtab(:,:,:)
+    real(8), intent(in) :: etab(:,:,:)    
+    real(8), intent(in) :: ceri(:,:)
+    real(8), intent(in) :: mass(:)
+    integer, intent(in) :: iAtomStart(:)
+    
+    integer, allocatable :: ind(:), lind(:)
+    integer :: iAt, nAng
+    real(8) :: dacc, basis(3, 3)
+
+    ALLOCATE_(ind, (nAtom+1))
+    ind(1:nAtom) = iAtomStart(1:nAtom) - 1
+    ind(nAtom+1) = ind(nAtom) + (mAngAtom(nAtom)+1)**2
+
+    ALLOCATE_(lind, (nAtom+1))
+    lind(1) = 0
+    do iAt = 1, nAtom
+      lind(iAt+1) = lind(iAt) + mAngAtom(iAt) + 1
+    end do
+    nAng = lind(nAtom+1)
+
+    dacc = 4.0_8 * epsilon(1.0_8)
+    basis = transpose(latVecs)
+    
+    call gw_drv(nAtom, nOrb, mmAng+1, ind, HSqrReal, eigen, SSqrReal, filling, &
+        &dacc, coord0, basis, tPeriodic, HSqrReal2, specie0, mAngSpecie+1, &
+        &nSpecie, &
+        &nEl, q0Specie, hubbU, xtab, etab, ceri, mass, nAng, lind)
+
+    DEALLOCATE_(ind)
+    DEALLOCATE_(lind)
+    
+  end subroutine calculateGW
+  
+
 
 
   !=============================================================================
@@ -56,7 +108,7 @@ contains
 
 
   subroutine gw_drv(nn,ndim,ldim,ind,c,ev,s,occ,dacc,rat,basis,period,hxc,izp,&
-      &lmax,ntype,rnel,qzero,uhubb,xtab,etab,ceri,xm,nang)
+      &lmax,ntype,rnel,qzero,uhubb,xtab,etab,ceri,xm,nang,lind)
     integer, intent(in) :: nn, ndim, ldim ! ldim = mmAng+1
     integer, intent(in) :: ind(:)
     real*8, intent(in) ::  c(:,:)
