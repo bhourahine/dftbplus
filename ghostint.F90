@@ -72,7 +72,6 @@ contains
     intgh(3,9) = x(7)
     intgh(4,9) = x(7)
 
-    return
   end subroutine ghostint
 
 

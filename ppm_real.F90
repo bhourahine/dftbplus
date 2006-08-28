@@ -39,7 +39,7 @@ contains
 
     if(mode.eq.1) then
       if(abs(omega).gt.1.d-10) then
-        print *,'ppm_real: omega must be zero for mode = 1'
+        write(*,*) 'ppm_real: omega must be zero for mode = 1'
       endif
       CALL DSYEV('V','U',nang,wmv,nAng,ev,wrk,3*nAng,info)
       do m = 1,nang
@@ -52,7 +52,7 @@ contains
       enddo
     else
       if(dreal(omega).gt.1.d-10) then
-        print *,'ppm_real: omega must be pure imaginary for mode = 2'
+        write(*,*) 'ppm_real: omega must be pure imaginary for mode = 2'
       endif
       iomega = dimag(omega)
       CALL DSYEV('N','U',nang,wmv,nAng,ev,wrk,3*nAng,info)
@@ -65,7 +65,7 @@ contains
         endif
       enddo
     endif
-    return
+
   end subroutine ppm_real
 
 

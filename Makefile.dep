@@ -38,8 +38,8 @@ gw_input.o = gw_input.o $(_mod_accuracy) $(allocate.h) $(_mod_slaterkosterdata)
 _mod_gwinput: gw_input.o
 _mod_gwinput = $(gw_input.o)
 
-long_range.o:
-long_range.o = long_range.o
+long_range.o: _mod_message
+long_range.o = long_range.o $(_mod_message)
 _mod_gwlongrange: long_range.o
 _mod_gwlongrange = $(long_range.o)
 
@@ -58,8 +58,8 @@ selfcor.o = selfcor.o $(_mod_gwtransq)
 _mod_gwselfcor: selfcor.o
 _mod_gwselfcor = $(selfcor.o)
 
-short_range.o: _mod_gwgamma
-short_range.o = short_range.o $(_mod_gwgamma)
+short_range.o: _mod_gwgamma _mod_message
+short_range.o = short_range.o $(_mod_gwgamma) $(_mod_message)
 _mod_gwshortrange: short_range.o
 _mod_gwshortrange = $(short_range.o)
 

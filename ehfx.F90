@@ -47,7 +47,7 @@ contains
   !=============================================================================
   subroutine ehfx (nn,ndim,nang,ind,izp,rat,basis,period, &
       & c,hxc,stc,occ,dacc,qij,gamma,ehf,exc,  &
-      & qzero,uhubb,xtab,etab,xm,ntype,lmax,ldim)
+      & qzero,uhubb,xtab,etab,xm,ntype,lmax,morb, qq)
 
     !     Frank-Condon Integrals for carbon
     real*8 g1,f2
@@ -55,17 +55,18 @@ contains
     parameter (f2 = 0.173720d0)
 
     !     Parameter
-    integer nn,ndim,nang,ind(*),izp(*), ldim
+    integer nn,ndim,nang,ind(*),izp(*), morb
     real*8  rat(3,*),basis(3,*)
     real*8  c(nDim,*),hxc(nDim,*),stc(nDim,*),occ(*),dacc
     real*8  qij(*),gamma(nAng,*),ehf(*),exc(*)
     logical period
+    real*8, intent(in) :: qq(:)
 
     !! NNDIM = Nr. of atoms
     !! nDim = Nr. of all orbitals
     !! nAng = Nr. of all shells
     !! nType = nr. of types
-    !! ldim = max nr. of orbitals per atom
+    !! morb = max nr. of orbitals per atom
 
     !     Local variables
     integer i,j,n,m,k,idm,idn,l,izpk,indl,hocc
@@ -82,17 +83,17 @@ contains
     integer ntype ,lmax(nType)
     real*8  qzero(nType)
     real*8  uhubb(nType) 
-    real*8  xtab(nType,ldim,ldim),etab(nType,ldim,ldim)
+    real*8  xtab(nType,morb,morb),etab(nType,morb,morb)
     real*8  xm(nType)
 
     !      indo = .false.
     indo = .true.
 
 
-    print *,'=====> XC'
+    write(*,*) '=====> XC'
     ! ======================== XC part ========================================
     !     Calc <psi_i|v_xc|psi_i>; wrk1 = hxc*c
-    call DSYMM('L','U',ndim,ndim,1.d0,hxc,nDim,c,nDim,0.d0,wrk1,nDim)
+    call DSYMM('L','L',ndim,ndim,1.d0,hxc,nDim,c,nDim,0.d0,wrk1,nDim)
     do i = 1,ndim
       exc(i) = 0.d0 
       do m = 1,ndim
@@ -103,13 +104,13 @@ contains
     !     SCC correction to <psi_i|v_xc|psi_i>
     !     dvxc_i = q^i_A * gamma(U_xc)_AB * dq_B; U_xc = U_H - U_ee
     !     Read charges from file
-    open(55,file='CHR.DAT')
-    do i = 1,5
-      read(55,*)
-    end do
+    !open(55,file='CHR.DAT')
+    !do i = 1,5
+    !  read(55,*)
+    !end do
     do i = 1,nn
-      read(55,*) k,deltq(k)
-      deltq(k) = deltq(k)-qzero(izp(k))
+      !read(55,*) k,deltq(k)
+      deltq(i) = qq(i)-qzero(izp(i))
     end do
 
     !     Calculate ERI mean over angular momentum
@@ -132,7 +133,7 @@ contains
       end do
     end do
 
-    print *,'=====> SCC-XC'
+    write(*,*) '=====> SCC-XC'
     !     shift = gxc*deltq
     call DSYMV('L',nn,1.d0,gxc,nn,deltq,1,0.d0,shift,1)
     do i = 1,ndim
@@ -148,7 +149,7 @@ contains
         exc(i) = exc(i) +  tmp*shift(k)
       end do
     end do
-    print *,'=====> HF'
+    write(*,*) '=====> HF'
     ! 
     ! ======================== X part ======================================== 
     !     Calculate exchange energy per orbital CNDO
@@ -173,7 +174,7 @@ contains
     end do
 
 
-    print *,'=====> INDO'
+    write(*,*) '=====> INDO'
     !     Add one-center exchange terms
 
     if(indo) then
@@ -236,7 +237,6 @@ contains
         end do
       end if
     end if
-    return
   end subroutine ehfx
 
 end module GWEhfx

@@ -35,7 +35,7 @@ contains
     integer, intent(in) :: nType
 
     if(dreal(omega).gt.1.d-10) then
-      print *,'polar: omega must be pure imaginary!'
+      write(*,*) 'polar: omega must be pure imaginary!'
       stop
     endif
     iomega = dimag(omega)
@@ -64,7 +64,7 @@ contains
         plr(n,m) =  plr(m,n)
       enddo
     enddo
-    return
+
   end subroutine polar
 
 end module GWPolar

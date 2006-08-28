@@ -48,7 +48,7 @@ contains
         enddo
       enddo
     enddo
-    return
+
   end subroutine transq
 
 

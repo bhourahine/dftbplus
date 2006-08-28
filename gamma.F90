@@ -51,7 +51,7 @@ contains
         gval= rrc-val12-val21
       ENDIF
     ENDIF
-    RETURN
+
   END subroutine gam12
 
 
@@ -98,7 +98,7 @@ contains
         gdrv= -rrc3-(drv12+drv21)*rrc
       ENDIF
     ENDIF
-    RETURN
+
   END subroutine gam121
 
 
@@ -128,7 +128,7 @@ contains
     fac= (b6-3*a2*b4)*drc2*drc*rrc
     gval= efac*(0.5*a*b4*drc2-fac)
     gdrv= -a*gval+efac*fac*rrc
-    RETURN
+
   END subroutine gamsub
 
 end module GWGamma

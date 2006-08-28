@@ -86,7 +86,6 @@ contains
       enddo
     enddo
 
-    return
   end subroutine selfcor
 
 

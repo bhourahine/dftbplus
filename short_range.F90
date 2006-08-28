@@ -1,5 +1,6 @@
 module GWShortRange
   use GWGamma
+  use Message
   implicit none
   private
 
@@ -80,7 +81,7 @@ contains
     END DO
 
     IF(abs(lastshell) .gt. tol) THEN
-      STOP "tolerance in subroutine short not reached."
+      call error("Tolerance in subroutine short not reached.")
     END IF
     value = result 
 
@@ -166,7 +167,7 @@ contains
     END DO
 
     IF(abs(lastshell) .gt. tol) THEN
-      STOP "tolerance in subroutine short1 not reached."
+      call error("tolerance in subroutine short1 not reached.")
     END IF
 
   end subroutine SHORTRANGE1

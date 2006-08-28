@@ -1,4 +1,5 @@
 module GWLongRange
+  use Message
   implicit none
   private
 
@@ -76,7 +77,7 @@ contains
 
     !       stop if tolerance not reached
     IF ( abs(lastshell)  .gt. tol ) THEN
-      STOP "tolerance in phi not reached in reciprocal space"     
+      call error("Tolerance in phi not reached in reciprocal space.")
     END IF
 
     reciprocal=(4.0*MPI*reciprocal)/vol
@@ -117,7 +118,7 @@ contains
 
     !       stop if tolerance not reached
     IF ( abs(lastshell)  .gt. tol ) THEN
-      STOP "tolerance in phi not reached in real space"     
+      call error("Tolerance in phi not reached in real space")
     END IF
 
 
@@ -211,7 +212,7 @@ contains
 
     !       stop if tolerance not reached
     IF ( abs(lastshell)  .gt. tol ) THEN
-      STOP "tolerance in phi1 not reached in reciprocal space"
+      call error("Tolerance in phi1 not reached in reciprocal space.")
     END IF
 
     reciprocal(1)=(4.0*MPI*reciprocal(1))/vol 
@@ -258,7 +259,7 @@ contains
 
     !       stop if tolerance not reached
     IF ( abs(lastshell)  .gt. tol ) THEN
-      STOP "tolerance in phi1 not reached in real space"
+      call error("Tolerance in phi1 not reached in real space.")
     END IF
 
 
@@ -342,7 +343,6 @@ contains
         & t*(1.48851587+t*(-0.82215223+t*0.17087277)))))))))
     if (x .lt. 0.0) terfc=2.0-terfc
 
-    RETURN
   END FUNCTION terfc
 
 
@@ -497,7 +497,7 @@ contains
     END DO
 
     IF (nopt .ge. 20) THEN
-      STOP "Gmax COULD NOT BE DETERMINED IN getGRmax"
+      call error("Gmax COULD NOT BE DETERMINED IN getGRmax.")
     END IF
 
     !       now find best value of R by refining the interval [Rl,Rr]
@@ -518,7 +518,7 @@ contains
     END DO
 
     IF (nopt .ge. 20) THEN
-      STOP "Rmax COULD NOT BE DETERMINED IN getGRmax"
+      call error("Rmax COULD NOT BE DETERMINED IN getGRmax.")
     END IF
 
     Gmax = G

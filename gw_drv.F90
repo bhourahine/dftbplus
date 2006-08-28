@@ -30,7 +30,7 @@ contains
   subroutine calculateGW(nAtom, nOrb, mAngAtom, mAngSpecie, mmAng, HSqrReal, &
       &eigen, SSqrReal, &
       &filling, coord0, latVecs, tPeriodic, HSqrReal2, specie0, nSpecie, nEl, &
-      &q0Specie, hubbU, xtab, etab, ceri, mass, iAtomStart)
+      &q0Specie, hubbU, xtab, etab, ceri, mass, iAtomStart, qq, ehf, exc, ezse)
     integer, intent(in) :: nAtom
     integer, intent(in) :: nOrb
     integer, intent(in) :: mAngAtom(:)
@@ -54,7 +54,11 @@ contains
     real(8), intent(in) :: ceri(:,:)
     real(8), intent(in) :: mass(:)
     integer, intent(in) :: iAtomStart(:)
-    
+    real*8, intent(in) :: qq(:)
+    real*8, intent(out) :: ehf(:)
+    real*8, intent(out) :: exc(:)
+    real*8, intent(out) :: ezse(:)
+
     integer, allocatable :: ind(:), lind(:)
     integer :: iAt, nAng
     real(8) :: dacc, basis(3, 3)
@@ -62,7 +66,6 @@ contains
     ALLOCATE_(ind, (nAtom+1))
     ind(1:nAtom) = iAtomStart(1:nAtom) - 1
     ind(nAtom+1) = ind(nAtom) + (mAngAtom(nAtom)+1)**2
-
     ALLOCATE_(lind, (nAtom+1))
     lind(1) = 0
     do iAt = 1, nAtom
@@ -71,12 +74,13 @@ contains
     nAng = lind(nAtom+1)
 
     dacc = 4.0_8 * epsilon(1.0_8)
-    basis = transpose(latVecs)
-    
-    call gw_drv(nAtom, nOrb, mmAng+1, ind, HSqrReal, eigen, SSqrReal, filling, &
+    basis = reshape(latVecs, (/3, 3/), order=(/2, 1/))
+    call gw_drv(nAtom, nOrb, (mmAng+1)**2, mmAng+1, ind, HSqrReal, eigen, SSqrReal, &
+        & filling, &
         &dacc, coord0, basis, tPeriodic, HSqrReal2, specie0, mAngSpecie+1, &
         &nSpecie, &
-        &nEl, q0Specie, hubbU, xtab, etab, ceri, mass, nAng, lind)
+        &nEl, q0Specie, hubbU, xtab, etab, ceri, mass, nAng, lind, qq, &
+        &ehf, exc, ezse)
 
     DEALLOCATE_(ind)
     DEALLOCATE_(lind)
@@ -107,9 +111,10 @@ contains
   !============================================================================
 
 
-  subroutine gw_drv(nn,ndim,ldim,ind,c,ev,s,occ,dacc,rat,basis,period,hxc,izp,&
-      &lmax,ntype,rnel,qzero,uhubb,xtab,etab,ceri,xm,nang,lind)
-    integer, intent(in) :: nn, ndim, ldim ! ldim = mmAng+1
+  subroutine gw_drv(nn,ndim,morb,ldim, ind,c,ev,s,occ,dacc,rat,basis,period,hxc,izp,&
+      &lmax,ntype,rnel,qzero,uhubb,xtab,etab,ceri,xm,nang,lind, qq, &
+      &ehf, exc, ezse)
+    integer, intent(in) :: nn, ndim, morb, ldim ! morb = mmAng+1
     integer, intent(in) :: ind(:)
     real*8, intent(in) ::  c(:,:)
     real*8, intent(in) ::  ev(:)
@@ -132,15 +137,19 @@ contains
     real*8, intent(in) :: ceri(:,:)
     real*8, intent(in) :: xm(:)  ! Mass (for checking for ghosts)
     integer, intent(in) :: nang
+    real*8, intent(in) :: qq(:)
+    real*8, intent(out) :: ehf(:)
+    real*8, intent(out) :: exc(:)
+    real*8, intent(out) :: ezse(:)
 
     !     Local variables
     integer nel,nhel,lind(nn+1),i,j,k,l,m,n,izpj
     real*8 wij(ndim,ndim),epsi(nAng,nAng),zq(nAng),qij(nAng)
-    real*8 esc(ndim),ehf(ndim),exc(ndim),ezse(ndim)
+    real*8 esc(ndim)
     real*8 wmv(nAng,nAng),phi(nAng,nAng),gmo(nAng,nAng)
     real*8 stc(ndim,ndim),wzero(nAng,nAng)
     complex*16 omega,wq(nAng),slfc(ndim),sreno(ndim),qpcor(ndim)
-    
+
     ASSERT(size(ind) >= nn + 1)
     ASSERT(all(shape(c) == (/ ndim, ndim /)))
     ASSERT(size(ev) == ndim)
@@ -153,21 +162,22 @@ contains
     ASSERT(size(lmax) == ntype)
     ASSERT(size(qzero) == ntype)
     ASSERT(size(uhubb) == ntype)
-    ASSERT(all(shape(xtab) == (/ nn, ldim, ldim /)))
-    ASSERT(all(shape(etab) == (/ nn, ldim, ldim /)))
+    ASSERT(all(shape(xtab) == (/ ntype, morb, morb /)))
+    ASSERT(all(shape(etab) == (/ ntype, morb, morb /)))
     ASSERT(all(shape(ceri) == (/ ntype, ldim /)))
     ASSERT(size(xm) == ntype)
+    ASSERT(size(ehf) == ndim)
+    ASSERT(size(exc) == ndim)
+    ASSERT(size(ezse) == ndim)
 
-
-
-    print *,'===> GW part starts'
+    write(*,*) '===> GW part starts'
     nel=int(rnel)
     if(mod(nel,2).ne.0) then
-      print *,'Warning: Not a closed shell system!'
+      write(*,*) 'Warning: Not a closed shell system!'
     endif
     nhel = nel/2
     if(ev(nhel+1)-ev(nhel).lt.degtol) then
-      print *,'Detected fractional occupation!'
+      write(*,*) 'Detected fractional occupation!'
     endif
 
 
@@ -180,7 +190,7 @@ contains
     enddo
 
     !     overlap*coefficients needed in routine transq
-    call dsymm('L','U',ndim,ndim,1.0d0,s,ndim,c,ndim,0.0d0,stc,ndim)
+    call dsymm('L','L',ndim,ndim,1.0d0,s,ndim,c,ndim,0.0d0,stc,ndim)
 
     !     Get matrix of the coulomb interaction [v] (equal to gamma)
     !     Warning: this gamma is angular momentum resolved 
@@ -192,7 +202,7 @@ contains
     enddo
 
 
-    print *,'===> Epsinv 1. frequency' 
+    write(*,*) '===> Epsinv 1. frequency' 
     !     Set up plasmon-pole model, epsi = <eps>^-1, wmv = epsi*v - v  
     omega = (0.d0,0.d0)     
     call epsinv(nn,ndim,nang,gmo,stc,c,occ,dacc, &
@@ -211,7 +221,7 @@ contains
 
     call ppm_real(wmv,phi,zq,wq,nang,omega,1)
 
-    print *,'===> Epsinv 2. frequency' 
+    write(*,*) '===> Epsinv 2. frequency' 
     !     Do same thing for another testfrequecy
     omega = (0.d0,5.d-1)
     call epsinv(nn,ndim,nang,gmo,stc,c,occ,dacc, &
@@ -227,14 +237,14 @@ contains
     call ppm_real(wmv,phi,zq,wq,nang,omega,2)
     !     PPM parameters w_q and z_q are now known, phi are eigenvectors of W-v
 
-    print *,'===> X + XC'
+    write(*,*) '===> X + XC'
     !     Get hartree exchange (ehf) and DFT exchange-correlation (exc)
     call ehfx(nn,ndim,nang,ind,izp,rat,basis,period, &
         &  c,hxc,stc,occ,dacc,qij,gmo,ehf,exc, &
-    &  qzero,uhubb,xtab,etab,xm,ntype,lmax,ldim)
+    &  qzero,uhubb,xtab,etab,xm,ntype,lmax,morb, qq)
 
 
-    print *,'===> Selfcor'
+    write(*,*) '===> Selfcor'
     !     Consider energy dependence of selfenergy through renormalization
     !     Selfenergy is numerically differentiated 
     do i = 1,ndim
@@ -246,7 +256,7 @@ contains
       sreno(i) = slfc(i)
     enddo
     call DCOPY(ndim,ev,1,esc,1)
-    print *,'===> Selfcor epsilon'
+    write(*,*) '===> Selfcor epsilon'
     call selfcor(nn,ndim,nang,stc,c,occ,dacc, &
         &  qij,phi,zq,wq,ev,esc,slfc,2,lmax,izp,nType)
     do i = 1,ndim
@@ -255,21 +265,7 @@ contains
       qpcor(i) = sreno(i)*(slfc(i) +ehf(i)-exc(i))
       ezse(i)  = ev(i)+dreal(qpcor(i))
     enddo
-
-    open(45,FILE='SEL.DAT')
-    write(45,*) & 
-        & 'Orb     eps.      E_X         E_XC       E_HF       E_QP'
-    write(45,*) &
-        & '=============================================================='
-    do i = 1,ndim
-      write(45,'(1x,i4,3x,5(f8.4,4x))') i,conv*ev(i),conv*ehf(i) &
-          &  ,conv*exc(i),conv*(ev(i)-exc(i)+ehf(i)) &
-          &  ,conv*(ezse(i))
-    enddo
-    close(45)
     
-    return
-
   end subroutine gw_drv
 
 end module GWDriver

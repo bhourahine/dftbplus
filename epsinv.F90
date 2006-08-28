@@ -51,7 +51,7 @@ contains
 
 
     if(abs(dreal(omega)).gt.1.d-10) then
-      print *,'EPSINV works only for imaginary omega'
+      write(*,*) 'EPSINV works only for imaginary omega'
       stop
     endif
 
@@ -79,7 +79,6 @@ contains
     CALL DGETRF(nang,nang,epsi,nAng,ipiv,info)
     CALL DGETRI(nang,epsi,nAng,ipiv,wrk,64*nAng,info)
 
-    return
   end subroutine epsinv
 
 
