@@ -132,7 +132,11 @@ module inputdata_module
     ! set the lowest eigenvalue in the system
     logical                :: tFixLowestEi   = .false.
     real(dp)               :: FixLowestEi(2) = 0.0_dp
-
+    
+    logical                :: tOrbitalShift = .false.
+    real(dp)               :: OrbitalShift(2) = 0.0_dp
+    
+    
     logical                :: tFillKSep     = .false.
     integer                :: iDistribFn    = 0
     real(dp)               :: wvScale       = 0.0_dp

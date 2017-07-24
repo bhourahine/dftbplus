@@ -800,6 +800,15 @@ program dftbplus
           end do
         end if
 
+        if (tOrbitalShift) then
+          if (iSCCiter > 1) then
+            do iSpin = 1, nSpin
+              eigen(:,:,iSpin) = eigen(:,:,iSpin) &
+                  & + OrbitalShift(iSpin) * (0.5_dp - filling(:,:,iSpin) / real(3-nSpin,dp))
+            end do
+          end if
+        end if
+        
         call getFillingsAndBandEnergies(eigen, nEl, nSpin, tempElec, kWeight, tSpinSharedEf,&
             & tFillKSep, tFixEf, iDistribFn, Ef, filling, Eband, TS, E0)
 
@@ -1178,7 +1187,17 @@ program dftbplus
 
       energy%Eelec = energy%EnonSCC + energy%ESCC + energy%Espin &
           & + energy%ELS + energy%Edftbu + energy%Eext + energy%e3rd
-
+      
+      if (tOrbitalShift) then
+        if (nSpin < 3) then
+          do iSpin = 1, nSpin
+            energy%Eelec = energy%Eelec &
+                & + OrbitalShift(iSpin)*real(3-nSpin,dp)*sum( filling(:,:,iSpin)/real(3-nSpin,dp) &
+                & - (filling(:,:,iSpin)/real(3-nSpin,dp))**2 ) / 2.0_dp
+          end do
+        end if
+      end if
+      
       energy%atomElec(:) = energy%atomNonSCC(:) &
           & + energy%atomSCC(:) + energy%atomSpin(:) + energy%atomDftbu(:) &
           & + energy%atomLS(:) + energy%atomExt(:) + energy%atom3rd(:)

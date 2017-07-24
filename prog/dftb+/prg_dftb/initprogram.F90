@@ -177,8 +177,10 @@ module initprogram
 
   logical :: tFixLowestEi                 !* Fix the lowest eigenvalue at specified value
   real(dp) :: FixLowestEi(2)              !* set value for the bottom eigenvalue
-
-
+  
+  logical :: tOrbitalShift
+  real(dp) :: OrbitalShift(2)
+  
   logical :: tSetFillingTemp              !* Filling temp updated by MD.
   integer  :: iDistribFn = 0              !* Choice of electron distribution
                                           !* function, defaults to Fermi
@@ -778,6 +780,16 @@ contains
       FixLowestEi = 0.0_dp
     end if
 
+    OrbitalShift = 0.0_dp
+    tOrbitalShift = input%ctrl%tOrbitalShift
+    if (tOrbitalShift) then
+      if (nSpin == 4) then
+        OrbitalShift(1) = input%ctrl%OrbitalShift(1)
+      else
+        OrbitalShift(:nSpin) = input%ctrl%OrbitalShift(:nSpin)
+      end if
+    end if
+    
     tSetFillingTemp = input%ctrl%tSetFillingTemp
     tFillKSep = input%ctrl%tFillKSep
     tempAtom = input%ctrl%tempAtom
