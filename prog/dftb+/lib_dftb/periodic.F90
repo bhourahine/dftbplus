@@ -716,7 +716,8 @@ contains
   end subroutine reallocateArrays3
 
   !> Calculate indexing array and number of elements in sparse arrays like the real space overlap
-  subroutine getSparseDescriptor(iNeighbor, nNeighbor, img2CentCell, orb, iPair, sparseSize)
+  subroutine getSparseDescriptor(iNeighbor, nNeighbor, img2CentCell, species, orb, iPair, &
+      & sparseSize)
 
     !> Neighbours of each atom
     integer, intent(in) :: iNeighbor(0:,:)
@@ -727,6 +728,9 @@ contains
     !> Indexing for mapping image atoms to central cell
     integer, intent(in) :: img2CentCell(:)
 
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
@@ -737,13 +741,14 @@ contains
     integer, intent(out) :: sparseSize
 
     integer :: nAtom, mNeighbor
-    integer :: ind, iAt1, nOrb1, iNeigh1, nOrb2
+    integer :: ind, iAt1, iAt2, iSp1, iSp2, nOrb1, iNeigh1, nOrb2
 
     nAtom = size(iNeighbor, dim=2)
     mNeighbor = size(iNeighbor, dim=1)
 
     @:ASSERT(allocated(iPair))
     @:ASSERT(size(iPair, dim=2) == nAtom)
+    @:ASSERT(size(species) >= nAtom)
 
     if (mNeighbor > size(iPair, dim=1)) then
       deallocate(iPair)
@@ -752,10 +757,13 @@ contains
     end if
     ind = 0
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      iSp1 = species(iAt1)
+      nOrb1 = orb%nOrbSpecies(iSp1)
       do iNeigh1 = 0, nNeighbor(iAt1)
         iPair(iNeigh1, iAt1) = ind
-        nOrb2 = orb%nOrbAtom(img2CentCell(iNeighbor(iNeigh1, iAt1)))
+        iAt2 = img2CentCell(iNeighbor(iNeigh1, iAt1))
+        iSp2 = species(iAt2)
+        nOrb2 = orb%nOrbSpecies(iSp2)
         ind = ind + nOrb1 * nOrb2
       end do
     end do
@@ -765,8 +773,7 @@ contains
 
 
   !> Allocate (reallocate) space for the sparse hamiltonian and overlap matrix.
-  subroutine reallocateHS_1(ham, over, iPair, iNeighbor, nNeighbor, orb, &
-      &img2Centcell)
+  subroutine reallocateHS_1(ham, over, iPair, iNeighbor, nNeighbor, orb, img2Centcell, species)
 
     !> Hamiltonian
     real(dp), allocatable, intent(inout):: ham(:)
@@ -790,6 +797,9 @@ contains
     !> array mapping images of atoms to originals in the central cell
     integer, intent(in) :: img2CentCell(:)
 
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> nr. atoms in the central cell
     integer :: nAtom
 
@@ -800,7 +810,7 @@ contains
     integer :: mNeighbor
 
     integer :: ind
-    integer :: iAt1, iNeigh1, nOrb1
+    integer :: iAt1, iAt2, iSp1, iSp2, iNeigh1, nOrb1
 
     nAtom = size(iNeighbor, dim=2)
     mNeighbor = size(iNeighbor, dim=1)
@@ -820,10 +830,13 @@ contains
     nElem = 0
     ind = 0
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      iSp1 = species(iAt1)
+      nOrb1 = orb%nOrbSpecies(iSp1)
       do iNeigh1 = 0, nNeighbor(iAt1)
         iPair(iNeigh1, iAt1) = ind
-        ind = ind + nOrb1 * orb%nOrbAtom(img2CentCell(iNeighbor(iNeigh1, iAt1)))
+        iAt2 = img2CentCell(iNeighbor(iNeigh1, iAt1))
+        iSp2 = species(iAt2)
+        ind = ind + nOrb1 * orb%nOrbSpecies(iSp2)
       end do
     end do
     nElem = ind
@@ -840,8 +853,7 @@ contains
 
 
   !> Allocate (reallocate) space for the sparse hamiltonian and overlap matrix.
-  subroutine reallocateHS_2(ham, over, iPair, iNeighbor, nNeighbor, orb, &
-      &img2CentCell)
+  subroutine reallocateHS_2(ham, over, iPair, iNeighbor, nNeighbor, orb, img2CentCell, species)
 
     !> Hamiltonian.
     real(dp), allocatable, intent(inout) :: ham(:,:)
@@ -865,6 +877,8 @@ contains
     !> Mapping on atoms in the central cell
     integer, intent(in) :: img2CentCell(:)
 
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
 
     !> nr. of spin blocks in the Hamiltonian
     integer :: nSpin
@@ -878,8 +892,7 @@ contains
     !> nr. of max. possible neighbors (incl. itself)
     integer :: mNeighbor
 
-    integer :: ind
-    integer :: iAt1, iNeigh1, nOrb1
+    integer :: ind, iAt1, iAt2, iSp1, iSp2, iNeigh1, nOrb1
 
     nAtom = size(iNeighbor, dim=2)
     mNeighbor = size(iNeighbor, dim=1)
@@ -900,10 +913,13 @@ contains
     nElem = 0
     ind = 0
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      iSp1 = species(iAt1)
+      nOrb1 = orb%nOrbSpecies(iSp1)
       do iNeigh1 = 0, nNeighbor(iAt1)
         iPair(iNeigh1, iAt1) = ind
-        ind = ind +  nOrb1 * orb%nOrbAtom(img2CentCell(iNeighbor(iNeigh1,iAt1)))
+        iAt2 = img2CentCell(iNeighbor(iNeigh1,iAt1))
+        iSp2 = species(iAt2)
+        ind = ind +  nOrb1 * orb%nOrbSpecies(iSp2)
       end do
     end do
     nElem = ind
@@ -921,13 +937,13 @@ contains
 
   !> Allocate (reallocate) space for the sparse hamiltonian and overlap matrix.
   subroutine reallocateHS_Single(ham, iPair, iNeighbor, nNeighbor, orb, &
-      &img2CentCell)
+      &img2CentCell, species)
 
     !> Hamiltonian.
     real(dp), allocatable, intent(inout) :: ham(:)
 
     !> Pair indexing array (specifying the offset for the interaction between atoms in the central
-    !> cell and their neigbhors).
+    !> cell and their neighbours).
     integer, allocatable, intent(inout) :: iPair(:,:)
 
     !> List of neighbors for each atom in the central cell. (Note: first index runs from 0!)
@@ -942,6 +958,8 @@ contains
     !> Mapping on atoms in the central cell.
     integer, intent(in) :: img2CentCell(:)
 
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
 
     !> nr. atoms in the central cell
     integer :: nAtom
@@ -952,8 +970,7 @@ contains
     !> nr. of max. possible neighbors (incl. itself)
     integer :: mNeighbor
 
-    integer :: ind
-    integer :: iAt1, iNeigh1, nOrb1
+    integer :: ind, iAt1, iAt2, iSp1, iSp2, iNeigh1, nOrb1
 
     nAtom = size(iNeighbor, dim=2)
     mNeighbor = size(iNeighbor, dim=1)
@@ -962,7 +979,8 @@ contains
     @:ASSERT(allocated(ham))
     @:ASSERT(allocated(iPair))
     @:ASSERT(size(iPair, dim=2) == nAtom)
-
+    @:ASSERT(size(species) >= nAtom)
+    
     if (mNeighbor > size(iPair, dim=1)) then
       deallocate(iPair)
       allocate(iPair(0:mNeighbor-1, nAtom))
@@ -971,10 +989,13 @@ contains
     nElem = 0
     ind = 0
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      iSp1 = species(iAt1)
+      nOrb1 = orb%nOrbSpecies(iSp1)
       do iNeigh1 = 0, nNeighbor(iAt1)
         iPair(iNeigh1, iAt1) = ind
-        ind = ind +  nOrb1 * orb%nOrbAtom(img2CentCell(iNeighbor(iNeigh1,iAt1)))
+        iAt2 = img2CentCell(iNeighbor(iNeigh1,iAt1))
+        iSp2 = species(iAt2)
+        ind = ind +  nOrb1 * orb%nOrbSpecies(iSp2)
       end do
     end do
     nElem = ind
@@ -988,25 +1009,29 @@ contains
 
 
   !> Builds an atom offset array for the squared hamiltonain/overlap.
-  subroutine buildSquaredAtomIndex(iAtomStart, orb)
+  subroutine buildSquaredAtomIndex(iAtomStart, species, orb)
 
     !> Returns the offset array for each atom.
     integer, intent(out) :: iAtomStart(:)
 
+    !> Species of the atoms in the central cell
+    integer, intent(in) :: species(:)
+
     !> Information about the orbitals in the system.
     type(TOrbitals), intent(in) :: orb
 
-    integer :: ind, iAt1
+    integer :: ind, iAt1, iSp1
     integer :: nAtom
 
-    nAtom = size(orb%nOrbAtom)
-
-    @:ASSERT(all(shape(iAtomStart) == (/ nAtom + 1 /)))
+    nAtom = size(iAtomStart) - 1
+    
+    @:ASSERT(size(species) >= nAtom)
 
     ind = 1
     do iAt1 = 1, nAtom
+      iSp1 = species(iAt1)
       iAtomStart(iAt1) = ind
-      ind = ind + orb%nOrbAtom(iAt1)
+      ind = ind + orb%nOrbSpecies(iSp1)
     end do
     iAtomStart(nAtom+1) = ind
 

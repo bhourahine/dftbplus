@@ -84,17 +84,18 @@ contains
 
   !> Initializes instance.
   !!
-  subroutine ThirdOrder_init(this, inp)
-
+  subroutine ThirdOrder_init(this, inp, nAtom)
 
     !> Instance.
     type(ThirdOrder), intent(out) :: this
 
-
     !> Input data.
     type(ThirdOrderInp), intent(in) :: inp
 
-    this%nAtoms = size(inp%orb%nOrbAtom)
+    !> Number of atoms
+    integer, intent(in) :: nAtom
+    
+    this%nAtoms = nAtom
     this%mShellsReal = inp%orb%mShell
     this%nSpecies = size(inp%hubbUs, dim=2)
     this%shellResolved = inp%shellResolved

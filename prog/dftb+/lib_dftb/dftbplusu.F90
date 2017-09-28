@@ -524,7 +524,7 @@ contains
 
 
   !> Adds DFTB+U blocks onto end of a 1D vector
-  subroutine AppendBlock_reduce(input, equiv, orb, output, skew)
+  subroutine AppendBlock_reduce(input, equiv, orb, species, output, skew)
 
     !> unpacked data
     real(dp), intent(in) :: input(:,:,:,:)
@@ -535,6 +535,9 @@ contains
     !> Information about the orbitals and their angular momenta
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> 1D array with appended data
     real(dp), intent(inout) :: output(:)
 
@@ -560,8 +563,8 @@ contains
 
     do iS = 1, nSpin
       do iAt = 1, nAtom
-        do iOrb1 = 1, orb%nOrbAtom(iAt)
-          do iOrb2 = 1, orb%nOrbAtom(iAt)
+        do iOrb1 = 1, orb%nOrbSpecies(species(iAt))
+          do iOrb2 = 1, orb%nOrbSpecies(species(iAt))
             if (equiv(iOrb1, iOrb2, iAt, iS) > 0) then
               if (iSkew) then
                 output(equiv(iOrb1, iOrb2, iAt, iS)) = &

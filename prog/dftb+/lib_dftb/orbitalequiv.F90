@@ -30,7 +30,7 @@ contains
 
   !> Merges two equivalency arrays by finding the intersection in the equivalences.
   !> Note: Equivalences marked below 0 are mapped to 0 in the final equivalence matrix
-  subroutine OrbitalEquiv_merge(equiv1, equiv2, orb, equivNew)
+  subroutine OrbitalEquiv_merge(equiv1, equiv2, orb, species, equivNew)
 
     !> First equivalency array.
     integer, intent(in) :: equiv1(:,:,:)
@@ -41,6 +41,9 @@ contains
     !> Contains information about the atomic orbitals in the system.
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> New equivalency array on return.
     integer, intent(out) :: equivNew(:,:,:)
 
@@ -66,7 +69,7 @@ contains
     newInd = 1
     do iS = 1, nSpin
       do iAt = 1, nAtom
-        do iOrb = 1, orb%nOrbAtom(iAt)
+        do iOrb = 1, orb%nOrbSpecies(species(iAt))
           ! If element had been already processed, skip
           if (.not. mask(iOrb, iAt, iS)) then
             cycle
@@ -91,7 +94,7 @@ contains
 
   !> Reduces passed orbital property by summing up on equivalent orbitals.
   !> Note: equivalences of 0 or below are not reduced
-  subroutine OrbitalEquiv_reduce(input, equiv, orb, output)
+  subroutine OrbitalEquiv_reduce(input, equiv, orb, species, output)
 
     !> The vector containing the values for all orbitals
     real(dp), intent(in) :: input(:,:,:)
@@ -102,6 +105,9 @@ contains
     !> Contains information about the atomic orbitals in the system
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Contains the equivalent orbital sums at exit as vector.
     real(dp), intent(out) :: output(:)
 
@@ -118,7 +124,7 @@ contains
     output(:) = 0.0_dp
     do iS = 1, nSpin
       do iAt = 1, nAtom
-        do iOrb = 1, orb%nOrbAtom(iAt)
+        do iOrb = 1, orb%nOrbSpecies(species(iAt))
           if (equiv(iOrb, iAt, iS) > 0) then
             output(equiv(iOrb, iAt, iS)) = output(equiv(iOrb, iAt, iS)) &
                 & + input(iOrb, iAt, iS)
@@ -133,7 +139,7 @@ contains
   !> Expands a reduced vector by putting every element of it into the first corresponding orbital
   !> and putting zero for all other equivalent orbitals.
   !> Note: equivalences of 0 or below are not expanded
-  subroutine OrbitalEquiv_expand(input, equiv, orb, output)
+  subroutine OrbitalEquiv_expand(input, equiv, orb, species, output)
 
     !> Reduced vector.
     real(dp), intent(in) :: input(:)
@@ -143,7 +149,10 @@ contains
 
     !> Contains information about the atomic orbitals in the system
     type(TOrbitals), intent(in) :: orb
-
+    
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Expanded array.
     real(dp), intent(out) :: output(:,:,:)
 
@@ -163,7 +172,7 @@ contains
     output(:,:,:) = 0.0_dp
     do iS = 1, nSpin
       do iAt = 1, nAtom
-        do iOrb = 1, orb%nOrbAtom(iAt)
+        do iOrb = 1, orb%nOrbSpecies(species(iAt))
           if (mask(equiv(iOrb, iAt, iS))) then
             if (equiv(iOrb, iAt, iS) > 0) then
               output(iOrb, iAt, iS) = input(equiv(iOrb, iAt, iS))

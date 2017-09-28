@@ -121,7 +121,7 @@ contains
 
   !> The stress tensor contributions from the non-SCC energy
   subroutine getNonSCCStress(st,derivator,DM,EDM,skHamCont,skOverCont,coords,species,iNeighbor, &
-      & nNeighbor,img2CentCell,iPair,orb,cellVol)
+      & nNeighbor,img2CentCell,iPair,orb, nAtom, cellVol)
 
     !> stress tensor
     real(dp), intent(out) :: st(:,:)
@@ -162,11 +162,14 @@ contains
     !> Information about the shells and orbitals in the system.
     type(TOrbitals), intent(in) :: orb
 
+    !> atoms in the system
+    integer, intent(in) :: nAtom
+    
     !> cell volume.
     real(dp), intent(in) :: cellVol
 
     integer :: iOrig, ii, jj
-    integer :: nAtom, iNeigh, iAtom1, iAtom2, iAtom2f
+    integer :: iNeigh, iAtom1, iAtom2, iAtom2f
     integer :: nOrb1, nOrb2
     real(dp) :: sqrDMTmp(orb%mOrb,orb%mOrb), sqrEDMTmp(orb%mOrb,orb%mOrb)
     real(dp) :: hPrimeTmp(orb%mOrb,orb%mOrb,3), sPrimeTmp(orb%mOrb,orb%mOrb,3)
@@ -175,16 +178,15 @@ contains
     @:ASSERT(all(shape(st) == [3, 3]))
     @:ASSERT(size(DM,dim=1)==size(EDM,dim=1))
 
-    nAtom = size(orb%nOrbAtom)
     st(:,:) = 0.0_dp
 
     do iAtom1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAtom1)
+      nOrb1 = orb%nOrbSpecies(species(iAtom1))
       !! loop from 1 as no contribution from the atom itself
       do iNeigh = 1, nNeighbor(iAtom1)
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        nOrb2 = orb%nOrbAtom(iAtom2f)
+        nOrb2 = orb%nOrbSpecies(species(iAtom2f))
         iOrig = iPair(iNeigh,iAtom1)
         sqrDMTmp(:,:) = 0.0_dp
         sqrEDMTmp(:,:) = 0.0_dp
@@ -286,7 +288,7 @@ contains
     real(dp) :: shiftSprime(orb%mOrb,orb%mOrb)
     real(dp) :: vect(3), intermed(3)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(shift,dim=3)
     nSpin = size(shift,dim=4)
 
     @:ASSERT(all(shape(st) == [3, 3]))
@@ -431,7 +433,7 @@ contains
     real(dp) :: shiftSprime(orb%mOrb,orb%mOrb)
     real(dp) :: vect(3), intermed(3)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(shift,dim=3)
     nSpin = size(shift,dim=4)
 
     @:ASSERT(all(shape(st) == [3, 3]))
@@ -439,7 +441,6 @@ contains
     @:ASSERT(size(DM,dim=1)==size(EDM,dim=1))
     @:ASSERT(size(shift,dim=1)==orb%mOrb)
     @:ASSERT(size(shift,dim=2)==orb%mOrb)
-    @:ASSERT(size(shift,dim=3)==nAtom)
     @:ASSERT(size(DM,dim=2)==nSpin)
 
     st = 0.0_dp

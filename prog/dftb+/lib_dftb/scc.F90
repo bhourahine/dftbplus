@@ -206,7 +206,7 @@ contains
 
 
   !> Initialises the SCC module
-  subroutine Scc_initialize(this, inp)
+  subroutine Scc_initialize(this, inp, nAtom)
 
     !> Resulting instance
     type(TScc), intent(out) :: this
@@ -214,13 +214,16 @@ contains
     !> Scc input
     type(TSccInp), intent(inout) :: inp
 
+    !> atoms
+    integer, intent(in) :: nAtom
+    
     integer :: iSp1, iSp2, iU1, iU2, iL
     real(dp) :: maxGEwald
 
     @:ASSERT(.not. this%tInitialised)
 
     this%nSpecies = size(inp%orb%nOrbSpecies)
-    this%nAtom = size(inp%orb%nOrbAtom)
+    this%nAtom = nAtom
     this%mShell = inp%orb%mShell
     this%mOrb = inp%orb%mOrb
 

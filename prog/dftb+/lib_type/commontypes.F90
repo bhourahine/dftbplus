@@ -23,9 +23,6 @@ module commontypes
     !> Nr. of orbitals for each atomic species (nSpecies)
     integer, allocatable :: nOrbSpecies(:)
 
-    !> Nr. of orbitals for each atom (nAtom)
-    integer, allocatable :: nOrbAtom(:)
-
     !> Ang. momentum of the a particular l-shell on a particular species (maxval(nShell), nSpecies)
     integer, allocatable :: angShell(:,:)
 

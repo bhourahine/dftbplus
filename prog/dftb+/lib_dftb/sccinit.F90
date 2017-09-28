@@ -39,7 +39,7 @@ contains
 
 
   !> Initialise the charge vector from the reference atomic charges
-  subroutine initQFromAtomChrg(fOrb, qAtom, fRefShell, species, speciesNames, orb)
+  subroutine initQFromAtomChrg(fOrb, qAtom, fRefShell, species, speciesNames, nAtom, orb)
 
     !> The number of electrons per lm,atom,spin
     real(dp), intent(out) :: fOrb(:,:,:)
@@ -56,13 +56,14 @@ contains
     !> Names of the species (for error messages)
     character(len=*), intent(in) :: speciesNames(:)
 
+    !> number of atoms in the system
+    integer, intent(in) :: nAtom
+    
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
-    integer :: iAt, iSp, iSh1, nAtom, iShL, iShR, nSh
+    integer :: iAt, iSp, iSh1, iShL, iShR, nSh
     real(dp) :: fShell, fAtomRes
-
-    nAtom = size(orb%nOrbAtom)
 
     @:ASSERT(size(fOrb, dim=1) == orb%mOrb)
     @:ASSERT(size(fOrb, dim=2) == nAtom)
@@ -101,7 +102,7 @@ contains
   !> Initialise the charge vector from the reference atomic charges results in a set of charges
   !> appropriate for the neutral spin unpolarised atom reference system that DFTB assumes for
   !> SCC/spin extensions
-  subroutine initQFromShellChrg(qq, qShell, species, orb)
+  subroutine initQFromShellChrg(qq, qShell, species, nAtom, orb)
 
     !> The charges per lm,atom,spin
     real(dp), intent(out) :: qq(:,:,:)
@@ -112,12 +113,13 @@ contains
     !> List of chemical species for each atom
     integer, intent(in) :: species(:)
 
+    !> number of atoms in the system
+    integer, intent(in) :: nAtom
+    
     !> Information about the orbitals
     type(TOrbitals), intent(in) :: orb
 
-    integer :: iAt1, iSp1, iSh1, nAtom, iSh1l, iSh1r, nSh1
-
-    nAtom = size(orb%nOrbAtom)
+    integer :: iAt1, iSp1, iSh1, iSh1l, iSh1r, nSh1
 
     @:ASSERT(size(qq, dim=1) == orb%mOrb)
     @:ASSERT(size(qq, dim=2) == nAtom)
@@ -145,7 +147,7 @@ contains
   !> charge matches that expected for the calculation.
   !> Should test of the input, if the number of orbital charges per atom match the number from the
   !> angular momentum.
-  subroutine initQFromFile(qq, fileName, orb, magnetisation, nEl, qBlock, qiBlock)
+  subroutine initQFromFile(qq, fileName, orb, species, magnetisation, nEl, qBlock, qiBlock)
 
     !> The charges per lm,atom,spin
     real(dp), intent(out) :: qq(:,:,:)
@@ -159,12 +161,15 @@ contains
     !> Information about the orbitals in the system.
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Nr. of electrons for each spin channel
     real(dp), intent(in), optional :: nEl
 
     !> magnetisation checksum for regular spin polarization total magnetic moment
     real(dp), intent(in), optional :: magnetisation
-
+    
     !> block Mulliken population for LDA+U etc
     real(dp), intent(out), optional :: qBlock(:,:,:,:)
 
@@ -174,7 +179,7 @@ contains
     integer :: nOrb, nAtom, nSpin ! nr. of orbitals / atoms / spin channels
     integer :: iErr               ! error returned by the io commands
     integer, save :: file = -1     ! file unit number
-    integer :: iOrb, iAtom, iSpin, ii
+    integer :: iOrb, iAtom, iSpin, ii, iSp
     integer :: fileFormat
     real(dp) :: CheckSum(size(qq, dim=3)) ! total charge is present at the top
     ! of the file
@@ -241,7 +246,7 @@ contains
 
     do iSpin = 1, nSpin
       do iAtom = 1, nAtom
-        nOrb = orb%nOrbAtom(iAtom)
+        nOrb = orb%nOrbSpecies(species(iAtom))
         if (tReadBinary) then
           read (file, iostat=iErr) (qq(iOrb, iAtom, iSpin), iOrb = 1,nOrb)
         else
@@ -282,7 +287,7 @@ contains
       if (tBlockPresent) then
         do iSpin = 1, nSpin
           do iAtom = 1, nAtom
-            nOrb = orb%nOrbAtom(iAtom)
+            nOrb = orb%nOrbSpecies(species(iAtom))
             do ii = 1, nOrb
               if (tReadBinary) then
                 read (file, iostat=iErr) qBlock(1:nOrb, ii ,iAtom, iSpin)
@@ -300,7 +305,7 @@ contains
       end if
       do iSpin = 1, nSpin
         do iAtom = 1, nAtom
-          nOrb = orb%nOrbAtom(iAtom)
+          nOrb = orb%nOrbSpecies(species(iAtom))
           do ii = 1, nOrb
             qBlock(ii, ii ,iAtom, iSpin) = qq(ii ,iAtom, iSpin)
           end do
@@ -312,7 +317,7 @@ contains
       if (tiBlockPresent) then
         do iSpin = 1, nSpin
           do iAtom = 1, nAtom
-            nOrb = orb%nOrbAtom(iAtom)
+            nOrb = orb%nOrbSpecies(species(iAtom))
             do ii = 1, nOrb
               if (tReadBinary) then
                 read (file, iostat=iErr) qiBlock(1:nOrb, ii ,iAtom, iSpin)
@@ -336,7 +341,7 @@ contains
 
 
   !> Write the current charges to an external file
-  subroutine writeQToFile(qq, fileName, fd, orb, qBlock, qiBlock)
+  subroutine writeQToFile(qq, fileName, fd, orb, species, qBlock, qiBlock)
 
     !> Array containing the charges
     real(dp), intent(in) :: qq(:,:,:)
@@ -350,6 +355,9 @@ contains
     !> Information about the orbitals in the system.
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> block Mulliken population for LDA+U etc.
     real(dp), intent(in), optional :: qBlock(:,:,:,:)
 
@@ -398,7 +406,7 @@ contains
     end if
     do iSpin = 1, nSpin
       do iAtom = 1, nAtom
-        nOrb = orb%nOrbAtom(iAtom)
+        nOrb = orb%nOrbSpecies(species(iAtom))
         if (tWriteBinary) then
           write(fd, iostat=iErr) (qq(iOrb, iAtom, iSpin), iOrb = 1, nOrb)
         else
@@ -413,7 +421,7 @@ contains
     if (tqBlock) then
       do iSpin = 1, nSpin
         do iAtom = 1, nAtom
-          nOrb = orb%nOrbAtom(iAtom)
+          nOrb = orb%nOrbSpecies(species(iAtom))
           do ii = 1, nOrb
             if (tWriteBinary) then
               write(fd, iostat=iErr) qBlock(1:nOrb, ii ,iAtom, iSpin)
@@ -433,7 +441,7 @@ contains
     if (tqiBlock) then
       do iSpin = 1, nSpin
         do iAtom = 1, nAtom
-          nOrb = orb%nOrbAtom(iAtom)
+          nOrb = orb%nOrbSpecies(species(iAtom))
           do ii = 1, nOrb
             if (tWriteBinary) then
               write(fd, iostat=iErr) qiBlock(1:nOrb, ii ,iAtom, iSpin)

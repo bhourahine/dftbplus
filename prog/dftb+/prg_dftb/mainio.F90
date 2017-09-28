@@ -2066,7 +2066,7 @@ contains
 
 
   !> Write out charges.
-  subroutine writeCharges(fCharges, fdCharges, orb, qInput, qBlockIn, qiBlockIn)
+  subroutine writeCharges(fCharges, fdCharges, orb, species, qInput, qBlockIn, qiBlockIn)
 
     !> File name for charges to be written to
     character(*), intent(in) :: fCharges
@@ -2077,6 +2077,9 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> input charges
     real(dp), intent(in) :: qInput(:,:,:)
 
@@ -2086,7 +2089,7 @@ contains
     !> Imaginary part of block populations if present
     real(dp), intent(in), optional :: qiBlockIn(:,:,:,:)
 
-    call writeQToFile(qInput, fCharges, fdCharges, orb, qBlockIn, qiBlockIn)
+    call writeQToFile(qInput, fCharges, fdCharges, orb, species, qBlockIn, qiBlockIn)
     write(stdOut, "(A,A)") '>> Charges saved for restart in ', trim(fCharges)
 
   end subroutine writeCharges

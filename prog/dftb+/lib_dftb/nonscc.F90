@@ -108,9 +108,9 @@ contains
     do iAt1 = 1, nAtom
       iSp1 = species(iAt1)
       ind = iPair(0, iAt1) + 1
-      do iOrb1 = 1, orb%nOrbAtom(iAt1)
+      do iOrb1 = 1, orb%nOrbSpecies(iSp1)
         ham(ind) = selfegy(orb%iShellOrb(iOrb1, iSp1), iSp1)
-        ind = ind + orb%nOrbAtom(iAt1) + 1
+        ind = ind + orb%nOrbSpecies(iSp1) + 1
       end do
     end do
 
@@ -166,9 +166,9 @@ contains
     do iAt1 = 1, nAtom
       iSp1 = species(iAt1)
       ind = iPair(0,iAt1) + 1
-      do iOrb1 = 1, orb%nOrbAtom(iAt1)
+      do iOrb1 = 1, orb%nOrbSpecies(iSp1)
         over(ind) = 1.0_dp
-        ind = ind + orb%nOrbAtom(iAt1) + 1
+        ind = ind + orb%nOrbSpecies(iSp1) + 1
       end do
     end do
 

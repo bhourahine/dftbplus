@@ -66,7 +66,7 @@ contains
 
     @:ASSERT(present(iHubbU) .eqv. present(dQUniqU))
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(q0,dim=2)
     if (present(dQ)) then
       dQWork => dQ
     else
@@ -128,7 +128,7 @@ contains
     integer :: iAt, iSp, iSh, iStart, iend
 
     deltaQPerLShell(:,:) = 0.0_dp
-    do iAt = 1, size(orb%nOrbAtom)
+    do iAt = 1, size(deltaQ,dim=2)
       iSp = species(iAt)
       do iSh = 1, orb%nShell(iSp)
         iStart = orb%posShell(iSh,iSp)
@@ -152,7 +152,7 @@ contains
     integer :: iAt, iSp, iSh
 
     deltaQUniqU(:,:) = 0.0_dp
-    do iAt = 1, size(orb%nOrbAtom)
+    do iAt = 1, size(deltaQPerLShell, dim=2)
       iSp = species(iAt)
       do iSh = 1, orb%nShell(iSp)
         deltaQUniqU(iHubbU(iSh, iSp), iAt) = &
