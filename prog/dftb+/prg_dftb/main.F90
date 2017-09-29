@@ -1859,7 +1859,7 @@ contains
 
     integer :: nAtom
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
 
     ham(:,:) = 0.0_dp
     ham(:,1) = h0
@@ -2656,7 +2656,7 @@ contains
     integer :: iK, iK2
     logical :: tStoreEigvecs, tImHam
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     tImHam = present(iRhoPrim)
     tStoreEigvecs = present(eigvecsFifo)
     nKPoint = size(kWeight)
@@ -2830,7 +2830,7 @@ contains
 
 
   !> Adds spin-orbit contribution to dense Hamiltonian (for non-dual spin-orbit model).
-  subroutine addOnsiteSpinOrbitContrib(xi, species, orb, iDenseStart, HSqrCplx)
+  subroutine addOnsiteSpinOrbitContrib(xi, species, nAtom, orb, iDenseStart, HSqrCplx)
 
     !> Spin orbit constants for each species
     real(dp), intent(in) :: xi(:,:)
@@ -2838,6 +2838,9 @@ contains
     !> chemical species
     integer, intent(in) :: species(:)
 
+    !> number of atoms
+    integer, intent(in) :: nAtom
+    
     !> atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
@@ -2848,10 +2851,9 @@ contains
     complex(dp), intent(inout) :: HSqrCplx(:,:)
 
     complex(dp), allocatable :: atomZ(:,:,:), atomPlus(:,:,:), Lz(:,:), Lplus(:,:)
-    integer :: nAtom, nSpecies, nOrb
+    integer :: nSpecies, nOrb
     integer :: iSp, iOrb, iAt, ll
 
-    nAtom = size(orb%nOrbAtom)
     nSpecies = maxval(species(1:nAtom))
     nOrb = size(HSqrCplx, dim=1) / 2
     allocate(atomZ(orb%mOrb, orb%mOrb, nSpecies))
@@ -4953,7 +4955,7 @@ contains
     integer :: nFilledLev, nAtom, nSpin
     integer :: iSpin
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     nSpin = size(nEl)
 
     if (any(abs(mod(filling, real(3 - nSpin, dp))) > elecTolMax)) then

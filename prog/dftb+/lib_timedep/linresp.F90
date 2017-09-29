@@ -302,7 +302,6 @@ contains
 
 #:if WITH_ARPACK
     @:ASSERT(self%tInit)
-    @:ASSERT(size(orb%nOrbAtom) == self%nAtom)
     call LinRespGrad_old(tSpin, self%nAtom, iAtomStart, eigVec, eigVal, sccCalc, dqAt, coords0, &
         & self%nExc, self%nStat, self%symmetry, SSqrReal, filling, species0, self%HubbardU, &
         & self%spinW, self%nEl, iNeighbor, img2CentCell, orb, tWriteTagged, fdTagged, &
@@ -402,7 +401,6 @@ contains
 
     real(dp), allocatable :: shiftPerAtom(:), shiftPerL(:,:)
     @:ASSERT(self%tInit)
-    @:ASSERT(self%nAtom == size(orb%nOrbAtom))
     ! BA: SCC is currently ugly, it gives back an array with an additional dimension (spin),
     ! however, fills always the first channel only!
     ALLOCATE(shiftPerAtom(self%nAtom))

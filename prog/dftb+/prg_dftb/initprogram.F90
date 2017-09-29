@@ -972,7 +972,7 @@ contains
       end if
 
       sccInp%ewaldAlpha = input%ctrl%ewaldAlpha
-      call initialize(sccCalc, sccInp)
+      call initialize(sccCalc, sccInp, nAtom)
       deallocate(sccInp)
       mCutoff = max(mCutoff, sccCalc%getCutoff())
 
@@ -994,7 +994,7 @@ contains
         thirdInp%dampExp = input%ctrl%dampExp
         thirdInp%shellResolved = input%ctrl%tOrbResolved
         allocate(thirdOrd)
-        call ThirdOrder_init(thirdOrd, thirdInp)
+        call ThirdOrder_init(thirdOrd, thirdInp, nAtom)
         mCutoff = max(mCutoff, thirdOrd%getCutoff())
       end if
     end if
@@ -1029,7 +1029,7 @@ contains
     allocate(img2CentCell(nAllAtom))
     allocate(iCellVec(nAllAtom))
     allocate(iDenseStart(nAtom + 1))
-    call buildSquaredAtomIndex(iDenseStart, orb)
+    call buildSquaredAtomIndex(iDenseStart, species0, orb)
 
     ! Intialize Hamilton and overlap
     tImHam = tDualSpinOrbit .or. (tSpinOrbit .and. tDFTBU) ! .or. tBField
@@ -1128,7 +1128,7 @@ contains
       else
         allocate(iEqOrbSpin(orb%mOrb, nAtom, nSpin))
         call Spin_getOrbitalEquiv(orb, species0, iEqOrbSpin)
-        call OrbitalEquiv_merge(iEqOrbSCC, iEqOrbSpin, orb, iEqOrbitals)
+        call OrbitalEquiv_merge(iEqOrbSCC, iEqOrbSpin, orb, species, iEqOrbitals)
         deallocate(iEqOrbSpin)
       end if
       deallocate(iEqOrbSCC)
@@ -1138,7 +1138,7 @@ contains
         allocate(iEqOrbSpin(orb%mOrb, nAtom, nSpin))
         allocate(iEqOrbDFTBU(orb%mOrb, nAtom, nSpin))
         call DFTBplsU_getOrbitalEquiv(iEqOrbDFTBU,orb, species0, nUJ, niUJ, iUJ)
-        call OrbitalEquiv_merge(iEqOrbitals, iEqOrbDFTBU, orb, iEqOrbSpin)
+        call OrbitalEquiv_merge(iEqOrbitals, iEqOrbDFTBU, orb, species, iEqOrbSpin)
         iEqOrbitals(:,:,:) = iEqOrbSpin(:,:,:)
         nIneqOrb = maxval(iEqOrbitals)
         deallocate(iEqOrbSpin)
@@ -1320,14 +1320,14 @@ contains
           ! We take all orbitals from all atoms.
           nOrbRegion = 0
           do ii = 1, nAtomRegion
-            nOrbRegion = nOrbRegion + orb%nOrbAtom(iAtomRegion(ii))
+            nOrbRegion = nOrbRegion + orb%nOrbSpecies(species(iAtomRegion(ii)))
           end do
           ind = 1
           allocate(tmpir1(nOrbRegion))
           ! Create an index of the orbitals
           do ii = 1, nAtomRegion
             iAt = iAtomRegion(ii)
-            do jj = 1, orb%nOrbAtom(iAt)
+            do jj = 1, orb%nOrbSpecies(species(iAt))
               tmpir1(ind) = iDenseStart(iAt) + jj - 1
               ind = ind + 1
             end do
@@ -1815,25 +1815,25 @@ contains
         if (tDFTBU) then
           if (nSpin == 2) then
             if (tFixEf) then ! do not check charge or magnetisation from file
-              call initQFromFile(qInput, fCharges, orb, qBlock=qBlockIn)
+              call initQFromFile(qInput, fCharges, orb, species, qBlock=qBlockIn)
             else
-              call initQFromFile(qInput, fCharges, orb, nEl = sum(nEl), &
+              call initQFromFile(qInput, fCharges, orb, species, nEl = sum(nEl), &
                   & magnetisation=nEl(1)-nEl(2), qBlock=qBlockIn)
             end if
           else
             if (tImHam) then
               if (tFixEf) then
-                call initQFromFile(qInput, fCharges, orb, &
+                call initQFromFile(qInput, fCharges, orb, species, &
                     & qBlock=qBlockIn,qiBlock=qiBlockIn)
               else
-                call initQFromFile(qInput, fCharges, orb, nEl = nEl(1), &
+                call initQFromFile(qInput, fCharges, orb, species, nEl = nEl(1), &
                     & qBlock=qBlockIn,qiBlock=qiBlockIn)
               end if
             else
               if (tFixEf) then
-                call initQFromFile(qInput, fCharges, orb, qBlock=qBlockIn)
+                call initQFromFile(qInput, fCharges, orb, species, qBlock=qBlockIn)
               else
-                call initQFromFile(qInput, fCharges, orb, nEl = nEl(1), &
+                call initQFromFile(qInput, fCharges, orb, species, nEl = nEl(1), &
                     & qBlock=qBlockIn)
               end if
             end if
@@ -1842,16 +1842,16 @@ contains
           ! hack again caused by going from up/down to q and M
           if (nSpin == 2) then
             if (tFixEf) then
-              call initQFromFile(qInput, fCharges, orb)
+              call initQFromFile(qInput, fCharges, orb, species)
             else
-              call initQFromFile(qInput, fCharges, orb, nEl = sum(nEl),&
+              call initQFromFile(qInput, fCharges, orb, species, nEl = sum(nEl),&
                   & magnetisation=nEl(1)-nEl(2))
             end if
           else
             if (tFixEf) then
-              call initQFromFile(qInput, fCharges, orb)
+              call initQFromFile(qInput, fCharges, orb, species)
             else
-              call initQFromFile(qInput, fCharges, orb, nEl = nEl(1))
+              call initQFromFile(qInput, fCharges, orb, species, nEl = nEl(1))
             end if
           end if
         end if
@@ -1883,15 +1883,15 @@ contains
               ! does not actually matter if additional spin polarization pushes
               ! charges to <0 as the initial charges are not mixed in to later
               ! iterations
-              qInput(1:orb%nOrbAtom(ii),ii,2) = &
-                  & qInput(1:orb%nOrbAtom(ii),ii,1) * &
+              qInput(1:orb%nOrbSpecies(species(ii)),ii,2) = &
+                  & qInput(1:orb%nOrbSpecies(species(ii)),ii,1) * &
                   & input%ctrl%initialSpins(1,ii) / &
-                  & sum(qInput(1:orb%nOrbAtom(ii),ii,1))
+                  & sum(qInput(1:orb%nOrbSpecies(species(ii)),ii,1))
             end do
           else
             do ii = 1, nAtom
-              qInput(1:orb%nOrbAtom(ii),ii,2) = &
-                  & qInput(1:orb%nOrbAtom(ii),ii,1) * &
+              qInput(1:orb%nOrbSpecies(species(ii)),ii,2) = &
+                  & qInput(1:orb%nOrbSpecies(species(ii)),ii,1) * &
                   & (nEl(1)-nEl(2))/sum(qInput(:,:,1))
             end do
           end if
@@ -1905,10 +1905,10 @@ contains
             end if
             do ii = 1, nAtom
               do jj = 1, 3
-                qInput(1:orb%nOrbAtom(ii),ii,jj+1) = &
-                    & qInput(1:orb%nOrbAtom(ii),ii,1) * &
+                qInput(1:orb%nOrbSpecies(species(ii)),ii,jj+1) = &
+                    & qInput(1:orb%nOrbSpecies(species(ii)),ii,1) * &
                     & input%ctrl%initialSpins(jj,ii) &
-                    & / sum(qInput(1:orb%nOrbAtom(ii),ii,1))
+                    & / sum(qInput(1:orb%nOrbSpecies(species(ii)),ii,1))
               end do
             end do
           end if
@@ -1943,13 +1943,11 @@ contains
         end if
       end if
 
-      call OrbitalEquiv_reduce(qInput, iEqOrbitals, orb, qInpRed(1:nIneqOrb))
+      call OrbitalEquiv_reduce(qInput, iEqOrbitals, orb, species, qInpRed(1:nIneqOrb))
       if (tDFTBU) then
-        call AppendBlock_reduce( qBlockIn,iEqBlockDFTBU, orb, &
-            & qInpRed )
+        call AppendBlock_reduce( qBlockIn,iEqBlockDFTBU, orb, species, qInpRed )
         if (tImHam) then
-          call AppendBlock_reduce( qiBlockIn,iEqBlockDFTBULS, orb, &
-              & qInpRed, skew=.true. )
+          call AppendBlock_reduce( qiBlockIn,iEqBlockDFTBULS, orb, species, qInpRed, skew=.true. )
         end if
       end if
 

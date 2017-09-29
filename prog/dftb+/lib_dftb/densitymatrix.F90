@@ -333,8 +333,8 @@ contains
 
 
   !> Make a regular density matrix for the real wave-function case
-  subroutine sp_density_matrix_real(dm, eigenvecs, filling, iNeighbor, nNeighbor, orb, iAtomStart, &
-      & img2CentCell)
+  subroutine sp_density_matrix_real(dm, eigenvecs, filling, iNeighbor, nNeighbor, orb, species,&
+      & iAtomStart, img2CentCell)
 
     !> the resulting nOrb*nOrb density matrix with only the elements of interest
     !> calculated, instead of the whole dm
@@ -354,7 +354,10 @@ contains
 
     !> Information about the orbitals of the atoms
     type(TOrbitals), intent(in) :: orb
-
+    
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iAtomStart(:)
 
@@ -374,7 +377,7 @@ contains
     allocate(inCellNeighbor(0:size(iNeighbor,dim=1),size(iNeighbor,dim=2)))
     allocate(nInCellNeighbor(size(iNeighbor,dim=2)))
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     dm(:,:) = 0.0_dp
 
     inCellNeighbor(:,:) = 0
@@ -399,7 +402,7 @@ contains
     !$OMP  END PARALLEL DO
 
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      nOrb1 = orb%nOrbSpecies(species(iAt1))
       start1 = iAtomStart(iAt1)
       tmpEigen(1:nLevels,1:nOrb1) = &
           & transpose(eigenvecs(start1:start1+nOrb1-1,1:nLevels))
@@ -412,7 +415,7 @@ contains
       !$OMP& SCHEDULE(RUNTIME)
       do iNeigh1 = 0, nInCellNeighbor(iAt1)
         start2 = iAtomStart(inCellNeighbor(iNeigh1,iAt1))
-        nOrb2 = orb%nOrbAtom(inCellNeighbor(iNeigh1,iAt1))
+        nOrb2 = orb%nOrbSpecies(species(inCellNeighbor(iNeigh1,iAt1)))
         dm(start2:start2+nOrb2-1, start1:start1+nOrb1-1) = &
             &matmul(eigenvecs(start2:start2+nOrb2-1,1:nLevels), &
             &tmpEigen(1:nLevels,1:nOrb1))
@@ -424,8 +427,8 @@ contains
 
 
   !> Make a regular density matrix for the complex wave-function case
-  subroutine sp_density_matrix_cmplx(dm, eigenvecs, filling, iNeighbor, nNeighbor, orb, iAtomStart,&
-      & img2CentCell)
+  subroutine sp_density_matrix_cmplx(dm, eigenvecs, filling, iNeighbor, nNeighbor, orb, species,&
+      & iAtomStart, img2CentCell)
 
     !> the resulting nOrb*nOrb density matrix with only the elements of interest
     !> calculated, instead of the whole dm
@@ -446,6 +449,9 @@ contains
     !> Informatio about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iAtomStart(:)
 
@@ -465,7 +471,7 @@ contains
     allocate(inCellNeighbor(0:size(iNeighbor,dim=1),size(iNeighbor,dim=2)))
     allocate(nInCellNeighbor(size(iNeighbor,dim=2)))
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
 
     dm(:,:) = cmplx(0.0_dp,0.0_dp,dp)
     inCellNeighbor(:,:) = 0
@@ -490,7 +496,7 @@ contains
     !$OMP  END PARALLEL DO
 
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      nOrb1 = orb%nOrbSpecies(species(iAt1))
       start1 = iAtomStart(iAt1)
       tmpEigen(1:nLevels,1:nOrb1) = &
           &transpose(eigenvecs(start1:start1+nOrb1-1,1:nLevels))
@@ -505,7 +511,7 @@ contains
       !$OMP& SCHEDULE(RUNTIME)
       do iNeigh1 = 0, nInCellNeighbor(iAt1)
         start2 = iAtomStart(inCellNeighbor(iNeigh1,iAt1))
-        nOrb2 = orb%nOrbAtom(inCellNeighbor(iNeigh1,iAt1))
+        nOrb2 = orb%nOrbSpecies(species(inCellNeighbor(iNeigh1,iAt1)))
         dm(start2:start2+nOrb2-1, start1:start1+nOrb1-1) = &
             &matmul(eigenvecs(start2:start2+nOrb2-1,1:nLevels), &
             &tmpEigen(1:nLevels,1:nOrb1))
@@ -518,7 +524,7 @@ contains
 
   !> Make an energy weighted density matrix for the real wave-function case
   subroutine sp_energy_density_matrix_real(dm, eigenvecs, filling, eigen, iNeighbor, nNeighbor, &
-      & orb, iAtomStart, img2CentCell)
+      & orb, species, iAtomStart, img2CentCell)
 
     !> the resulting nOrb*nOrb density matrix with only the elements of interest
     !> calculated, instead of the whole dm
@@ -542,6 +548,9 @@ contains
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iAtomStart(:)
 
@@ -562,7 +571,7 @@ contains
     allocate(inCellNeighbor(0:size(iNeighbor,dim=1),size(iNeighbor,dim=2)))
     allocate(nInCellNeighbor(size(iNeighbor,dim=2)))
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     dm(:,:) = 0.0_dp
 
     inCellNeighbor(:,:) = 0
@@ -587,7 +596,7 @@ contains
     !$OMP  END PARALLEL DO
 
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      nOrb1 = orb%nOrbSpecies(species(iAt1))
       start1 = iAtomStart(iAt1)
       tmpEigen(1:nLevels,1:nOrb1) = &
           & transpose(eigenvecs(start1:start1+nOrb1-1,1:nLevels))
@@ -601,7 +610,7 @@ contains
       !$OMP& SCHEDULE(RUNTIME)
       do iNeigh1 = 0, nInCellNeighbor(iAt1)
         start2 = iAtomStart(inCellNeighbor(iNeigh1,iAt1))
-        nOrb2 = orb%nOrbAtom(inCellNeighbor(iNeigh1,iAt1))
+        nOrb2 = orb%nOrbSpecies(species(inCellNeighbor(iNeigh1,iAt1)))
         dm(start2:start2+nOrb2-1, start1:start1+nOrb1-1) = &
             &matmul(eigenvecs(start2:start2+nOrb2-1,1:nLevels), &
             &tmpEigen(1:nLevels,1:nOrb1))
@@ -614,7 +623,7 @@ contains
 
   !> Make an energy weighted density matrix for the complex wave-function case
   subroutine sp_energy_density_matrix_cmplx(dm, eigenvecs, filling, eigen, iNeighbor, nNeighbor, &
-      & orb, iAtomStart, img2CentCell)
+      & orb, species, iAtomStart, img2CentCell)
 
     !> the resulting nOrb*nOrb density matrix with only the elements of interest
     !> calculated, instead of the whole dm
@@ -638,6 +647,9 @@ contains
     !> Atom offset for the squared Hamiltonian
     type(TOrbitals), intent(in) :: orb
 
+    !> Chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Atomic mapping indexes.
     integer, intent(in) :: iAtomStart(:)
 
@@ -657,7 +669,7 @@ contains
     allocate(inCellNeighbor(0:size(iNeighbor,dim=1),size(iNeighbor,dim=2)))
     allocate(nInCellNeighbor(size(iNeighbor,dim=2)))
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     dm(:,:) = cmplx(0.0_dp,0.0_dp,dp)
 
     inCellNeighbor(:,:) = 0
@@ -682,7 +694,7 @@ contains
     !$OMP  END PARALLEL DO
 
     do iAt1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAt1)
+      nOrb1 = orb%nOrbSpecies(species(iAt1))
       start1 = iAtomStart(iAt1)
       tmpEigen(1:nLevels,1:nOrb1) = &
           & transpose(eigenvecs(start1:start1+nOrb1-1,1:nLevels))
@@ -696,7 +708,7 @@ contains
       !$OMP& SCHEDULE(RUNTIME)
       do iNeigh1 = 0, nInCellNeighbor(iAt1)
         start2 = iAtomStart(inCellNeighbor(iNeigh1,iAt1))
-        nOrb2 = orb%nOrbAtom(inCellNeighbor(iNeigh1,iAt1))
+        nOrb2 = orb%nOrbSpecies(species(inCellNeighbor(iNeigh1,iAt1)))
         dm(start2:start2+nOrb2-1, start1:start1+nOrb1-1) = &
             &matmul(eigenvecs(start2:start2+nOrb2-1,1:nLevels), &
             &tmpEigen(1:nLevels,1:nOrb1))

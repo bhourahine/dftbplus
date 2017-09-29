@@ -40,7 +40,7 @@ contains
 
   !> Calculate the Mulliken population for each atom in the system, by summing
   !> the individual orbital contriutions on each atom
-  subroutine mullikenPerAtom(qq, over, rho, orb, iNeighbor, nNeighbor, img2CentCell, iPair)
+  subroutine mullikenPerAtom(qq, over, rho, orb, species, iNeighbor, nNeighbor, img2CentCell, iPair)
 
     !> The charge per atom
     real(dp), intent(inout) :: qq(:)
@@ -54,6 +54,9 @@ contains
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 
@@ -69,15 +72,15 @@ contains
     real(dp), allocatable :: qPerOrbital(:,:)
     integer :: nAtom
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     @:ASSERT(size(qq) == nAtom)
     @:ASSERT(size(over) == size(rho))
 
     allocate(qPerOrbital(orb%mOrb, nAtom))
     qPerOrbital(:,:) = 0.0_dp
 
-    call mullikenPerOrbital( qPerOrbital,over,rho,orb,iNeighbor,nNeighbor, &
-        &img2CentCell,iPair )
+    call mullikenPerOrbital(qPerOrbital, over, rho, orb, species, iNeighbor, nNeighbor,&
+        & img2CentCell, iPair)
 
     qq(:) = qq(:) + sum(qPerOrbital, dim=1)
     deallocate(qPerOrbital)
@@ -90,7 +93,8 @@ contains
   !> one triangle of real space extended matrices
   !>
   !> To do: add description of algorithm to programer manual / documentation.
-  subroutine mullikenPerOrbital(qq, over, rho, orb, iNeighbor, nNeighbor, img2CentCell, iPair)
+  subroutine mullikenPerOrbital(qq, over, rho, orb, species, iNeighbor, nNeighbor, img2CentCell,&
+      & iPair)
 
     !> The charge per orbital
     real(dp), intent(inout) :: qq(:,:)
@@ -104,6 +108,9 @@ contains
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 
@@ -123,19 +130,19 @@ contains
     real(dp) :: sqrTmp(orb%mOrb,orb%mOrb)
     real(dp) :: mulTmp(orb%mOrb**2)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
 
     @:ASSERT(all(shape(qq) == (/orb%mOrb, nAtom/)))
     @:ASSERT(size(over) == size(rho))
 
     do iAtom1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAtom1)
+      nOrb1 = orb%nOrbSpecies(species(iAtom1))
       do iNeigh = 0, nNeighbor(iAtom1)
         sqrTmp(:,:) = 0.0_dp
         mulTmp(:) = 0.0_dp
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        nOrb2 = orb%nOrbAtom(iAtom2f)
+        nOrb2 = orb%nOrbSpecies(species(iAtom2f))
         iOrig = iPair(iNeigh,iAtom1) + 1
         mulTmp(1:nOrb1*nOrb2) = over(iOrig:iOrig+nOrb1*nOrb2-1) &
             &* rho(iOrig:iOrig+nOrb1*nOrb2-1)
@@ -159,7 +166,8 @@ contains
   !> using purely real-space overlap and density matrix values.
   !>
   !> To do: add description of algorithm to programer manual / documentation.
-  subroutine mullikenPerBlock(qq, over, rho, orb, iNeighbor, nNeighbor, img2CentCell, iPair)
+  subroutine mullikenPerBlock(qq, over, rho, orb, species, iNeighbor, nNeighbor, img2CentCell,&
+      & iPair)
 
     !> The charge per atom block
     real(dp), intent(inout) :: qq(:,:,:)
@@ -173,6 +181,9 @@ contains
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 
@@ -192,17 +203,17 @@ contains
     real(dp) :: STmp(orb%mOrb,orb%mOrb)
     real(dp) :: rhoTmp(orb%mOrb,orb%mOrb)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
 
     @:ASSERT(all(shape(qq) == (/orb%mOrb,orb%mOrb,nAtom/)))
     @:ASSERT(size(over) == size(rho))
 
     do iAtom1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAtom1)
+      nOrb1 = orb%nOrbSpecies(species(iAtom1))
       do iNeigh = 0, nNeighbor(iAtom1)
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        nOrb2 = orb%nOrbAtom(iAtom2f)
+        nOrb2 = orb%nOrbSpecies(species(iAtom2f))
         iOrig = iPair(iNeigh,iAtom1) + 1
         sTmp(1:nOrb2,1:nOrb1) = &
             & reshape(over(iOrig:iOrig+nOrb1*nOrb2-1), (/nOrb2,nOrb1/))
@@ -231,7 +242,8 @@ contains
   !> system using purely real-space overlap and density matrix values.
   !>
   !> To do: add description of algorithm to programer manual / documentation.
-  subroutine skewMullikenPerBlock(qq, over, rho, orb, iNeighbor, nNeighbor, img2CentCell, iPair)
+  subroutine skewMullikenPerBlock(qq, over, rho, orb, species, iNeighbor, nNeighbor, img2CentCell,&
+      & iPair)
 
     !> The charge per atom block
     real(dp), intent(inout) :: qq(:,:,:)
@@ -245,6 +257,9 @@ contains
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
+    !> chemical species of atoms
+    integer, intent(in) :: species(:)
+    
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 
@@ -264,17 +279,17 @@ contains
     real(dp) :: STmp(orb%mOrb,orb%mOrb)
     real(dp) :: rhoTmp(orb%mOrb,orb%mOrb)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
 
     @:ASSERT(all(shape(qq) == (/orb%mOrb,orb%mOrb,nAtom/)))
     @:ASSERT(size(over) == size(rho))
 
     do iAtom1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAtom1)
+      nOrb1 = orb%nOrbSpecies(species(iAtom1))
       do iNeigh = 0, nNeighbor(iAtom1)
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        nOrb2 = orb%nOrbAtom(iAtom2f)
+        nOrb2 = orb%nOrbSpecies(species(iAtom2f))
         iOrig = iPair(iNeigh,iAtom1) + 1
         sTmp(1:nOrb2,1:nOrb1) = &
             & reshape(over(iOrig:iOrig+nOrb1*nOrb2-1), (/nOrb2,nOrb1/))

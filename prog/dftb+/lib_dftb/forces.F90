@@ -92,17 +92,17 @@ contains
 
     @:ASSERT(size(deriv,dim=1) == 3)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     deriv(:,:) = 0.0_dp
 
     do iAtom1 = 1, nAtom
-      nOrb1 = orb%nOrbAtom(iAtom1)
+      nOrb1 = orb%nOrbSpecies(species(iAtom1))
       !! loop from 1 as no contribution from the atom itself
       do iNeigh = 1, nNeighbor(iAtom1)
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
         if (iAtom1 /= iAtom2f) then
-          nOrb2 = orb%nOrbAtom(iAtom2f)
+          nOrb2 = orb%nOrbSpecies(species(iAtom2f))
           iOrig = iPair(iNeigh,iAtom1)
           sqrDMTmp(:,:) = 0.0_dp
           sqrEDMTmp(:,:) = 0.0_dp
@@ -196,7 +196,7 @@ contains
     real(dp) :: hPrimeTmp(orb%mOrb,orb%mOrb,3), sPrimeTmp(orb%mOrb,orb%mOrb,3)
     real(dp) :: derivTmp(3)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     nSpin = size(shift,dim=4)
     @:ASSERT(nSpin == 1 .or. nSpin == 2 .or. nSpin ==4)
     @:ASSERT(size(deriv,dim=1) == 3)
@@ -327,7 +327,7 @@ contains
     real(dp) :: derivTmp(3)
     complex(dp), parameter :: i = (0.0_dp,1.0_dp)
 
-    nAtom = size(orb%nOrbAtom)
+    nAtom = size(nNeighbor)
     nSpin = size(shift,dim=4)
     @:ASSERT(nSpin == 1 .or. nSpin == 2 .or. nSpin ==4)
     @:ASSERT(size(deriv,dim=1) == 3)

@@ -39,7 +39,7 @@ contains
 
 
   !> Initialise the charge vector from the reference atomic charges
-  subroutine initQFromAtomChrg(fOrb, qAtom, fRefShell, species, speciesNames, nAtom, orb)
+  subroutine initQFromAtomChrg(fOrb, qAtom, fRefShell, species0, speciesNames, orb)
 
     !> The number of electrons per lm,atom,spin
     real(dp), intent(out) :: fOrb(:,:,:)
@@ -51,32 +51,31 @@ contains
     real(dp), intent(in) :: fRefShell(:,:)
 
     !> List of chemical species for each atom
-    integer, intent(in) :: species(:)
+    integer, intent(in) :: species0(:)
 
     !> Names of the species (for error messages)
     character(len=*), intent(in) :: speciesNames(:)
-
-    !> number of atoms in the system
-    integer, intent(in) :: nAtom
     
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
-    integer :: iAt, iSp, iSh1, iShL, iShR, nSh
+    integer :: iAt, iSp, iSh1, iShL, iShR, nSh, nAtom
     real(dp) :: fShell, fAtomRes
 
+    nAtom = size(species0)
+    
     @:ASSERT(size(fOrb, dim=1) == orb%mOrb)
     @:ASSERT(size(fOrb, dim=2) == nAtom)
     @:ASSERT(size(fOrb, dim=3) >= 1)
     @:ASSERT(size(fRefShell, dim=1) >= orb%mShell)
     @:ASSERT(size(fRefShell, dim=2) == size(orb%nShell))
-    @:ASSERT(size(species) == nAtom)
+    @:ASSERT(size(species0) == nAtom)
     @:ASSERT(size(speciesNames) == size(orb%nShell))
 
     fOrb = 0.0_dp
     ! fill degenerately over m for each shell l
     do iAt = 1, nAtom
-      iSp = species(iAt)
+      iSp = species0(iAt)
       ! nr. of electrons = number of electrons in all shells - net charge
       fAtomRes = sum(fRefShell(1:orb%nShell(iSp),iSp)) - qAtom(iAt)
       lpShell: do iSh1 = 1, orb%nShell(iSp)
@@ -102,7 +101,7 @@ contains
   !> Initialise the charge vector from the reference atomic charges results in a set of charges
   !> appropriate for the neutral spin unpolarised atom reference system that DFTB assumes for
   !> SCC/spin extensions
-  subroutine initQFromShellChrg(qq, qShell, species, nAtom, orb)
+  subroutine initQFromShellChrg(qq, qShell, species0, orb)
 
     !> The charges per lm,atom,spin
     real(dp), intent(out) :: qq(:,:,:)
@@ -111,27 +110,24 @@ contains
     real(dp), intent(in) :: qShell(:,:)
 
     !> List of chemical species for each atom
-    integer, intent(in) :: species(:)
-
-    !> number of atoms in the system
-    integer, intent(in) :: nAtom
+    integer, intent(in) :: species0(:)
     
     !> Information about the orbitals
     type(TOrbitals), intent(in) :: orb
 
-    integer :: iAt1, iSp1, iSh1, iSh1l, iSh1r, nSh1
+    integer :: iAt1, iSp1, iSh1, iSh1l, iSh1r, nSh1, nAtom
 
+    nAtom = size(species0)
     @:ASSERT(size(qq, dim=1) == orb%mOrb)
     @:ASSERT(size(qq, dim=2) == nAtom)
     @:ASSERT(size(qq, dim=3) >= 1)
     @:ASSERT(size(qShell, dim=1) == orb%mShell)
     @:ASSERT(size(qShell, dim=2) == size(orb%angShell, dim=2))
-    @:ASSERT(size(species) == nAtom)
 
     qq(:,:,:) = 0.0_dp
     ! fill degenerately over m for each shell l
     do iAt1 = 1, nAtom
-      iSp1 = species(iAt1)
+      iSp1 = species0(iAt1)
       do iSh1 = 1, orb%nShell(iSp1)
         iSh1l = orb%posShell(iSh1, iSp1)
         iSh1r = orb%posShell(iSh1+1, iSp1) - 1

@@ -1128,7 +1128,6 @@ contains
     allocate(slako%orb)
     allocate(slako%orb%nShell(geo%nSpecies))
     allocate(slako%orb%nOrbSpecies(geo%nSpecies))
-    allocate(slako%orb%nOrbAtom(geo%nAtom))
     slako%orb%mOrb = 0
     slako%orb%mShell = 0
     do iSp1 = 1, geo%nSpecies
@@ -1145,8 +1144,7 @@ contains
     end do
     slako%orb%mShell = maxval(slako%orb%nShell)
     slako%orb%mOrb = maxval(slako%orb%nOrbSpecies)
-    slako%orb%nOrbAtom(:) = slako%orb%nOrbSpecies(geo%species(:))
-    slako%orb%nOrb = sum(slako%orb%nOrbAtom)
+    slako%orb%nOrb = sum(slako%orb%nOrbSpecies(geo%species(:)))
 
     allocate(slako%orb%angShell(slako%orb%mShell, geo%nSpecies))
     allocate(slako%orb%iShellOrb(slako%orb%mOrb, geo%nSpecies))
