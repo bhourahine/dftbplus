@@ -43,7 +43,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> New equivalency array on return.
     integer, intent(out) :: equivNew(:,:,:)
 
@@ -107,7 +107,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Contains the equivalent orbital sums at exit as vector.
     real(dp), intent(out) :: output(:)
 
@@ -149,10 +149,10 @@ contains
 
     !> Contains information about the atomic orbitals in the system
     type(TOrbitals), intent(in) :: orb
-    
+
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Expanded array.
     real(dp), intent(out) :: output(:,:,:)
 

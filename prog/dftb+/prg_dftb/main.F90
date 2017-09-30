@@ -312,7 +312,7 @@ contains
     end if
 
     ! If the geometry is periodic, need to update lattice information in geometry loop
-    tLatticeChanged = tPeriodic
+    tLatticeChanged = boundaryConditions%tPeriodic
 
     ! As first geometry iteration, require updates for coordinates in dependent routines
     tCoordsChanged = .true.
@@ -328,13 +328,13 @@ contains
       end if
 
       if (tLatticeChanged) then
-        call handleLatticeChange(latVec, sccCalc, tStress, extPressure, mCutoff,&
+        call handleLatticeChange(boundaryConditions%latVec, sccCalc, tStress, extPressure, mCutoff,&
             & dispersion, recVec, invLatVec, cellVol, recCellVol, extLatDerivs, cellVec, rCellVec)
       end if
 
       if (tCoordsChanged) then
-        call handleCoordinateChange(coord0, latVec, invLatVec, species0, mCutoff, skRepCutoff, orb,&
-            & tPeriodic, sccCalc, dispersion, thirdOrd, img2CentCell, iCellVec,&
+        call handleCoordinateChange(coord0, boundaryConditions, invLatVec, species0, mCutoff,&
+            & skRepCutoff, orb, sccCalc, dispersion, thirdOrd, img2CentCell, iCellVec,&
             & neighborList, nAllAtom, coord0Fold, coord, species, rCellVec, nAllOrb, nNeighbor,&
             & ham, over, H0, rhoPrim, iRhoPrim, iHam, ERhoPrim, iSparseStart)
       end if
@@ -361,9 +361,10 @@ contains
 
       call resetExternalPotentials(potential)
       if (tEField) then
-        call setUpExternalElectricField(tTDEField, tPeriodic, EFieldStrength, EFieldVector,&
-            & EFieldOmega, EFieldPhase, neighborList, nNeighbor, iCellVec, img2CentCell, cellVec,&
-            & deltaT, iGeoStep, coord0Fold, coord, EField, potential%extAtom(:,1), absEField)
+        call setUpExternalElectricField(tTDEField, boundaryConditions%tPeriodic, EFieldStrength,&
+            & EFieldVector, EFieldOmega, EFieldPhase, neighborList, nNeighbor, iCellVec,&
+            & img2CentCell, cellVec, deltaT, iGeoStep, coord0Fold, coord, EField,&
+            & potential%extAtom(:,1), absEField)
       end if
 
       call mergeExternalPotentials(orb, species, potential)
@@ -452,8 +453,8 @@ contains
               & iGeoStep, tMD, tDerivs, tCoordOpt, tLatOpt, iLatGeoStep, iSccIter, energy,&
               & diffElec, sccErrorQ, indMovedAtom, pCoord0Out, q0, qInput, qOutput, eigen, filling,&
               & orb, species, tDFTBU, tImHam, tPrintMulliken, orbitalL, qBlockOut, Ef, Eband, TS,&
-              & E0, extPressure, cellVol, tAtomicEnergy, tDispersion, tEField, tPeriodic, nSpin,&
-              & tSpinOrbit, tSccCalc)
+              & E0, extPressure, cellVol, tAtomicEnergy, tDispersion, tEField,&
+              & boundaryConditions%tPeriodic, nSpin, tSpinOrbit, tSccCalc)
         end if
 
         if (tConverged .or. tStopScc) then
@@ -463,7 +464,7 @@ contains
       end do lpSCC
 
       if (tLinResp) then
-        call ensureLinRespConditions(t3rd, tRealHS, tPeriodic, tForces)
+        call ensureLinRespConditions(t3rd, tRealHS, boundaryConditions%tPeriodic, tForces)
         call calculateLinRespExcitations(lresp, sccCalc, qOutput, q0, over, HSqrReal, eigen(:,1,:),&
             & filling(:,1,:), coord0, species, speciesName, orb, denseMatIndex, skHamCont,&
             & skOverCont, fdAutotest, fdEigvec, runId, neighborList, nNeighbor, iSparseStart,&
@@ -502,8 +503,8 @@ contains
       ! MD geometry files are written only later, once velocities for the current geometry are known
       if (tGeoOpt .and. tWriteRestart) then
         call writeCurrentGeometry(geoOutFile, pCoord0Out, tLatOpt, tMd, tAppendGeo, tFracCoord,&
-            & tPeriodic, tPrintMulliken, species0, speciesName, latVec, iGeoStep, iLatGeoStep,&
-            & nSpin, qOutput, velocities)
+            & boundaryConditions%tPeriodic, tPrintMulliken, species0, speciesName,&
+            & boundaryConditions%latVec, iGeoStep, iLatGeoStep, nSpin, qOutput, velocities)
       end if
 
       call printEnergies(energy)
@@ -524,8 +525,9 @@ contains
         if (tStress) then
           call getStress(sccCalc, tEField, nonSccDeriv, EField, rhoPrim, ERhoPrim, qOutput, q0,&
               & skHamCont, skOverCont, pRepCont, neighborList, nNeighbor, species,&
-              & img2CentCell, iSparseStart, orb, potential, coord, latVec, invLatVec, cellVol,&
-              & coord0, dispersion, totalStress, totalLatDeriv, intPressure, iRhoPrim)
+              & img2CentCell, iSparseStart, orb, potential, coord, boundaryConditions%latVec,&
+              & invLatVec, cellVol, coord0, dispersion, totalStress, totalLatDeriv, intPressure,&
+              & iRhoPrim)
           call printVolume(cellVol)
           ! MD case includes the atomic kinetic energy contribution, so print that later
           if (.not. tMD) then
@@ -536,8 +538,8 @@ contains
 
       if (tWriteDetailedOut) then
         call writeDetailedOut2(fdDetailedOut, tSccCalc, tConverged, tXlbomd, tLinResp, tGeoOpt,&
-            & tMD, tPrintForces, tStress, tPeriodic, energy, totalStress, totalLatDeriv, derivs, &
-            & chrgForces, indMovedAtom, cellVol, intPressure, geoOutFile)
+            & tMD, tPrintForces, tStress, boundaryConditions%tPeriodic, energy, totalStress,&
+            & totalLatDeriv, derivs, chrgForces, indMovedAtom, cellVol, intPressure, geoOutFile)
       end if
 
       if (tSccCalc .and. .not. tXlbomd .and. .not. tConverged) then
@@ -607,8 +609,8 @@ contains
             end if
           else
             call getNextLatticeOptStep(pGeoLatOpt, energy%EGibbs, constrLatDerivs, origLatVec,&
-                & tLatOptFixAng, tLatOptFixLen, tLatOptIsotropic, indMovedAtom, latVec, coord0,&
-                & diffGeo, tGeomEnd)
+                & tLatOptFixAng, tLatOptFixLen, tLatOptIsotropic, indMovedAtom,&
+                & boundaryConditions%latVec, coord0, diffGeo, tGeomEnd)
             iLatGeoStep = iLatGeoStep + 1
             tLatticeChanged = .true.
             if (.not. tGeomEnd .and. tCoordOpt) then
@@ -625,33 +627,34 @@ contains
           newCoords(:,:) = coord0
           call getNextMdStep(pMdIntegrator, pMdFrame, temperatureProfile, derivs, movedMass,&
               & mass, cellVol, invLatVec, species0, indMovedAtom, tStress, tBarostat, energy,&
-              & newCoords, latVec, intPressure, totalStress, totalLatDeriv, velocities, tempIon)
+              & newCoords, boundaryConditions%latVec, intPressure, totalStress, totalLatDeriv,&
+              & velocities, tempIon)
           tCoordsChanged = .true.
           tLatticeChanged = tBarostat
-          call printMdInfo(tSetFillingTemp, tEField, tPeriodic, tempElec, absEField, tempIon,&
-              & intPressure, extPressure, energy)
+          call printMdInfo(tSetFillingTemp, tEField, boundaryConditions%tPeriodic, tempElec,&
+              & absEField, tempIon, intPressure, extPressure, energy)
           if (tWriteRestart) then
-            if (tPeriodic) then
-              cellVol = abs(determinant33(latVec))
+            if (boundaryConditions%tPeriodic) then
+              cellVol = abs(determinant33(boundaryConditions%latVec))
               energy%EGibbs = energy%EMermin + extPressure * cellVol
             end if
             call writeMdOut2(fdMd, tStress, tBarostat, tLinResp, tEField, tFixEf, tPrintMulliken,&
-                & energy, latVec, cellVol, intPressure, extPressure, tempIon, absEField, qOutput,&
-                & q0, dipoleMoment)
+                & energy, boundaryConditions%latVec, cellVol, intPressure, extPressure, tempIon,&
+                & absEField, qOutput, q0, dipoleMoment)
             call writeCurrentGeometry(geoOutFile, pCoord0Out, .false., .true., .true., tFracCoord,&
-                & tPeriodic, tPrintMulliken, species0, speciesName, latVec, iGeoStep, iLatGeoStep,&
-                & nSpin, qOutput, velocities)
+                & boundaryConditions%tPeriodic, tPrintMulliken, species0, speciesName,&
+                & boundaryConditions%latVec, iGeoStep, iLatGeoStep, nSpin, qOutput, velocities)
           end if
           coord0(:,:) = newCoords
           if (tWriteDetailedOut) then
-            call writeDetailedOut3(fdDetailedOut, tPrintForces, tSetFillingTemp, tPeriodic,&
-                & tStress, totalStress, totalLatDeriv, energy, tempElec, extPressure, intPressure,&
-                & tempIon)
+            call writeDetailedOut3(fdDetailedOut, tPrintForces, tSetFillingTemp,&
+                & boundaryConditions%tPeriodic, tStress, totalStress, totalLatDeriv, energy,&
+                & tempElec, extPressure, intPressure, tempIon)
           end if
         else if (tSocket .and. iGeoStep < nGeoSteps) then
           ! Only receive geometry from socket, if there are still geometry iterations left
-          call receiveGeometryFromSocket(socket, tPeriodic, coord0, latVec, tCoordsChanged,&
-              & tLatticeChanged, tStopDriver)
+          call receiveGeometryFromSocket(socket, boundaryConditions%tPeriodic, coord0,&
+              & boundaryConditions%latVec, tCoordsChanged, tLatticeChanged, tStopDriver)
         end if
       end if
 
@@ -706,30 +709,31 @@ contains
     end if
 
     if (tWriteAutotest) then
-      if (tPeriodic) then
-        cellVol = abs(determinant33(latVec))
+      if (boundaryConditions%tPeriodic) then
+        cellVol = abs(determinant33(boundaryConditions%latVec))
         energy%EGibbs = energy%EMermin + extPressure * cellVol
       end if
-      call writeAutotestTag(fdAutotest, autotestTag, tPeriodic, cellVol, tMulliken, qOutput,&
-          & derivs, chrgForces, excitedDerivs, tStress, totalStress, pDynMatrix,&
-          & energy%EMermin, extPressure, energy%EGibbs, coord0, tLocalise, localisation)
+      call writeAutotestTag(fdAutotest, autotestTag, boundaryConditions%tPeriodic, cellVol,&
+          & tMulliken, qOutput, derivs, chrgForces, excitedDerivs, tStress, totalStress,&
+          & pDynMatrix, energy%EMermin, extPressure, energy%EGibbs, coord0, tLocalise, localisation)
     end if
     if (tWriteResultsTag) then
       call writeResultsTag(fdResultsTag, resultsTag, derivs, chrgForces, tStress, totalStress,&
-          & pDynMatrix, tPeriodic, cellVol)
+          & pDynMatrix, boundaryConditions%tPeriodic, cellVol)
     end if
     if (tWriteDetailedXML) then
-      call writeDetailedXml(runId, speciesName, species0, pCoord0Out, tPeriodic, latVec, tRealHS,&
-          & nKPoint, nSpin, size(eigen, dim=1), nOrb, kPoint, kWeight, filling, occNatural)
+      call writeDetailedXml(runId, speciesName, species0, pCoord0Out, boundaryConditions%tPeriodic,&
+          & boundaryConditions%latVec, tRealHS, nKPoint, nSpin, size(eigen, dim=1), nOrb, kPoint,&
+          & kWeight, filling, occNatural)
     end if
 
     call destructProgramVariables()
 
   end subroutine runDftbPlus
 
-  
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!! Privat routines
+!!! Private routines
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
@@ -875,7 +879,7 @@ contains
 
     !> data structure for indexing large dense arrays
     type(TDenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> Number of atoms
     integer, intent(in) :: nAtom
 
@@ -1222,16 +1226,16 @@ contains
 
 
   !> Does the operations that are necessary after atomic coordinates change
-  subroutine handleCoordinateChange(coord0, latVec, invLatVec, species0, mCutoff, skRepCutoff, &
-      & orb, tPeriodic, sccCalc, dispersion, thirdOrd, img2CentCell, iCellVec, neighborList,&
+  subroutine handleCoordinateChange(coord0, boundaryConditions, invLatVec, species0, mCutoff,&
+      & skRepCutoff, orb, sccCalc, dispersion, thirdOrd, img2CentCell, iCellVec, neighborList,&
       & nAllAtom, coord0Fold, coord, species, rCellVec, nAllOrb, nNeighbor, ham, over, H0, rhoPrim,&
       & iRhoPrim, iHam, ERhoPrim, iSparseStart)
 
     !> Central cell coordinates
     real(dp), intent(in) :: coord0(:,:)
 
-    !> Lattice vectors if periodic
-    real(dp), intent(in) :: latVec(:,:)
+    !> boundary conditions for the system
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
 
     !> Inverse of the lattice vectors
     real(dp), intent(in) :: invLatVec(:,:)
@@ -1247,9 +1251,6 @@ contains
 
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
-
-    !> Is the geometry periodic
-    logical, intent(in) :: tPeriodic
 
     !> SCC module internal variables
     type(TScc), allocatable, intent(inout) :: sccCalc
@@ -1319,8 +1320,8 @@ contains
     integer :: sparseSize
 
     coord0Fold(:,:) = coord0
-    if (tPeriodic) then
-      call foldCoordToUnitCell(coord0Fold, latVec, invLatVec)
+    if (boundaryConditions%tPeriodic) then
+      call foldCoordToUnitCell(coord0Fold, boundaryConditions%latVec, invLatVec)
     end if
 
     call updateNeighborListAndSpecies(coord, species, img2CentCell, iCellVec, &
@@ -2305,7 +2306,7 @@ contains
 
     tStoreEigvecs = present(storeEigvecsCplx)
     nAtom = size(nNeighbor)
-    
+
     #:call ASSERT_CODE
       @:ASSERT(.not. present(xi) .or. (present(species) .and. present(orb)))
       if (tStoreEigvecs) then
@@ -2452,7 +2453,7 @@ contains
 
     !> species of atoms
     integer, intent(in), optional :: species(:)
-    
+
     !> eigenvectors
     real(dp), intent(inout) :: eigvecs(:,:,:)
 
@@ -2856,7 +2857,7 @@ contains
 
     !> number of atoms
     integer, intent(in) :: nAtom
-    
+
     !> atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
@@ -2931,7 +2932,7 @@ contains
 
     !> chemical species
     integer, intent(in) :: species(:)
-    
+
     !> Atomic neighbours
     type(TNeighborList), intent(in) :: neighborList
 
@@ -3250,7 +3251,7 @@ contains
     integer :: nSpin, nAtom
 
     nSpin = size(qOutput, dim=3)
-    nAtom = size(qOutput, dim=2)    
+    nAtom = size(qOutput, dim=2)
     call reduceCharges(orb, species, nIneqOrb, iEqOrbitals, qOutput, qOutRed, qBlockOut,&
         & iEqBlockDftbu, qiBlockOut, iEqBlockDftbuLS)
     qDiffRed = qOutRed - qInpRed
@@ -3341,7 +3342,7 @@ contains
 
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
-    
+
     !> Number of unique types of atomic orbitals
     integer, intent(in) :: nIneqOrb
 
@@ -3564,7 +3565,7 @@ contains
 
     !> data structure for indexing large dense arrays
     type(TDenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> non-SCC hamiltonian information
     type(OSlakoCont), intent(in) :: skHamCont
 
@@ -3879,7 +3880,7 @@ contains
 
     !> species of all atoms in the system
     integer, intent(in) :: species(:)
-    
+
     !> Index of start of atom blocks in dense matrices
     integer, intent(in) :: iDenseStart(:)
 
@@ -3922,7 +3923,7 @@ contains
     !> Storage for dense overlap matrix (complex case)
     complex(dp), intent(inout), optional :: SSqrCplx(:,:)
 
-    !> storage for eigenvectors    
+    !> storage for eigenvectors
     type(OFifoRealR2), intent(inout), optional :: storeEigvecsReal(:)
 
     !> storage for eigenvectors
@@ -3974,7 +3975,7 @@ contains
 
     !> Atomic species
     integer, intent(in) :: species(:)
-    
+
     !> Index of start of atom blocks in dense matrices
     integer, intent(in) :: iDenseStart(:)
 
@@ -4108,7 +4109,7 @@ contains
 
     !> atomic species
     integer, intent(in) :: species(:)
-    
+
     !> Index of start of atom blocks in dense matrices
     integer, intent(in) :: iDenseStart(:)
 
@@ -4135,10 +4136,10 @@ contains
 
     !> Storage for dense overlap matrix
     complex(dp), intent(inout) :: SSqrCplx(:,:)
-    
+
     !> energy weighted density matrix in sparse storage
     real(dp), intent(out) :: ERhoPrim(:)
-    
+
     !> storage for eigenvectors
     type(OFifoCplxR2), intent(inout), optional :: storeEigvecsCplx(:)
 

@@ -56,7 +56,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 
@@ -110,7 +110,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 
@@ -183,7 +183,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 
@@ -259,7 +259,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Number of neighbours of each real atom (central cell)
     integer, intent(in) :: iNeighbor(0:,:)
 

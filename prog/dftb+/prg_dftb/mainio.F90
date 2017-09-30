@@ -152,7 +152,7 @@ contains
 
     !> Orbital information.
     type(TDenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> Species.
     integer, intent(in) :: species(:)
 
@@ -289,7 +289,7 @@ contains
 
     !> Orbital information.
     type(TDenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> Species.
     integer, intent(in) :: species(:)
 
@@ -617,10 +617,10 @@ contains
 
     !> Orbital information.
     type(TOrbitals), intent(in) :: orb
-    
+
     !> Orbital information.
     type(TDenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> Sparse overlap matrix.
     real(dp), intent(in) :: over(:)
 
@@ -2078,7 +2078,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> input charges
     real(dp), intent(in) :: qInput(:,:,:)
 
@@ -2298,7 +2298,7 @@ contains
 
     !> Orbital information.
     type(TDenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> k-points
     real(dp), intent(in) :: kPoint(:,:)
 
@@ -2380,7 +2380,7 @@ contains
 
     !> Orbital information.
     type(TDenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
 
@@ -2406,7 +2406,7 @@ contains
     !> storage for eigenvectors to disc
     type(OFifoRealR2), intent(inout), optional :: storeEigvecsReal(:)
 
-    !> storage for eigenvectors to disc    
+    !> storage for eigenvectors to disc
     type(OFifoCplxR2), intent(inout), optional :: storeEigvecsCplx(:)
 
     @:ASSERT(present(HSqrReal) .neqv. present(HSqrCplx))

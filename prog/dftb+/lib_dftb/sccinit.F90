@@ -55,7 +55,7 @@ contains
 
     !> Names of the species (for error messages)
     character(len=*), intent(in) :: speciesNames(:)
-    
+
     !> Information about the orbitals.
     type(TOrbitals), intent(in) :: orb
 
@@ -63,7 +63,7 @@ contains
     real(dp) :: fShell, fAtomRes
 
     nAtom = size(species0)
-    
+
     @:ASSERT(size(fOrb, dim=1) == orb%mOrb)
     @:ASSERT(size(fOrb, dim=2) == nAtom)
     @:ASSERT(size(fOrb, dim=3) >= 1)
@@ -111,7 +111,7 @@ contains
 
     !> List of chemical species for each atom
     integer, intent(in) :: species0(:)
-    
+
     !> Information about the orbitals
     type(TOrbitals), intent(in) :: orb
 
@@ -159,13 +159,13 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Nr. of electrons for each spin channel
     real(dp), intent(in), optional :: nEl
 
     !> magnetisation checksum for regular spin polarization total magnetic moment
     real(dp), intent(in), optional :: magnetisation
-    
+
     !> block Mulliken population for LDA+U etc
     real(dp), intent(out), optional :: qBlock(:,:,:,:)
 
@@ -353,7 +353,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> block Mulliken population for LDA+U etc.
     real(dp), intent(in), optional :: qBlock(:,:,:,:)
 

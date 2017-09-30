@@ -94,7 +94,7 @@ contains
 
     !> Number of atoms
     integer, intent(in) :: nAtom
-    
+
     this%nAtoms = nAtom
     this%mShellsReal = inp%orb%mShell
     this%nSpecies = size(inp%hubbUs, dim=2)

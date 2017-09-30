@@ -101,13 +101,15 @@ module initprogram
   !> nr of different types (nAtom)
   integer :: nType
 
-
   !> data type for atomic orbital information
   type(TOrbitals), target :: orb
 
+  !> Boundary conditions of the system
+  type(TBoundaryConditions) :: boundaryConditions
+
   !> data type for indexing dense large matrices
   type(TDenseMatIndex), target :: denseMatIndex
-  
+
   !> nr. of orbitals in the system, this is also contained in denseMatIndex
   integer :: nOrb
 
@@ -135,10 +137,6 @@ module initprogram
   !> temporary array of coords (3,:)
   real(dp), allocatable :: tmp3Coords(:,:)
 
-
-  !> if calculation is periodic
-  logical :: tPeriodic
-
   !> Should central cell coordinates be output?
   logical :: tShowFoldedCoord
 
@@ -152,20 +150,14 @@ module initprogram
   !> Tollerance for SCC cycle
   real(dp) :: sccTol
 
-
-  !> lattice vectors as columns
-  real(dp), allocatable, target :: latVec(:,:)
-
   !> reciprocal lattice vectors as columns
   real(dp), allocatable, target :: recVec(:,:)
-
 
   !> original lattice vectors used for optimizing
   real(dp) :: origLatVec(3,3)
 
   !> normalized vectors in those directions
   real(dp) :: normOrigLatVec(3,3)
-
 
   !> reciprocal vectors in 2 pi units
   real(dp), allocatable :: invLatVec(:,:)
@@ -723,6 +715,7 @@ contains
 
     character(lc) :: strTmp, strTmp2
 
+    logical :: tPeriodic
 
     !> flag to check for first cycle through a loop
     logical :: tFirst
@@ -786,8 +779,10 @@ contains
     sccTol = input%ctrl%sccTol
     nAtom = input%geom%nAtom
     nType = input%geom%nSpecies
-    tPeriodic = input%geom%tPeriodic
+    boundaryConditions%tPeriodic = input%geom%tPeriodic
     tShowFoldedCoord = input%ctrl%tShowFoldedCoord
+
+    tPeriodic = boundaryConditions%tPeriodic
     if (tShowFoldedCoord .and. .not. tPeriodic) then
       call error("Folding coordinates back into the central cell is&
           & meaningless for molecular boundary conditions!")
@@ -802,19 +797,18 @@ contains
 
     if (tPeriodic) then
       tLatticeChanged = .true.
-      allocate(latVec(3, 3))
-      @:ASSERT(all(shape(input%geom%latVecs) == shape(latVec)))
-      latVec(:,:) = input%geom%latVecs(:,:)
+      allocate(boundaryConditions%latVec(3, 3))
+      @:ASSERT(all(shape(input%geom%latVecs) == [3,3]))
+      boundaryConditions%latVec = input%geom%latVecs
       allocate(recVec(3, 3))
       allocate(invLatVec(3, 3))
-      invLatVec = latVec(:,:)
+      invLatVec = boundaryConditions%latVec
       call matinv(invLatVec)
       invLatVec = reshape(invLatVec, (/3, 3/), order=(/2, 1/))
       recVec = 2.0_dp * pi * invLatVec
-      CellVol = abs(determinant33(latVec))
+      CellVol = abs(determinant33(boundaryConditions%latVec))
       recCellVol = abs(determinant33(recVec))
     else
-      allocate(latVec(0, 0))
       allocate(recVec(0, 0))
       allocate(invLatVec(0, 0))
       CellVol = 0.0_dp
@@ -930,7 +924,7 @@ contains
       allocate(sccCalc)
       sccInp%orb => orb
       if (tPeriodic) then
-        sccInp%latVecs = latVec
+        sccInp%latVecs = boundaryConditions%latVec
         sccInp%recVecs = recVec
         sccInp%volume = CellVol
       end if
@@ -1214,7 +1208,7 @@ contains
       tLatOptFixLen = input%ctrl%tLatOptFixLen
       tLatOptIsotropic = input%ctrl%tLatOptIsotropic
       if (tLatOptFixAng .or. any(tLatOptFixLen) .or. tLatOptIsotropic) then
-        origLatVec(:,:) = latVec(:,:)
+        origLatVec(:,:) = boundaryConditions%latVec(:,:)
         do ii = 1, 3
            normOrigLatVec(:,ii) = origLatVec(:,ii) &
                 & / sqrt(sum(origLatVec(:,ii)**2))
@@ -1234,8 +1228,8 @@ contains
       tForces = .true.
       tGeoOpt = .false.
       tMD = .false.
-      call receiveGeometryFromSocket(socket, tPeriodic, coord0, latVec, tCoordsChanged,&
-          & tLatticeChanged, tDummy)
+      call receiveGeometryFromSocket(socket, boundaryConditions%tPeriodic, coord0,&
+          & boundaryConditions%latVec, tCoordsChanged, tLatticeChanged, tDummy)
     end if
 
     tAppendGeo = input%ctrl%tAppendGeo
@@ -1450,7 +1444,7 @@ contains
                                   ! of lattice vectors
             &(/1.0_dp,1.0_dp,1.0_dp,0.0_dp,0.0_dp,0.0_dp,0.0_dp,0.0_dp,0.0_dp/))
       else
-        call reset( pGeoLatOpt, reshape(latVec, (/ 9 /)) )
+        call reset( pGeoLatOpt, reshape(boundaryConditions%latVec, (/ 9 /)) )
       end if
     end if
 
@@ -1485,7 +1479,7 @@ contains
         allocate(slaKirk)
         if (tPeriodic) then
           call DispSlaKirk_init(slaKirk, input%ctrl%dispInp%slakirk, &
-              & latVec)
+              & boundaryConditions%latVec)
         else
           call DispSlaKirk_init(slaKirk, input%ctrl%dispInp%slakirk)
         end if
@@ -1495,7 +1489,7 @@ contains
         allocate(uff)
         if (tPeriodic) then
           call DispUff_init(uff, input%ctrl%dispInp%uff, nAtom, species0, &
-              & latVec)
+              & boundaryConditions%latVec)
         else
           call DispUff_init(uff, input%ctrl%dispInp%uff, nAtom)
         end if
@@ -1506,7 +1500,7 @@ contains
         allocate(dftd3)
         if (tPeriodic) then
           call DispDftD3_init(dftd3, input%ctrl%dispInp%dftd3, nAtom, &
-              & species0, speciesName, latVec)
+              & species0, speciesName, boundaryConditions%latVec)
         else
           call DispDftD3_init(dftd3, input%ctrl%dispInp%dftd3, nAtom, &
               & species0, speciesName)
@@ -1958,7 +1952,7 @@ contains
 
     ! Initalize images (translations)
     if (tPeriodic) then
-      call getCellTranslations(cellVec, rCellVec, latVec, invLatVec, mCutoff)
+      call getCellTranslations(cellVec, rCellVec, boundaryConditions%latVec, invLatVec, mCutoff)
     else
       allocate(cellVec(3, 1))
       allocate(rCellVec(3, 1))

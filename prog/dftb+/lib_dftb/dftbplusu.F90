@@ -537,7 +537,7 @@ contains
 
     !> chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> 1D array with appended data
     real(dp), intent(inout) :: output(:)
 

@@ -216,7 +216,7 @@ contains
 
     !> atoms
     integer, intent(in) :: nAtom
-    
+
     integer :: iSp1, iSp2, iU1, iU2, iL
     real(dp) :: maxGEwald
 

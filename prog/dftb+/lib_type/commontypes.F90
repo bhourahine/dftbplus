@@ -11,7 +11,7 @@ module commontypes
   implicit none
   private
 
-  public :: TOrbitals, TDenseMatIndex
+  public :: TOrbitals, TDenseMatIndex, TBoundaryConditions
 
 
   !> Contains information about the orbitals of the species/atoms in the system
@@ -43,14 +43,28 @@ module commontypes
   end type TOrbitals
 
   !> Contains index information for large dense matrices like the hamiltonian
-  type TDenseMatIndex  
-    
+  type TDenseMatIndex
+
     !> Total number of orbitals in system.
     integer :: nOrb
 
     !> Start of orbitals for atoms in dense  H/S matrices
     integer, allocatable :: iDenseStart(:)
-    
+
   end type TDenseMatIndex
-  
+
+  !> Boundary conditions on the system
+  type TBoundaryConditions
+
+    !> cluster geometry
+    logical :: tCluster
+
+    !> periodic geometry
+    logical :: tPeriodic
+
+    !> Lattice vectors
+    real(dp), allocatable :: latVec(:,:)
+
+  end type TBoundaryConditions
+
 end module commontypes

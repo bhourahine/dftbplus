@@ -141,7 +141,7 @@ contains
 
     !> number of ground state spatial basis functions
     integer, intent(in) :: norb
-    
+
     !> print tag information
     logical, intent(in) :: tWriteTagged
 

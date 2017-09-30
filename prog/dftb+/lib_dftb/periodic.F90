@@ -730,7 +730,7 @@ contains
 
     !> Chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
@@ -799,7 +799,7 @@ contains
 
     !> Chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> nr. atoms in the central cell
     integer :: nAtom
 
@@ -980,7 +980,7 @@ contains
     @:ASSERT(allocated(iPair))
     @:ASSERT(size(iPair, dim=2) == nAtom)
     @:ASSERT(size(species) >= nAtom)
-    
+
     if (mNeighbor > size(iPair, dim=1)) then
       deallocate(iPair)
       allocate(iPair(0:mNeighbor-1, nAtom))
@@ -1024,7 +1024,7 @@ contains
     integer :: nAtom
 
     nAtom = size(iDenseStart) - 1
-    
+
     @:ASSERT(size(species) >= nAtom)
 
     ind = 1

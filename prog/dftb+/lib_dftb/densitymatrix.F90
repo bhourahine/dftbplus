@@ -354,10 +354,10 @@ contains
 
     !> Information about the orbitals of the atoms
     type(TOrbitals), intent(in) :: orb
-    
+
     !> Chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iDenseStart(:)
 
@@ -451,7 +451,7 @@ contains
 
     !> Chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iDenseStart(:)
 
@@ -550,7 +550,7 @@ contains
 
     !> Chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iDenseStart(:)
 
@@ -649,7 +649,7 @@ contains
 
     !> Chemical species of atoms
     integer, intent(in) :: species(:)
-    
+
     !> Atomic mapping indexes.
     integer, intent(in) :: iDenseStart(:)
 

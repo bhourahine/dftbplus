@@ -281,7 +281,7 @@ contains
 
     !> data type for dense matrix indexing
     type(TdenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> print tag information
     logical, intent(in) :: tWriteTagged
 
@@ -354,7 +354,7 @@ contains
 
     !> data type for dense matrix indexing
     type(TdenseMatIndex), intent(in) :: denseMatIndex
-    
+
     !> non-SCC H0 data
     type(OSlakoCont), intent(in) :: skHamCont
 
