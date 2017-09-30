@@ -121,7 +121,7 @@ contains
 
   !> The stress tensor contributions from the non-SCC energy
   subroutine getNonSCCStress(st,derivator,DM,EDM,skHamCont,skOverCont,coords,species,iNeighbor, &
-      & nNeighbor,img2CentCell,iPair,orb, nAtom, cellVol)
+      & nNeighbor,img2CentCell,iPair,orb, cellVol)
 
     !> stress tensor
     real(dp), intent(out) :: st(:,:)
@@ -162,14 +162,11 @@ contains
     !> Information about the shells and orbitals in the system.
     type(TOrbitals), intent(in) :: orb
 
-    !> atoms in the system
-    integer, intent(in) :: nAtom
-    
     !> cell volume.
     real(dp), intent(in) :: cellVol
 
     integer :: iOrig, ii, jj
-    integer :: iNeigh, iAtom1, iAtom2, iAtom2f
+    integer :: iNeigh, iAtom1, iAtom2, iAtom2f, nAtom
     integer :: nOrb1, nOrb2
     real(dp) :: sqrDMTmp(orb%mOrb,orb%mOrb), sqrEDMTmp(orb%mOrb,orb%mOrb)
     real(dp) :: hPrimeTmp(orb%mOrb,orb%mOrb,3), sPrimeTmp(orb%mOrb,orb%mOrb,3)
@@ -178,6 +175,7 @@ contains
     @:ASSERT(all(shape(st) == [3, 3]))
     @:ASSERT(size(DM,dim=1)==size(EDM,dim=1))
 
+    nAtom = size(nNeighbor)
     st(:,:) = 0.0_dp
 
     do iAtom1 = 1, nAtom
