@@ -1009,10 +1009,10 @@ contains
 
 
   !> Builds an atom offset array for the squared hamiltonain/overlap.
-  subroutine buildSquaredAtomIndex(iAtomStart, species, orb)
+  subroutine buildSquaredAtomIndex(iDenseStart, species, orb)
 
     !> Returns the offset array for each atom.
-    integer, intent(out) :: iAtomStart(:)
+    integer, intent(out) :: iDenseStart(:)
 
     !> Species of the atoms in the central cell
     integer, intent(in) :: species(:)
@@ -1023,17 +1023,17 @@ contains
     integer :: ind, iAt1, iSp1
     integer :: nAtom
 
-    nAtom = size(iAtomStart) - 1
+    nAtom = size(iDenseStart) - 1
     
     @:ASSERT(size(species) >= nAtom)
 
     ind = 1
     do iAt1 = 1, nAtom
       iSp1 = species(iAt1)
-      iAtomStart(iAt1) = ind
+      iDenseStart(iAt1) = ind
       ind = ind + orb%nOrbSpecies(iSp1)
     end do
-    iAtomStart(nAtom+1) = ind
+    iDenseStart(nAtom+1) = ind
 
   end subroutine buildSquaredAtomIndex
 

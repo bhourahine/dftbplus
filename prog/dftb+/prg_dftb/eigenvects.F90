@@ -121,7 +121,7 @@ contains
   !> Diagonalizes a sparse represented Hamiltonian and overlap to give the eigenvectors and values,
   !> as well as often the Cholesky factorized overlap matrix (due to a side effect of lapack)
   subroutine realH(HSqrReal, SSqrReal, eigen, ham, over, iNeighbor, nNeighbor, &
-      & iAtomStart, iPair, img2CentCell, iSolver, jobz)
+      & iDenseStart, iPair, img2CentCell, iSolver, jobz)
 
     !> Large square matrix for the resulting eigenvectors
     real(dp), intent(out) :: HSqrReal(:,:)
@@ -146,7 +146,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Indexing array for the large square matrices to relate atom number to position in the matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Indexing array for sparse arrays to map atom and neighbour number to position in the matrix
     integer, intent(in) :: iPair(0:,:)
@@ -168,9 +168,9 @@ contains
     @:ASSERT(size(img2CentCell) >= maxval(iNeighbor))
     @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
 
-    call unpackHS(HSqrReal,ham,iNeighbor,nNeighbor,iAtomStart,iPair, &
+    call unpackHS(HSqrReal,ham,iNeighbor,nNeighbor,iDenseStart,iPair, &
         &img2CentCell)
-    call unpackHS(SSqrReal,over,iNeighbor,nNeighbor,iAtomStart,iPair, &
+    call unpackHS(SSqrReal,over,iNeighbor,nNeighbor,iDenseStart,iPair, &
         & img2CentCell)
 
     select case(iSolver)
@@ -191,7 +191,7 @@ contains
   !> eigenvectors and values, as well as often the Cholesky factorized overlap matrix (due to a side
   !> effect of lapack)
   subroutine cmplxH(HSqrCplx, SSqrCplx, eigen, ham, over, kpoint, iNeighbor, &
-      &nNeighbor, iCellVec, cellVec, iAtomStart, iPair, img2CentCell, &
+      &nNeighbor, iCellVec, cellVec, iDenseStart, iPair, img2CentCell, &
       &iSolver, jobz)
 
     !> Large square matrix for the resulting eigenvectors
@@ -225,7 +225,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Indexing array for the large square matrices to relate atom number to position in the matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Indexing array for sparse arrays to map atom and neighbour number to position in the matrix
     integer, intent(in) :: iPair(0:,:)
@@ -248,9 +248,9 @@ contains
     @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
 
     call unpackHS(HSqrCplx, ham, kPoint, iNeighbor, nNeighbor, iCellVec, &
-        &cellVec, iAtomStart, iPair, img2CentCell)
+        &cellVec, iDenseStart, iPair, img2CentCell)
     call unpackHS(SSqrCplx, over, kPoint, iNeighbor, nNeighbor, iCellVec, &
-        &cellVec, iAtomStart, iPair, img2CentCell)
+        &cellVec, iDenseStart, iPair, img2CentCell)
 
     select case(iSolver)
     case(1)
@@ -270,7 +270,7 @@ contains
   !> eigenvectors and values, as well as often the Cholesky factorized overlap matrix (due to a side
   !> effect of lapack)
   subroutine cmplx2Cmpnt(HSqrCplx, SSqrCplx, eigen, ham, over, iNeighbor, &
-      & nNeighbor, iAtomStart, iPair, img2CentCell, iSolver, jobz,xi,orb, &
+      & nNeighbor, iDenseStart, iPair, img2CentCell, iSolver, jobz,xi,orb, &
       & species, iHam)
 
     !> Large square matrix for the resulting eigenvectors
@@ -292,12 +292,12 @@ contains
     !> List of atomic neighbors for each central cell atom
     integer, intent(in) :: iNeighbor(0:,:)
 
-    !> Number of atomic neighbors for each central cell atom iAtomStart Indexing array for the large
+    !> Number of atomic neighbors for each central cell atom iDenseStart Indexing array for the large
     !> square matrices to relate atom number to position in the matrix
     integer, intent(in) :: nNeighbor(:)
 
     !> Indexing array for the large square matrices to relate atom number to position in the matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Indexing array for sparse arrays to map atom and neighbour number to position in the matrix
     integer, intent(in) :: iPair(0:,:)
@@ -359,7 +359,7 @@ contains
     HSqrCplx(:,:) = 0.0_dp
 
     work(:,:) = 0.0_dp
-    call unpackHS(work,over,iNeighbor,nNeighbor,iAtomStart,iPair, &
+    call unpackHS(work,over,iNeighbor,nNeighbor,iDenseStart,iPair, &
         &img2CentCell)
     SSqrCplx(1:nOrb,1:nOrb) = work(1:nOrb,1:nOrb)
     SSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = work(1:nOrb,1:nOrb)
@@ -367,13 +367,13 @@ contains
     ! 1 0 charge part
     ! 0 1
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,1),iNeighbor,nNeighbor,iAtomStart,iPair, &
+    call unpackHS(work,ham(:,1),iNeighbor,nNeighbor,iDenseStart,iPair, &
         &img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,1),iNeighbor,nNeighbor,iAtomStart,iPair, &
+      call unpackHS(work,iHam(:,1),iNeighbor,nNeighbor,iDenseStart,iPair, &
           &img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) &
           & + 0.5_dp*cmplx(0,1,dp)*work(1:nOrb,1:nOrb)
@@ -385,16 +385,16 @@ contains
     ! 0 1 x part
     ! 1 0
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,2),iNeighbor,nNeighbor,iAtomStart,iPair, &
+    call unpackHS(work,ham(:,2),iNeighbor,nNeighbor,iDenseStart,iPair, &
         &img2CentCell)
-    call blockSymmetrizeHS(work,iAtomStart)
+    call blockSymmetrizeHS(work,iDenseStart)
     HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) &
         & + 0.5_dp * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,2),iNeighbor,nNeighbor,iAtomStart,iPair, &
+      call unpackHS(work,iHam(:,2),iNeighbor,nNeighbor,iDenseStart,iPair, &
           &img2CentCell)
-      call blockAntiSymmetrizeHS(work,iAtomStart)
+      call blockAntiSymmetrizeHS(work,iDenseStart)
       HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) &
           & + 0.5_dp *cmplx(0,1,dp)* work(1:nOrb,1:nOrb)
     end if
@@ -402,16 +402,16 @@ contains
     ! 0 -i y part
     ! i  0
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,3),iNeighbor,nNeighbor,iAtomStart,iPair, &
+    call unpackHS(work,ham(:,3),iNeighbor,nNeighbor,iDenseStart,iPair, &
         &img2CentCell)
-    call blockSymmetrizeHS(work,iAtomStart)
+    call blockSymmetrizeHS(work,iDenseStart)
     HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) &
         & + cmplx(0.0,0.5,dp) * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,3),iNeighbor,nNeighbor,iAtomStart,iPair, &
+      call unpackHS(work,iHam(:,3),iNeighbor,nNeighbor,iDenseStart,iPair, &
           &img2CentCell)
-      call blockAntiSymmetrizeHS(work,iAtomStart)
+      call blockAntiSymmetrizeHS(work,iDenseStart)
       HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) &
           & - 0.5_dp * work(1:nOrb,1:nOrb)
     end if
@@ -419,7 +419,7 @@ contains
     ! 1  0 z part
     ! 0 -1
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,4),iNeighbor,nNeighbor,iAtomStart,iPair, &
+    call unpackHS(work,ham(:,4),iNeighbor,nNeighbor,iDenseStart,iPair, &
         &img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) &
         & + 0.5_dp * work(1:nOrb,1:nOrb)
@@ -428,7 +428,7 @@ contains
         & - 0.5_dp * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,4),iNeighbor,nNeighbor,iAtomStart,iPair, &
+      call unpackHS(work,iHam(:,4),iNeighbor,nNeighbor,iDenseStart,iPair, &
           &img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) &
           & + 0.5_dp * cmplx(0,1,dp) * work(1:nOrb,1:nOrb)
@@ -463,20 +463,20 @@ contains
       deallocate(Lz)
       do ii = 1, nAtom
         jj = species(ii)
-        HSqrCplx(iAtomStart(ii):iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) = &
-            & HSqrCplx(iAtomStart(ii):iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) &
+        HSqrCplx(iDenseStart(ii):iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) = &
+            & HSqrCplx(iDenseStart(ii):iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) &
             & + AtomZ(1:orb%nOrbSpecies(jj),1:orb%nOrbSpecies(jj),jj)
-        HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1) = &
-            & HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1) &
+        HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1) = &
+            & HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1) &
             & - AtomZ(1:orb%nOrbSpecies(jj),1:orb%nOrbSpecies(jj),jj)
-        HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) = &
-            & HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) &
+        HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) = &
+            & HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) &
             & + AtomPlus(1:orb%nOrbSpecies(jj),1:orb%nOrbSpecies(jj),jj)
       end do
       deallocate(AtomZ)
@@ -503,7 +503,7 @@ contains
   !> the eigenvectors and values, as well as often the Cholesky factorized overlap matrix (due to a
   !> side effect of lapack)
   subroutine cmplx2CmpntKpts(HSqrCplx, SSqrCplx, eigen, ham, over, kpoint, &
-      & iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart, iPair, &
+      & iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart, iPair, &
       & img2CentCell, iSolver, jobz,xi,orb, species, iHam)
 
     !> Large square matrix for the resulting eigenvectors
@@ -539,7 +539,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Indexing array for the large square matrices to relate atom number to position in the matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Indexing array for sparse arrays to map atom and neighbour number to position in the matrix
     integer, intent(in) :: iPair(0:,:)
@@ -601,7 +601,7 @@ contains
 
     work(:,:) = 0.0_dp
     call unpackHS(work,over,kPoint, iNeighbor,nNeighbor,iCellVec, &
-        & cellVec, iAtomStart,iPair, img2CentCell)
+        & cellVec, iDenseStart,iPair, img2CentCell)
     SSqrCplx(1:nOrb,1:nOrb) = work(1:nOrb,1:nOrb)
     SSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = work(1:nOrb,1:nOrb)
 
@@ -609,13 +609,13 @@ contains
     ! 0 1
     work(:,:) = 0.0_dp
     call unpackHS(work,ham(:,1),kPoint,iNeighbor,nNeighbor,iCellVec, &
-        & cellVec,iAtomStart,iPair, img2CentCell)
+        & cellVec,iDenseStart,iPair, img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work,iHam(:,1),kPoint,iNeighbor,nNeighbor,iCellVec, &
-          & cellVec,iAtomStart,iPair, img2CentCell)
+          & cellVec,iDenseStart,iPair, img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) &
           & + 0.5_dp*cmplx(0,1,dp)*work(1:nOrb,1:nOrb)
       HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = &
@@ -627,7 +627,7 @@ contains
     ! 1 0
     work(:,:) = 0.0_dp
     call unpackHS(work,ham(:,2),kPoint,iNeighbor,nNeighbor,iCellVec, &
-        & cellVec,iAtomStart,iPair, img2CentCell)
+        & cellVec,iDenseStart,iPair, img2CentCell)
     do ii = 1, nOrb
       work(ii,ii+1:) = conjg(work(ii+1:,ii))
     end do
@@ -637,7 +637,7 @@ contains
     if (present(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work,iHam(:,2),kPoint,iNeighbor,nNeighbor,iCellVec, &
-          & cellVec,iAtomStart,iPair, img2CentCell)
+          & cellVec,iDenseStart,iPair, img2CentCell)
       do ii = 1, nOrb
         work(ii,ii+1:) = -conjg(work(ii+1:,ii))
       end do
@@ -649,7 +649,7 @@ contains
     ! i  0
     work(:,:) = 0.0_dp
     call unpackHS(work,ham(:,3),kPoint,iNeighbor,nNeighbor,iCellVec, &
-        & cellVec,iAtomStart,iPair, img2CentCell)
+        & cellVec,iDenseStart,iPair, img2CentCell)
     do ii = 1, nOrb
       work(ii,ii+1:) = conjg(work(ii+1:,ii))
     end do
@@ -659,7 +659,7 @@ contains
     if (present(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work,iHam(:,3),kPoint,iNeighbor,nNeighbor,iCellVec, &
-          & cellVec,iAtomStart,iPair, img2CentCell)
+          & cellVec,iDenseStart,iPair, img2CentCell)
       do ii = 1, nOrb
         work(ii,ii+1:) = -conjg(work(ii+1:,ii))
       end do
@@ -675,7 +675,7 @@ contains
     ! 0 -1
     work(:,:) = 0.0_dp
     call unpackHS(work,ham(:,4),kPoint,iNeighbor,nNeighbor,iCellVec, &
-        & cellVec,iAtomStart,iPair, img2CentCell)
+        & cellVec,iDenseStart,iPair, img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) &
         & + 0.5_dp * work(1:nOrb,1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = &
@@ -684,7 +684,7 @@ contains
     if (present(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work,iHam(:,4),kPoint,iNeighbor,nNeighbor,iCellVec, &
-          & cellVec,iAtomStart,iPair, img2CentCell)
+          & cellVec,iDenseStart,iPair, img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) &
           & + 0.5_dp * cmplx(0,1,dp) * work(1:nOrb,1:nOrb)
       HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = &
@@ -718,20 +718,20 @@ contains
       deallocate(Lz)
       do ii = 1, nAtom
         jj = species(ii)
-        HSqrCplx(iAtomStart(ii):iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) = &
-            & HSqrCplx(iAtomStart(ii):iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) &
+        HSqrCplx(iDenseStart(ii):iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) = &
+            & HSqrCplx(iDenseStart(ii):iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) &
             & + AtomZ(1:orb%nOrbSpecies(jj),1:orb%nOrbSpecies(jj),jj)
-        HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1) = &
-            & HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1) &
+        HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1) = &
+            & HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1) &
             & - AtomZ(1:orb%nOrbSpecies(jj),1:orb%nOrbSpecies(jj),jj)
-        HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) = &
-            & HSqrCplx(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-            & iAtomStart(ii):iAtomStart(ii+1)-1) &
+        HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) = &
+            & HSqrCplx(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+            & iDenseStart(ii):iDenseStart(ii+1)-1) &
             & + AtomPlus(1:orb%nOrbSpecies(jj),1:orb%nOrbSpecies(jj),jj)
       end do
       deallocate(AtomZ)

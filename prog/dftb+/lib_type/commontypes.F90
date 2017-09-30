@@ -11,7 +11,7 @@ module commontypes
   implicit none
   private
 
-  public :: TOrbitals
+  public :: TOrbitals, TDenseMatIndex
 
 
   !> Contains information about the orbitals of the species/atoms in the system
@@ -40,8 +40,17 @@ module commontypes
     !> Max. nr. of orbitals for any species
     integer :: mOrb
 
-    !> Total number of orbitals in system.
-    integer :: nOrb
   end type TOrbitals
 
+  !> Contains index information for large dense matrices like the hamiltonian
+  type TDenseMatIndex  
+    
+    !> Total number of orbitals in system.
+    integer :: nOrb
+
+    !> Start of orbitals for atoms in dense  H/S matrices
+    integer, allocatable :: iDenseStart(:)
+    
+  end type TDenseMatIndex
+  
 end module commontypes

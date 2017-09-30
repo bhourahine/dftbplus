@@ -84,7 +84,7 @@ contains
   !> filled in the lower triangle part of the matrix. To fill the matrix completely, apply the
   !> blockSymmetrizeHS subroutine.
   subroutine unpackHS_cmplx(square, orig, kPoint, iNeighbor, nNeighbor, iCellVec, cellVec,&
-      & iAtomStart, iPair, img2CentCell)
+      & iDenseStart, iPair, img2CentCell)
 
     !> Square form matrix on exit.
     complex(dp), intent(out) :: square(:,:)
@@ -108,7 +108,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Atom offset for the squared Hamiltonian
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -129,25 +129,25 @@ contains
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT(size(square, dim=1) == iAtomStart(nAtom+1) - 1)
+    @:ASSERT(size(square, dim=1) == iDenseStart(nAtom+1) - 1)
     @:ASSERT(all(shape(kPoint) == (/ 3 /)))
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
 
     square(:,:) = cmplx(0, 0, dp)
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = exp((0.0_dp, 1.0_dp) * dot_product(kPoint2p, cellVec(:, iVec)))
@@ -166,7 +166,7 @@ contains
   !> Note: The non on-site blocks are only filled in the lower triangle part of the matrix. To fill
   !> the matrix completely, apply the blockSymmetrizeHS subroutine.
   subroutine unpackHS_real_kpts(square, orig, kPoint, iNeighbor, nNeighbor, iCellVec, cellVec,&
-      & iAtomStart, iPair, img2CentCell)
+      & iDenseStart, iPair, img2CentCell)
 
     !> Square form matrix on exit.
     real(dp), intent(out) :: square(:,:)
@@ -190,7 +190,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Atom offset for the squared Hamiltonian
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -211,25 +211,25 @@ contains
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT(size(square, dim=1) == iAtomStart(nAtom+1) -1)
+    @:ASSERT(size(square, dim=1) == iDenseStart(nAtom+1) -1)
     @:ASSERT(all(shape(kPoint) == (/ 3 /)))
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
 
     square(:,:) = 0.0_dp
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = cos(dot_product(kPoint2p, cellVec(:, iVec)))
@@ -246,7 +246,7 @@ contains
   !>
   !> Note: The non on-site blocks are only filled in the lower triangle part of the matrix. To fill
   !> the matrix completely, apply the blockSymmetrizeHS subroutine.
-  subroutine unpackHS_real(square, orig, iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell)
+  subroutine unpackHS_real(square, orig, iNeighbor, nNeighbor, iDenseStart, iPair, img2CentCell)
 
     !> Square form matrix on exit.
     real(dp), intent(out) :: square(:,:)
@@ -261,7 +261,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Atom offset for the squared Hamiltonian
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -279,22 +279,22 @@ contains
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT(size(square, dim=1) == iAtomStart(nAtom+1) - 1)
+    @:ASSERT(size(square, dim=1) == iDenseStart(nAtom+1) - 1)
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
 
     square(:,:) = 0.0_dp
 
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         square(jj:jj+nOrb2-1, ii:ii+nOrb1-1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)&
             & + reshape(orig(iOrig:iOrig+nOrb1*nOrb2-1), (/nOrb2,nOrb1/))
       end do
@@ -304,7 +304,7 @@ contains
 
 
   !> Unpack Pauli type hamitonian
-  subroutine unpackHSPauli(ham, over, iNeighbor, nNeighbor, iPair, iAtomStart, img2CentCell,&
+  subroutine unpackHSPauli(ham, over, iNeighbor, nNeighbor, iPair, iDenseStart, img2CentCell,&
       & HSqrCplx, SSqrCplx, iHam)
 
     !> Sparse hamitonian
@@ -320,7 +320,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -347,19 +347,19 @@ contains
     HSqrCplx(:,:) = 0.0_dp
 
     work(:,:) = 0.0_dp
-    call unpackHS(work,over,iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
+    call unpackHS(work,over,iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
     SSqrCplx(1:nOrb,1:nOrb) = work(1:nOrb,1:nOrb)
     SSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = work(1:nOrb,1:nOrb)
 
     ! 1 0 charge part
     ! 0 1
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,1),iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
+    call unpackHS(work,ham(:,1),iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,1),iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
+      call unpackHS(work,iHam(:,1),iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) + 0.5_dp*cmplx(0,1,dp)*work(1:nOrb,1:nOrb)
       HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb)&
           & + 0.5_dp*cmplx(0,1,dp)*work(1:nOrb,1:nOrb)
@@ -368,13 +368,13 @@ contains
     ! 0 1 x part
     ! 1 0
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,2),iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
-    call blockSymmetrizeHS(work,iAtomStart)
+    call unpackHS(work,ham(:,2),iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
+    call blockSymmetrizeHS(work,iDenseStart)
     HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) + 0.5_dp * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,2),iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
-      call blockAntiSymmetrizeHS(work,iAtomStart)
+      call unpackHS(work,iHam(:,2),iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
+      call blockAntiSymmetrizeHS(work,iDenseStart)
       HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) + 0.5_dp * cmplx(0,1,dp)&
           & * work(1:nOrb,1:nOrb)
     end if
@@ -382,27 +382,27 @@ contains
     ! 0 -i y part
     ! i  0
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,3),iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
-    call blockSymmetrizeHS(work,iAtomStart)
+    call unpackHS(work,ham(:,3),iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
+    call blockSymmetrizeHS(work,iDenseStart)
     HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) + cmplx(0.0,0.5,dp)&
         & * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,3),iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
-      call blockAntiSymmetrizeHS(work,iAtomStart)
+      call unpackHS(work,iHam(:,3),iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
+      call blockAntiSymmetrizeHS(work,iDenseStart)
       HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) - 0.5_dp * work(1:nOrb,1:nOrb)
     end if
 
     ! 1  0 z part
     ! 0 -1
     work(:,:) = 0.0_dp
-    call unpackHS(work,ham(:,4),iNeighbor,nNeighbor,iAtomStart,iPair, img2CentCell)
+    call unpackHS(work,ham(:,4),iNeighbor,nNeighbor,iDenseStart,iPair, img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) + 0.5_dp * work(1:nOrb,1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb)&
         & - 0.5_dp * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work,iHam(:,4),iNeighbor,nNeighbor,iAtomStart,iPair,img2CentCell)
+      call unpackHS(work,iHam(:,4),iNeighbor,nNeighbor,iDenseStart,iPair,img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) + 0.5_dp * cmplx(0,1,dp)&
           & * work(1:nOrb,1:nOrb)
       HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb)&
@@ -412,7 +412,7 @@ contains
   end subroutine unpackHSPauli
 
   !> Sparse to dense for k-points and Pauli block structure
-  subroutine unpackHSPauliK(ham, over, kPoint, iNeighbor, nNeighbor, iAtomStart, iPair,&
+  subroutine unpackHSPauliK(ham, over, kPoint, iNeighbor, nNeighbor, iDenseStart, iPair,&
       & img2CentCell, iCellVec, cellVec, HSqrCplx, SSqrCplx, iHam)
 
     !> Sparse hamitonian
@@ -431,7 +431,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -466,7 +466,7 @@ contains
     HSqrCplx(:,:) = 0.0_dp
 
     work(:,:) = 0.0_dp
-    call unpackHS(work,over,kPoint, iNeighbor,nNeighbor,iCellVec, cellVec, iAtomStart,iPair,&
+    call unpackHS(work,over,kPoint, iNeighbor,nNeighbor,iCellVec, cellVec, iDenseStart,iPair,&
         & img2CentCell)
     SSqrCplx(1:nOrb,1:nOrb) = work(1:nOrb,1:nOrb)
     SSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = work(1:nOrb,1:nOrb)
@@ -474,13 +474,13 @@ contains
     ! 1 0 charge part
     ! 0 1
     work(:,:) = 0.0_dp
-    call unpackHS(work, ham(:,1), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart,&
+    call unpackHS(work, ham(:,1), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart,&
         & iPair, img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = 0.5_dp*work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work, iHam(:,1), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart, &
+      call unpackHS(work, iHam(:,1), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart, &
           & iPair, img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) + 0.5_dp*cmplx(0,1,dp)*work(1:nOrb,1:nOrb)
       HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb)&
@@ -490,7 +490,7 @@ contains
     ! 0 1 x part
     ! 1 0
     work(:,:) = 0.0_dp
-    call unpackHS(work, ham(:,2), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart,&
+    call unpackHS(work, ham(:,2), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart,&
         & iPair, img2CentCell)
     do ii = 1, nOrb
       work(ii,ii+1:) = conjg(work(ii+1:,ii))
@@ -499,7 +499,7 @@ contains
     HSqrCplx(nOrb+1:2*nOrb,1:nOrb) = HSqrCplx(nOrb+1:2*nOrb,1:nOrb) + 0.5_dp * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work, iHam(:,2), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart,&
+      call unpackHS(work, iHam(:,2), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart,&
           & iPair, img2CentCell)
       do ii = 1, nOrb
         work(ii,ii+1:) = -conjg(work(ii+1:,ii))
@@ -511,7 +511,7 @@ contains
     ! 0 -i y part
     ! i  0
     work(:,:) = 0.0_dp
-    call unpackHS(work, ham(:,3), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart,&
+    call unpackHS(work, ham(:,3), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart,&
         & iPair, img2CentCell)
     do ii = 1, nOrb
       work(ii,ii+1:) = conjg(work(ii+1:,ii))
@@ -521,7 +521,7 @@ contains
         & * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work, iHam(:,3), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart,&
+      call unpackHS(work, iHam(:,3), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart,&
           & iPair, img2CentCell)
       do ii = 1, nOrb
         work(ii,ii+1:) = -conjg(work(ii+1:,ii))
@@ -536,14 +536,14 @@ contains
     ! 1  0 z part
     ! 0 -1
     work(:,:) = 0.0_dp
-    call unpackHS(work, ham(:,4), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart,&
+    call unpackHS(work, ham(:,4), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart,&
         & iPair, img2CentCell)
     HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) + 0.5_dp * work(1:nOrb,1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb,nOrb+1:2*nOrb)&
         & - 0.5_dp * work(1:nOrb,1:nOrb)
     if (present(iHam)) then
       work(:,:) = 0.0_dp
-      call unpackHS(work, iHam(:,4), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart,&
+      call unpackHS(work, iHam(:,4), kPoint, iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart,&
           & iPair, img2CentCell)
       HSqrCplx(1:nOrb,1:nOrb) = HSqrCplx(1:nOrb,1:nOrb) + 0.5_dp * cmplx(0,1,dp)&
           & * work(1:nOrb,1:nOrb)
@@ -556,7 +556,7 @@ contains
 
   !> Pack squared matrix in the sparse form (complex version).
   subroutine packHS_cmplx(primitive, square, kPoint, kWeight, iNeighbor, nNeighbor, mOrb,&
-      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+      & iCellVec, cellVec, iDenseStart, iPair, img2CentCell)
 
     !> Sparse matrix
     real(dp), intent(inout) :: primitive(:)
@@ -586,7 +586,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -614,25 +614,25 @@ contains
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT(size(square, dim=1) == iAtomStart(nAtom+1) - 1)
+    @:ASSERT(size(square, dim=1) == iDenseStart(nAtom+1) - 1)
     @:ASSERT(all(shape(kPoint) == (/ 3 /)))
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
     @:ASSERT(kWeight > 0.0_dp)
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
 
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = exp(cmplx(0,-1,dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
@@ -656,7 +656,7 @@ contains
 
 
   !> Pack squared matrix in the sparse form (real version).
-  subroutine packHS_real(primitive, square, iNeighbor, nNeighbor, mOrb, iAtomStart, iPair,&
+  subroutine packHS_real(primitive, square, iNeighbor, nNeighbor, mOrb, iDenseStart, iPair,&
       & img2CentCell)
 
     !> Sparse matrix
@@ -675,7 +675,7 @@ contains
     integer, intent(in) :: mOrb
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -700,19 +700,19 @@ contains
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT(size(square, dim=1) == iAtomStart(nAtom+1) - 1)
+    @:ASSERT(size(square, dim=1) == iDenseStart(nAtom+1) - 1)
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
 
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         tmpSqr(1:nOrb2, 1:nOrb1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)
 
         ! Symmetrize the on-site block before packing, just in case
@@ -731,7 +731,7 @@ contains
 
 
   !> Pack squared matrix in the sparse form (real Pauli version).
-  subroutine packHSPauli(primitive, square, iNeighbor, nNeighbor, mOrb, iAtomStart, iPair,&
+  subroutine packHSPauli(primitive, square, iNeighbor, nNeighbor, mOrb, iDenseStart, iPair,&
       & img2CentCell)
 
     !> Sparse matrix
@@ -750,7 +750,7 @@ contains
     integer, intent(in) :: mOrb
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -770,7 +770,7 @@ contains
 
     nAtom = size(iNeighbor, dim=2)
     ! number of orbitals in a regular spin block
-    nOrb = (iAtomStart(nAtom+1) - 1)
+    nOrb = (iDenseStart(nAtom+1) - 1)
 
 #:call ASSERT_CODE
     sizePrim = size(primitive,dim=1)
@@ -780,20 +780,20 @@ contains
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
     @:ASSERT(size(square, dim=1) == 2 * nOrb )
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
     @:ASSERT(size(primitive,dim=2)==4)
 
     do iBlock = 0, 1
       do iAtom1 = 1, nAtom
-        ii = iAtomStart(iAtom1)
-        nOrb1 = iAtomStart(iAtom1+1) - ii
+        ii = iDenseStart(iAtom1)
+        nOrb1 = iDenseStart(iAtom1+1) - ii
         do iNeigh = 0, nNeighbor(iAtom1)
           iOrig = iPair(iNeigh,iAtom1) + 1
           iAtom2 = iNeighbor(iNeigh, iAtom1)
           iAtom2f = img2CentCell(iAtom2)
-          jj = iAtomStart(iAtom2f)
+          jj = iDenseStart(iAtom2f)
           @:ASSERT(jj >= ii)
-          nOrb2 = iAtomStart(iAtom2f+1) - jj
+          nOrb2 = iDenseStart(iAtom2f+1) - jj
           tmpSqr(1:nOrb2, 1:nOrb1) = square(jj+iBlock*nOrb:jj+nOrb2-1+iBlock*nOrb,&
               & ii+iBlock*nOrb:ii+nOrb1-1+iBlock*nOrb)
           ! Hermitian the on-site block before packing, as only one triangle usually supplied
@@ -815,15 +815,15 @@ contains
     end do
 
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         ! take the Hermitian part of the block
         tmpSqr(1:nOrb2, 1:nOrb1) = 0.5_dp * (square(jj+nOrb:jj+nOrb2-1+nOrb,ii:ii+nOrb1-1)&
             & + transpose(square(nOrb+ii:nOrb+ii+nOrb1-1,jj:jj+nOrb2-1)))
@@ -840,7 +840,7 @@ contains
 
   !> Pack squared matrix into the sparse form (complex Pauli version).
   subroutine packHSPauli_kpts(primitive, square, kPoint, kWeight, iNeighbor, nNeighbor, mOrb,&
-      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+      & iCellVec, cellVec, iDenseStart, iPair, img2CentCell)
 
     !> Sparse matrix
     real(dp), intent(inout) :: primitive(:,:)
@@ -870,7 +870,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -893,7 +893,7 @@ contains
 
     nAtom = size(iNeighbor, dim=2)
     ! number of orbitals in a regular spin block
-    nOrb = (iAtomStart(nAtom+1) - 1)
+    nOrb = (iDenseStart(nAtom+1) - 1)
 
 #:call ASSERT_CODE
     sizePrim = size(primitive,dim=1)
@@ -904,7 +904,7 @@ contains
     @:ASSERT(size(square, dim=1) == 2 * nOrb )
     @:ASSERT(all(shape(kPoint) == (/ 3 /)))
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
     @:ASSERT(kWeight > 0.0_dp)
     @:ASSERT(size(primitive,dim=2)==4)
 
@@ -915,15 +915,15 @@ contains
       iOldVec = 0
       phase = 1.0_dp
       do iAtom1 = 1, nAtom
-        ii = iAtomStart(iAtom1)
-        nOrb1 = iAtomStart(iAtom1+1) - ii
+        ii = iDenseStart(iAtom1)
+        nOrb1 = iDenseStart(iAtom1+1) - ii
         do iNeigh = 0, nNeighbor(iAtom1)
           iOrig = iPair(iNeigh,iAtom1) + 1
           iAtom2 = iNeighbor(iNeigh, iAtom1)
           iAtom2f = img2CentCell(iAtom2)
-          jj = iAtomStart(iAtom2f)
+          jj = iDenseStart(iAtom2f)
           @:ASSERT(jj >= ii)
-          nOrb2 = iAtomStart(iAtom2f+1) - jj
+          nOrb2 = iDenseStart(iAtom2f+1) - jj
           iVec = iCellVec(iAtom2)
           if (iVec /= iOldVec) then
             phase = exp(cmplx(0,-1,dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
@@ -955,15 +955,15 @@ contains
     iOldVec = 0
     phase = 1.0_dp
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = exp(cmplx(0,-1,dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
@@ -999,7 +999,7 @@ contains
 
 
   !> Pack imaginary coefficient part of Pauli square matrix into the sparse form.
-  subroutine packHSPauliImag(primitive, square, iNeighbor, nNeighbor, mOrb, iAtomStart, iPair,&
+  subroutine packHSPauliImag(primitive, square, iNeighbor, nNeighbor, mOrb, iDenseStart, iPair,&
       & img2CentCell)
 
     !> Sparse matrix
@@ -1018,7 +1018,7 @@ contains
     integer, intent(in) :: mOrb
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -1038,7 +1038,7 @@ contains
 
     nAtom = size(iNeighbor, dim=2)
     ! number of orbitals in a regular spin block
-    nOrb = (iAtomStart(nAtom+1) - 1)
+    nOrb = (iDenseStart(nAtom+1) - 1)
 
 
 #:call ASSERT_CODE
@@ -1049,20 +1049,20 @@ contains
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
     @:ASSERT(size(square, dim=1) == 2 * nOrb )
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
     @:ASSERT(size(primitive,dim=2)==4)
 
     do iBlock = 0, 1
       do iAtom1 = 1, nAtom
-        ii = iAtomStart(iAtom1)
-        nOrb1 = iAtomStart(iAtom1+1) - ii
+        ii = iDenseStart(iAtom1)
+        nOrb1 = iDenseStart(iAtom1+1) - ii
         do iNeigh = 0, nNeighbor(iAtom1)
           iOrig = iPair(iNeigh,iAtom1) + 1
           iAtom2 = iNeighbor(iNeigh, iAtom1)
           iAtom2f = img2CentCell(iAtom2)
-          jj = iAtomStart(iAtom2f)
+          jj = iDenseStart(iAtom2f)
           @:ASSERT(jj >= ii)
-          nOrb2 = iAtomStart(iAtom2f+1) - jj
+          nOrb2 = iDenseStart(iAtom2f+1) - jj
           tmpSqr(1:nOrb2, 1:nOrb1) = square(jj+iBlock*nOrb:jj+nOrb2-1+iBlock*nOrb,&
               & ii+iBlock*nOrb:ii+nOrb1-1+iBlock*nOrb)
           ! Hermitian the on-site block before packing, as only one triangle usually supplied
@@ -1084,15 +1084,15 @@ contains
     end do
 
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         ! take the anti-Hermitian part of the block
         tmpSqr(1:nOrb2, 1:nOrb1) = 0.5_dp * ( square(nOrb+jj:nOrb+jj+nOrb2-1, ii:ii+nOrb1-1)&
             & - transpose(square(nOrb+ii:nOrb+ii+nOrb1-1,jj:jj+nOrb2-1)))
@@ -1111,7 +1111,7 @@ contains
 
   !> Pack imaginary coefficient part of Pauli square matrix into the sparse form (complex version).
   subroutine packHSPauliImag_kpts(primitive, square, kPoint, kWeight, iNeighbor, nNeighbor, mOrb,&
-      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+      & iCellVec, cellVec, iDenseStart, iPair, img2CentCell)
 
     !> Sparse matrix
     real(dp), intent(inout) :: primitive(:,:)
@@ -1141,7 +1141,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -1164,7 +1164,7 @@ contains
 
     nAtom = size(iNeighbor, dim=2)
     ! number of orbitals in a regular spin block
-    nOrb = (iAtomStart(nAtom+1) - 1)
+    nOrb = (iDenseStart(nAtom+1) - 1)
 
 #:call ASSERT_CODE
     sizePrim = size(primitive,dim=1)
@@ -1175,7 +1175,7 @@ contains
     @:ASSERT(size(square, dim=1) == 2 * nOrb )
     @:ASSERT(all(shape(kPoint) == (/ 3 /)))
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
     @:ASSERT(kWeight > 0.0_dp)
     @:ASSERT(size(primitive,dim=2)==4)
 
@@ -1186,15 +1186,15 @@ contains
       iOldVec = 0
       phase = 1.0_dp
       do iAtom1 = 1, nAtom
-        ii = iAtomStart(iAtom1)
-        nOrb1 = iAtomStart(iAtom1+1) - ii
+        ii = iDenseStart(iAtom1)
+        nOrb1 = iDenseStart(iAtom1+1) - ii
         do iNeigh = 0, nNeighbor(iAtom1)
           iOrig = iPair(iNeigh,iAtom1) + 1
           iAtom2 = iNeighbor(iNeigh, iAtom1)
           iAtom2f = img2CentCell(iAtom2)
-          jj = iAtomStart(iAtom2f)
+          jj = iDenseStart(iAtom2f)
           @:ASSERT(jj >= ii)
-          nOrb2 = iAtomStart(iAtom2f+1) - jj
+          nOrb2 = iDenseStart(iAtom2f+1) - jj
           iVec = iCellVec(iAtom2)
           if (iVec /= iOldVec) then
             phase = exp(cmplx(0,-1,dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
@@ -1225,15 +1225,15 @@ contains
     iOldVec = 0
     phase = 1.0_dp
     do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1+1) - ii
+      ii = iDenseStart(iAtom1)
+      nOrb1 = iDenseStart(iAtom1+1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
         iOrig = iPair(iNeigh,iAtom1) + 1
         iAtom2 = iNeighbor(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
+        jj = iDenseStart(iAtom2f)
         @:ASSERT(jj >= ii)
-        nOrb2 = iAtomStart(iAtom2f+1) - jj
+        nOrb2 = iDenseStart(iAtom2f+1) - jj
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = exp(cmplx(0,-1,dp)*dot_product(kPoint2p(:), cellVec(:, iVec)))
@@ -1264,7 +1264,7 @@ contains
 
 
   !> Pack only the charge (spin channel 1) part of a 2 component matrix
-  subroutine packHSPauliERho(primitive, square, iNeighbor, nNeighbor, mOrb, iAtomStart, iPair,&
+  subroutine packHSPauliERho(primitive, square, iNeighbor, nNeighbor, mOrb, iDenseStart, iPair,&
       & img2CentCell)
 
     !> Sparse matrix
@@ -1283,7 +1283,7 @@ contains
     integer, intent(in) :: mOrb
 
     !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iPair(0:,:)
@@ -1303,7 +1303,7 @@ contains
 
     nAtom = size(iNeighbor, dim=2)
     ! number of orbitals in a regular spin block
-    nOrb = (iAtomStart(nAtom+1) - 1)
+    nOrb = (iDenseStart(nAtom+1) - 1)
 
 #:call ASSERT_CODE
     sizePrim = size(primitive,dim=1)
@@ -1313,19 +1313,19 @@ contains
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
     @:ASSERT(size(square, dim=1) == 2 * nOrb )
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
 
     do iBlock = 0, 1
       do iAtom1 = 1, nAtom
-        ii = iAtomStart(iAtom1)
-        nOrb1 = iAtomStart(iAtom1+1) - ii
+        ii = iDenseStart(iAtom1)
+        nOrb1 = iDenseStart(iAtom1+1) - ii
         do iNeigh = 0, nNeighbor(iAtom1)
           iOrig = iPair(iNeigh,iAtom1) + 1
           iAtom2 = iNeighbor(iNeigh, iAtom1)
           iAtom2f = img2CentCell(iAtom2)
-          jj = iAtomStart(iAtom2f)
+          jj = iDenseStart(iAtom2f)
           @:ASSERT(jj >= ii)
-          nOrb2 = iAtomStart(iAtom2f+1) - jj
+          nOrb2 = iDenseStart(iAtom2f+1) - jj
           tmpSqr(1:nOrb2, 1:nOrb1) = square(jj+iBlock*nOrb:jj+nOrb2-1+iBlock*nOrb,&
               & ii+iBlock*nOrb:ii+nOrb1-1+iBlock*nOrb)
           ! Symmetrize the on-site block before packing, as only one triangle supplied
@@ -1346,7 +1346,7 @@ contains
 
   !> Pack squared matrix in the sparse form (real version).
   subroutine packHSPauliERho_kpts(primitive, square, kPoint, kWeight, iNeighbor, nNeighbor, mOrb,&
-      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+      & iCellVec, cellVec, iDenseStart, iPair, img2CentCell)
 
     !> Sparse matrix
     real(dp), intent(inout) :: primitive(:)
@@ -1376,7 +1376,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> Mapping between image atoms and correspondent atom in the central cell.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     integer, intent(in) :: iPair(0:,:)
 
@@ -1397,7 +1397,7 @@ contains
 
     nAtom = size(iNeighbor, dim=2)
     ! number of orbitals in a regular spin block
-    nOrb = (iAtomStart(nAtom+1) - 1)
+    nOrb = (iDenseStart(nAtom+1) - 1)
 
 #:call ASSERT_CODE
     sizePrim = size(primitive,dim=1)
@@ -1408,7 +1408,7 @@ contains
     @:ASSERT(size(square, dim=1) == 2 * nOrb )
     @:ASSERT(all(shape(kPoint) == (/ 3 /)))
     @:ASSERT(all(shape(nNeighbor) == (/ nAtom /)))
-    @:ASSERT(size(iAtomStart) == nAtom + 1)
+    @:ASSERT(size(iDenseStart) == nAtom + 1)
     @:ASSERT(kWeight > 0.0_dp)
 
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
@@ -1417,15 +1417,15 @@ contains
       iOldVec = 0
       phase = 1.0_dp
       do iAtom1 = 1, nAtom
-        ii = iAtomStart(iAtom1)
-        nOrb1 = iAtomStart(iAtom1+1) - ii
+        ii = iDenseStart(iAtom1)
+        nOrb1 = iDenseStart(iAtom1+1) - ii
         do iNeigh = 0, nNeighbor(iAtom1)
           iOrig = iPair(iNeigh,iAtom1) + 1
           iAtom2 = iNeighbor(iNeigh, iAtom1)
           iAtom2f = img2CentCell(iAtom2)
-          jj = iAtomStart(iAtom2f)
+          jj = iDenseStart(iAtom2f)
           @:ASSERT(jj >= ii)
-          nOrb2 = iAtomStart(iAtom2f+1) - jj
+          nOrb2 = iDenseStart(iAtom2f+1) - jj
           iVec = iCellVec(iAtom2)
           if (iVec /= iOldVec) then
             phase = exp(cmplx(0,-1,dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
@@ -1451,18 +1451,18 @@ contains
 
 
   !> Symmetrize a squared matrix leaving the on-site atomic blocks alone.  (Complex version)
-  subroutine blockSymmetrizeHS_cmplx(square, iAtomStart)
+  subroutine blockSymmetrizeHS_cmplx(square, iDenseStart)
 
     !> Square form matrix.
     complex(dp), intent(inout) :: square(:,:)
 
     !> Returns the offset array for each atom.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     integer :: nAtom, iAtom, iStart, iEnd, mOrb
 
-    nAtom = size(iAtomStart, dim=1) - 1
-    mOrb = iAtomStart(nAtom+1) - 1
+    nAtom = size(iDenseStart, dim=1) - 1
+    mOrb = iDenseStart(nAtom+1) - 1
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
@@ -1470,8 +1470,8 @@ contains
     @:ASSERT(size(square, dim=1) == mOrb)
 
     do iAtom = 1, nAtom
-      iStart = iAtomStart(iAtom)
-      iEnd = iAtomStart(iAtom+1) - 1
+      iStart = iDenseStart(iAtom)
+      iEnd = iDenseStart(iAtom+1) - 1
       square(iStart:iEnd, iEnd+1:mOrb) = transpose(square(iEnd+1:mOrb,iStart:iEnd))
     end do
 
@@ -1479,18 +1479,18 @@ contains
 
 
   !> Symmetrize a squared matrix leaving the on-site atomic blocks alone.  (Complex version)
-  subroutine blockHermitianHS_cmplx(square, iAtomStart)
+  subroutine blockHermitianHS_cmplx(square, iDenseStart)
 
     !> Square form matrix.
     complex(dp), intent(inout) :: square(:,:)
 
     !> Returns the offset array for each atom.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     integer :: nAtom, iAtom, iStart, iEnd, mOrb
 
-    nAtom = size(iAtomStart, dim=1) - 1
-    mOrb = iAtomStart(nAtom+1) - 1
+    nAtom = size(iDenseStart, dim=1) - 1
+    mOrb = iDenseStart(nAtom+1) - 1
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
@@ -1498,8 +1498,8 @@ contains
     @:ASSERT(size(square, dim=1) == mOrb)
 
     do iAtom = 1, nAtom
-      iStart = iAtomStart(iAtom)
-      iEnd = iAtomStart(iAtom+1) - 1
+      iStart = iDenseStart(iAtom)
+      iEnd = iDenseStart(iAtom+1) - 1
       square(iStart:iEnd, iEnd+1:mOrb) = transpose(conjg(square(iEnd+1:mOrb,iStart:iEnd)))
     end do
 
@@ -1507,26 +1507,26 @@ contains
 
 
   !> Symmetrize a squared matrix leaving the on-site atomic blocks alone.  (Real version)
-  subroutine blockSymmetrizeHS_real(square, iAtomStart)
+  subroutine blockSymmetrizeHS_real(square, iDenseStart)
 
     !> Square form matrix.
     real(dp), intent(inout) :: square(:,:)
 
     !> Returns the offset array for each atom.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     integer :: nAtom, iAtom, iStart, iEnd, mOrb
 
-    nAtom = size(iAtomStart) - 1
-    mOrb = iAtomStart(nAtom+1) - 1
+    nAtom = size(iDenseStart) - 1
+    mOrb = iDenseStart(nAtom+1) - 1
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
     @:ASSERT(size(square, dim=1) == mOrb)
 
     do iAtom = 1, nAtom
-      iStart = iAtomStart(iAtom)
-      iEnd = iAtomStart(iAtom+1) - 1
+      iStart = iDenseStart(iAtom)
+      iEnd = iDenseStart(iAtom+1) - 1
       square(iStart:iEnd, iEnd+1:mOrb) = transpose(square(iEnd+1:mOrb,iStart:iEnd))
     end do
 
@@ -1534,26 +1534,26 @@ contains
 
 
   !> Anti-symmetrize a squared matrix leaving the on-site atomic blocks alone. (Real version)
-  subroutine blockAntiSymmetrizeHS_real(square, iAtomStart)
+  subroutine blockAntiSymmetrizeHS_real(square, iDenseStart)
 
     !> Square form matrix.
     real(dp), intent(inout) :: square(:,:)
 
     !> Contains the offset in the array for each atom.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     integer :: nAtom, iAtom, iStart, iEnd, mOrb
 
-    nAtom = size(iAtomStart) - 1
-    mOrb = iAtomStart(nAtom+1) - 1
+    nAtom = size(iDenseStart) - 1
+    mOrb = iDenseStart(nAtom+1) - 1
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
     @:ASSERT(size(square, dim=1) == mOrb)
 
     do iAtom = 1, nAtom
-      iStart = iAtomStart(iAtom)
-      iEnd = iAtomStart(iAtom+1) - 1
+      iStart = iDenseStart(iAtom)
+      iEnd = iDenseStart(iAtom+1) - 1
       square(iStart:iEnd, iEnd+1:mOrb) = -transpose(square(iEnd+1:mOrb,iStart:iEnd))
     end do
 

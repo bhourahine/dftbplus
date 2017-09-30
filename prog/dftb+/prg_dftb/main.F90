@@ -290,11 +290,11 @@ contains
     ! set up larger arrays
     call initArrays(tForces, tExtChrg, tLinResp, tLinRespZVect, tMd, tMulliken, tSpinOrbit, tImHam,&
         & tStoreEigvecs, tWriteRealHS, tWriteHS, t2Component, tRealHS, tPrintExcitedEigvecs,&
-        & tDipole, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom, mass, rhoPrim,&
-        & h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy, potential, TS, E0,&
-        & Eband, eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx, SSqrCplx, HSqrReal,&
-        & SSqrReal, rhoSqrReal, chargePerShell, occNatural, velocities, movedVelo, movedAccel,&
-        & movedMass, dipoleMoment)
+        & tDipole, orb, denseMatIndex, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom,&
+        & mass, rhoPrim, h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy,&
+        & potential, TS, E0, Eband, eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx,&
+        & SSqrCplx, HSqrReal, SSqrReal, rhoSqrReal, chargePerShell, occNatural, velocities,&
+        & movedVelo, movedAccel, movedMass, dipoleMoment)
 
     if (tShowFoldedCoord) then
       pCoord0Out => coord0Fold
@@ -388,14 +388,15 @@ contains
 
         if (tWriteRealHS .or. tWriteHS) then
           call writeHSAndStop(tWriteHS, tWriteRealHS, tRealHS, over, neighborList, nNeighbor,&
-              & iDenseStart, iSparseStart, img2CentCell, kPoint, iCellVec, cellVec, ham, iHam)
+              & denseMatIndex%iDenseStart, iSparseStart, img2CentCell, kPoint, iCellVec, cellVec,&
+              & ham, iHam)
         end if
 
-        call getDensity(ham, over, neighborList, nNeighbor, iDenseStart, iSparseStart,&
-            & img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver, tRealHS,&
-            & tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken, iDistribFn,&
-            & tempElec, nEl, Ef, energy, eigen, filling, rhoPrim, Eband, TS, E0, iHam, xi,&
-            & orbitalL, HSqrReal, SSqrReal, iRhoPrim, HSqrCplx, SSqrCplx, rhoSqrReal,&
+        call getDensity(ham, over, neighborList, nNeighbor, denseMatIndex%iDenseStart,&
+            & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver,&
+            & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
+            & iDistribFn, tempElec, nEl, Ef, energy, eigen, filling, rhoPrim, Eband, TS, E0, iHam,&
+            & xi, orbitalL, HSqrReal, SSqrReal, iRhoPrim, HSqrCplx, SSqrCplx, rhoSqrReal,&
             & storeEigvecsReal, storeEigvecsCplx)
 
         if (tWriteBandDat) then
@@ -464,10 +465,10 @@ contains
       if (tLinResp) then
         call ensureLinRespConditions(t3rd, tRealHS, tPeriodic, tForces)
         call calculateLinRespExcitations(lresp, sccCalc, qOutput, q0, over, HSqrReal, eigen(:,1,:),&
-            & filling(:,1,:), coord0, species, speciesName, orb, skHamCont, skOverCont, fdAutotest,&
-            & fdEigvec, runId, neighborList, nNeighbor, iDenseStart, iSparseStart, img2CentCell,&
-            & tWriteAutotest, tForces, tLinRespZVect, tPrintExcitedEigvecs, nonSccDeriv, energy,&
-            & SSqrReal, rhoSqrReal, excitedDerivs, occNatural)
+            & filling(:,1,:), coord0, species, speciesName, orb, denseMatIndex, skHamCont,&
+            & skOverCont, fdAutotest, fdEigvec, runId, neighborList, nNeighbor, iSparseStart,&
+            & img2CentCell, tWriteAutotest, tForces, tLinRespZVect, tPrintExcitedEigvecs,&
+            & nonSccDeriv, energy, SSqrReal, rhoSqrReal, excitedDerivs, occNatural)
       end if
 
       if (tXlbomd) then
@@ -486,13 +487,14 @@ contains
 
       if (tPrintEigVecs) then
         call writeEigenvectors(nSpin, fdEigvec, runId, nAtom, neighborList, nNeighbor, cellVec,&
-            & iCellVEc, iDenseStart, iSparseStart, img2CentCell, species, speciesName, orb, kPoint,&
-            & over, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, storeEigvecsReal, storeEigvecsCplx)
+            & iCellVEc, iSparseStart, img2CentCell, species, speciesName, orb, denseMatIndex,&
+            & kPoint, over, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, storeEigvecsReal,&
+            & storeEigvecsCplx)
       end if
 
       if (tProjEigenvecs) then
         call writeProjectedEigenvectors(regionLabels, fdProjEig, eigen, nSpin, neighborList,&
-            & nNeighbor, cellVec, iCellVec, iDenseStart, iSparseStart, img2CentCell, orb, over,&
+            & nNeighbor, cellVec, iCellVec, iSparseStart, img2CentCell, orb, denseMatIndex, over,&
             & kPoint, kWeight, iOrbRegion, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx,&
             & storeEigvecsReal, storeEigvecsCplx)
       end if
@@ -508,9 +510,9 @@ contains
 
       if (tForces) then
         call getEnergyWeightedDensityMtx(forceType, filling, eigen, kPoint, kWeight, neighborList,&
-            & nNeighbor, orb, species, iDenseStart, iSparseStart, img2CentCell, iCellVec, cellVec,&
-            & tRealHS, ham, over, solver, ERhoPrim, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx,&
-            & storeEigvecsReal, storeEigvecsCplx)
+            & nNeighbor, orb, species, denseMatIndex%iDenseStart, iSparseStart, img2CentCell,&
+            & iCellVec, cellVec, tRealHS, ham, over, solver, ERhoPrim, HSqrReal, SSqrReal,&
+            & HSqrCplx, SSqrCplx, storeEigvecsReal, storeEigvecsCplx)
         call getGradients(sccCalc, tEField, tXlbomd, nonSccDeriv, Efield, rhoPrim,&
             & ERhoPrim, qOutput, q0, skHamCont, skOverCont, pRepCont, neighborList, nNeighbor,&
             & species, img2CentCell, iSparseStart, orb, potential, coord, dispersion, derivs,&
@@ -698,9 +700,9 @@ contains
         call error("Pipek-Mezey localisation not implemented for non-colinear DFTB")
       end if
       call calcPipekMezeyLocalisation(pipekMezey, nEl, filling, over, kPoint, kWeight,&
-          & neighborList, nNeighbor, iDenseStart, iSparseStart, img2CentCell, iCellVec, cellVec,&
-          & fdEigvec, runId, orb, species, speciesName, localisation, HSqrReal, SSqrReal, HsqrCplx,&
-          & SSqrCplx)
+          & neighborList, nNeighbor, iSparseStart, img2CentCell, iCellVec, cellVec, fdEigvec,&
+          & runId, orb, denseMatIndex, species, speciesName, localisation, HSqrReal, SSqrReal,&
+          & HsqrCplx, SSqrCplx)
     end if
 
     if (tWriteAutotest) then
@@ -817,11 +819,11 @@ contains
   !> Allocates most of the large arrays needed during the DFTB run.
   subroutine initArrays(tForces, tExtChrg, tLinResp, tLinRespZVect, tMd, tMulliken, tSpinOrbit,&
       & tImHam, tStoreEigvecs, tWriteRealHS, tWriteHS, t2Component, tRealHS, tPrintExcitedEigvecs,&
-      & tDipole, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom, mass, rhoPrim, h0,&
-      & iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy, potential, TS, E0,&
-      & Eband, eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx, SSqrCplx, HSqrReal,&
-      & SSqrReal, rhoSqrReal, chargePerShell, occNatural, velocities, movedVelo, movedAccel,&
-      & movedMass, dipoleMoment)
+      & tDipole, orb, denseMatIndex, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg, indMovedAtom,&
+      & mass, rhoPrim, h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs, chrgForces, energy,&
+      & potential, TS, E0, Eband, eigen, filling, coord0Fold, newCoords, orbitalL, HSqrCplx,&
+      & SSqrCplx, HSqrReal, SSqrReal, rhoSqrReal, chargePerShell, occNatural, velocities,&
+      & movedVelo, movedAccel, movedMass, dipoleMoment)
 
     !> Are forces required
     logical, intent(in) :: tForces
@@ -871,6 +873,9 @@ contains
     !> data structure with atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> data structure for indexing large dense arrays
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
+    
     !> Number of atoms
     integer, intent(in) :: nAtom
 
@@ -1006,13 +1011,13 @@ contains
     select case (nSpin)
     case (1)
       nSpinHams = 1
-      sqrHamSize = orb%nOrb
+      sqrHamSize = denseMatIndex%nOrb
     case (2)
       nSpinHams = 2
-      sqrHamSize = orb%nOrb
+      sqrHamSize = denseMatIndex%nOrb
     case (4)
       nSpinHams = 1
-      sqrHamSize = 2 * orb%nOrb
+      sqrHamSize = 2 * denseMatIndex%nOrb
     end select
 
     allocate(TS(nSpinHams))
@@ -1061,7 +1066,7 @@ contains
     allocate(chargePerShell(orb%mShell, nAtom, nSpin))
 
     if (tLinResp .and. tPrintExcitedEigVecs) then
-      allocate(occNatural(orb%nOrb))
+      allocate(occNatural(denseMatIndex%nOrb))
     end if
 
     if (tMD) then
@@ -1882,11 +1887,11 @@ contains
   !> Hamiltonian or the full (unpacked) density matrix, must also invoked from within this routine,
   !> as those unpacked quantities do not exist elsewhere.
   !>
-  subroutine getDensity(ham, over, neighborList, nNeighbor, iDenseStart, iSparseStart,&
-      & img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver, tRealHS,&
-      & tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken, iDistribFn,&
-      & tempElec, nEl, Ef, energy, eigen, filling, rhoPrim, Eband, TS, E0, iHam, xi, orbitalL,&
-      & HSqrReal, SSqrReal, iRhoPrim, HSqrCplx, SSqrCplx, rhoSqrReal, storeEigvecsReal,&
+  subroutine getDensity(ham, over, neighborList, nNeighbor, iDenseStart,&
+      & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, solver,&
+      & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
+      & iDistribFn, tempElec, nEl, Ef, energy, eigen, filling, rhoPrim, Eband, TS, E0, iHam, xi,&
+      & orbitalL, HSqrReal, SSqrReal, iRhoPrim, HSqrCplx, SSqrCplx, rhoSqrReal, storeEigvecsReal,&
       & storeEigvecsCplx)
 
     !> hamiltonian in sparse storage
@@ -3516,10 +3521,10 @@ contains
 
   !> Do the linear response excitation calculation.
   subroutine calculateLinRespExcitations(lresp, sccCalc, qOutput, q0, over, HSqrReal, eigen,&
-      & filling, coord0, species, speciesName, orb, skHamCont, skOverCont, fdAutotest, fdEigvec,&
-      & runId, neighborList, nNeighbor, iDenseStart, iSparseStart, img2CentCell, tWriteAutotest,&
-      & tForces, tLinRespZVect, tPrintExcitedEigvecs, nonSccDeriv, energy, SSqrReal, rhoSqrReal,&
-      & excitedDerivs, occNatural)
+      & filling, coord0, species, speciesName, orb, denseMatIndex, skHamCont, skOverCont,&
+      & fdAutotest, fdEigvec, runId, neighborList, nNeighbor, iSparseStart, img2CentCell,&
+      & tWriteAutotest, tForces, tLinRespZVect, tPrintExcitedEigvecs, nonSccDeriv, energy,&
+      & SSqrReal, rhoSqrReal, excitedDerivs, occNatural)
 
     !> excited state settings
     type(LinResp), intent(inout) :: lresp
@@ -3557,6 +3562,9 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> data structure for indexing large dense arrays
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
+    
     !> non-SCC hamiltonian information
     type(OSlakoCont), intent(in) :: skHamCont
 
@@ -3577,9 +3585,6 @@ contains
 
     !> Number of neighbours for each of the atoms
     integer, intent(in) :: nNeighbor(:)
-
-    !> Index of start of atom blocks in dense matrices
-    integer, intent(in) :: iDenseStart(:)
 
     !> Index array for the start of atomic blocks in sparse arrays
     integer, intent(in) :: iSparseStart(:,:)
@@ -3631,12 +3636,12 @@ contains
     energy%Eexcited = 0.0_dp
     allocate(dQAtom(nAtom))
     dQAtom(:) = sum(qOutput(:,:,1) - q0(:,:,1), dim=1)
-    call unpackHS(SSqrReal, over, neighborList%iNeighbor, nNeighbor, iDenseStart, iSparseStart,&
-        & img2CentCell)
-    call blockSymmetrizeHS(SSqrReal, iDenseStart)
+    call unpackHS(SSqrReal, over, neighborList%iNeighbor, nNeighbor, denseMatIndex%iDenseStart,&
+        & iSparseStart, img2CentCell)
+    call blockSymmetrizeHS(SSqrReal, denseMatIndex%iDenseStart)
     if (tForces) then
       do iSpin = 1, nSpin
-        call blockSymmetrizeHS(rhoSqrReal(:,:,iSpin), iDenseStart)
+        call blockSymmetrizeHS(rhoSqrReal(:,:,iSpin), denseMatIndex%iDenseStart)
       end do
     end if
     if (tWriteAutotest) then
@@ -3645,21 +3650,21 @@ contains
 
     if (tLinRespZVect) then
       if (tPrintExcitedEigVecs) then
-        allocate(naturalOrbs(orb%nOrb, orb%nOrb, 1))
+        allocate(naturalOrbs(denseMatIndex%nOrb, denseMatIndex%nOrb, 1))
       end if
-      call addGradients(tSpin, lresp, iDenseStart, HSqrReal, eigen, SSqrReal,&
-          & filling, coord0, sccCalc, dQAtom, pSpecies0, neighborList%iNeighbor, img2CentCell, orb,&
-          & skHamCont, skOverCont, tWriteAutotest, fdAutotest, energy%Eexcited, excitedDerivs, &
-          & nonSccDeriv, rhoSqrReal, occNatural=occNatural, naturalOrbs=naturalOrbs)
+      call addGradients(tSpin, lresp, HSqrReal, eigen, SSqrReal, filling, coord0, sccCalc, dQAtom,&
+          & pSpecies0, neighborList%iNeighbor, img2CentCell, orb, denseMatIndex, skHamCont,&
+          & skOverCont, tWriteAutotest, fdAutotest, energy%Eexcited, excitedDerivs,  nonSccDeriv,&
+          & rhoSqrReal, occNatural=occNatural, naturalOrbs=naturalOrbs)
       if (tPrintExcitedEigvecs) then
-        call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, iDenseStart,&
-            & iSparseStart, img2CentCell, orb, pSpecies0, speciesName, over, naturalOrbs,&
+        call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, iSparseStart,&
+            & img2CentCell, orb, denseMatIndex, pSpecies0, speciesName, over, naturalOrbs,&
             & SSqrReal, fileName="excitedOrbs")
       end if
     else
-      call calcExcitations(tSpin, lresp, iDenseStart, HSqrReal, eigen, SSqrReal, filling, coord0,&
-          & sccCalc, dQAtom, pSpecies0, neighborList%iNeighbor, img2CentCell, orb, tWriteAutotest,&
-          & fdAutotest, energy%Eexcited)
+      call calcExcitations(tSpin, lresp, HSqrReal, eigen, SSqrReal, filling, coord0, sccCalc,&
+          & dQAtom, pSpecies0, neighborList%iNeighbor, img2CentCell, orb, denseMatIndex,&
+          & tWriteAutotest, fdAutotest, energy%Eexcited)
     end if
     energy%Etotal = energy%Etotal + energy%Eexcited
     energy%EMermin = energy%EMermin + energy%Eexcited
@@ -4966,8 +4971,8 @@ contains
 
   !> Calculates and prints Pipek-Mezey localisation
   subroutine calcPipekMezeyLocalisation(pipekMezey, nEl, filling, over, kPoint, kWeight,&
-      & neighborList, nNeighbor, iDenseStart, iSparseStart, img2CentCell, iCellVec, cellVec,&
-      & fdEigvec, runId, orb, species, speciesName, localisation, HSqrReal, SSqrReal, HsqrCplx,&
+      & neighborList, nNeighbor, iSparseStart, img2CentCell, iCellVec, cellVec, fdEigvec, runId,&
+      & orb, denseMatIndex, species, speciesName, localisation, HSqrReal, SSqrReal, HsqrCplx,&
       & SSqrCplx)
 
     !> Localisation methods for single electron states (if used)
@@ -4994,9 +4999,6 @@ contains
     !> Number of neighbours for each of the atoms
     integer, intent(in) :: nNeighbor(:)
 
-    !> Index of start of atom blocks in dense matrices
-    integer, intent(in) :: iDenseStart(:)
-
     !> Index array for the start of atomic blocks in sparse arrays
     integer, intent(in) :: iSparseStart(:,:)
 
@@ -5017,6 +5019,9 @@ contains
 
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
+
+    !> data structure for indexing large dense arrays
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
 
     !> species of all atoms in the system
     integer, intent(in) :: species(:)
@@ -5050,40 +5055,41 @@ contains
     end if
 
     if (present(HSqrReal)) then
-      call unpackHS(SSqrReal,over,neighborList%iNeighbor, nNeighbor, iDenseStart, iSparseStart,&
-          & img2CentCell)
+      call unpackHS(SSqrReal,over,neighborList%iNeighbor, nNeighbor, denseMatIndex%iDenseStart,&
+          & iSparseStart, img2CentCell)
       do iSpin = 1, nSpin
         nFilledLev = floor(nEl(iSpin) / real(3 - nSpin, dp))
         localisation = pipekMezey%getLocalisation(HSqrReal(:, 1:nFilledLev, iSpin), SSqrReal,&
-            & iDenseStart)
+            & denseMatIndex%iDenseStart)
         write(stdOut, "(A, E15.8)") 'Original localisation', localisation
-        call pipekMezey%calcCoeffs(HSqrReal(:, 1:nFilledLev, iSpin), SSqrReal, iDenseStart)
+        call pipekMezey%calcCoeffs(HSqrReal(:, 1:nFilledLev, iSpin), SSqrReal,&
+            & denseMatIndex%iDenseStart)
         localisation = pipekMezey%getLocalisation(HSqrReal(:,1:nFilledLev,iSpin), SSqrReal,&
-            & iDenseStart)
+            & denseMatIndex%iDenseStart)
         write(stdOut, "(A, E20.12)") 'Final localisation ', localisation
       end do
 
-      call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, iDenseStart,&
-          & iSparseStart, img2CentCell, orb, species, speciesName, over, HSqrReal, SSqrReal,&
+      call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, iSparseStart,&
+          & img2CentCell, orb, denseMatIndex, species, speciesName, over, HSqrReal, SSqrReal,&
           & fileName="localOrbs")
     else
       do iSpin = 1, nSpin
         nFilledLev = floor(nEl(iSpin) / real( 3 - nSpin, dp))
         localisation = sum(pipekMezey%getLocalisation(&
             & HSqrCplx(:,:nFilledLev,:,iSpin), SSqrCplx, over, kpoint, kweight, neighborList,&
-            & nNeighbor, iCellVec, cellVec, iDenseStart, iSparseStart, img2CentCell))
+            & nNeighbor, iCellVec, cellVec, denseMatIndex%iDenseStart, iSparseStart, img2CentCell))
         write(stdOut, "(A, E20.12)") 'Original localisation', localisation
         call pipekMezey%calcCoeffs(HSqrCplx(:,:nFilledLev,:,iSpin), SSqrCplx, over, kpoint,&
-            & kweight, neighborList, nNeighbor, iCellVec, cellVec, iDenseStart, iSparseStart,&
-            & img2CentCell)
+            & kweight, neighborList, nNeighbor, iCellVec, cellVec, denseMatIndex%iDenseStart,&
+            & iSparseStart, img2CentCell)
         localisation = sum(pipekMezey%getLocalisation(&
             & HSqrCplx(:,:nFilledLev,:,iSpin), SSqrCplx, over, kpoint, kweight, neighborList,&
-            & nNeighbor, iCellVec, cellVec, iDenseStart, iSparseStart, img2CentCell))
+            & nNeighbor, iCellVec, cellVec, denseMatIndex%iDenseStart, iSparseStart, img2CentCell))
         write(stdOut, "(A, E20.12)") 'Final localisation', localisation
       end do
 
       call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, cellVec, iCellVec,&
-          & iDenseStart, iSparseStart, img2CentCell, orb, species, speciesName, over, kpoint,&
+          & iSparseStart, img2CentCell, orb, denseMatIndex, species, speciesName, over, kpoint,&
           & HSqrCplx, SSqrCplx, fileName="localOrbs")
     end if
 

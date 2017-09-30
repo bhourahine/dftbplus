@@ -105,7 +105,10 @@ module initprogram
   !> data type for atomic orbital information
   type(TOrbitals), target :: orb
 
-  !> nr. of orbitals in the system
+  !> data type for indexing dense large matrices
+  type(TDenseMatIndex), target :: denseMatIndex
+  
+  !> nr. of orbitals in the system, this is also contained in denseMatIndex
   integer :: nOrb
 
   !> nr. of orbitals for all atoms
@@ -191,11 +194,6 @@ module initprogram
 
   !> H/S sparse matrices indexing array for atomic blocks
   integer, allocatable :: iSparseStart(:,:)
-
-
-  !> atom start pos for dense  H/S
-  integer, allocatable :: iDenseStart(:)
-
 
   !> Hubbard Us (orbital, atom)
   real(dp), allocatable, target :: hubbU(:,:)
@@ -825,6 +823,8 @@ contains
     end if
 
     orb = input%slako%orb
+    nOrb = sum(orb%nOrbSpecies(input%geom%species(:)))
+    denseMatIndex%nOrb = nOrb
 
     ! Slater-Koster tables
     skHamCont = input%slako%skHamCont
@@ -1028,8 +1028,8 @@ contains
     allocate(species(nAllAtom))
     allocate(img2CentCell(nAllAtom))
     allocate(iCellVec(nAllAtom))
-    allocate(iDenseStart(nAtom + 1))
-    call buildSquaredAtomIndex(iDenseStart, species0, orb)
+    allocate(denseMatIndex%iDenseStart(nAtom + 1))
+    call buildSquaredAtomIndex(denseMatIndex%iDenseStart, species0, orb)
 
     ! Intialize Hamilton and overlap
     tImHam = tDualSpinOrbit .or. (tSpinOrbit .and. tDFTBU) ! .or. tBField
@@ -1071,9 +1071,6 @@ contains
     else
       tRealHS = .false.
     end if
-
-    ! Other usefull quantities
-    nOrb = orb%nOrb
 
     if (nSpin == 4) then
       allocate(nEl(1))
@@ -1277,7 +1274,7 @@ contains
               tmpir1 = 0
               ind = 1
               do iAt = 1, nAtomRegion
-                tmpir1(ind) = iDenseStart(iAt) + iOrb - 1
+                tmpir1(ind) = denseMatIndex%iDenseStart(iAt) + iOrb - 1
                 ind = ind + 1
               end do
               call append(iOrbRegion, tmpir1)
@@ -1304,7 +1301,7 @@ contains
               do ii = 1, nAtomRegion
                 iAt = iAtomRegion(ii)
                 do jj = orb%posShell(iSh, iSp), orb%posShell(iSh + 1, iSp) - 1
-                  tmpir1(ind) = iDenseStart(iAt) + jj - 1
+                  tmpir1(ind) = denseMatIndex%iDenseStart(iAt) + jj - 1
                   ind = ind + 1
                 end do
               end do
@@ -1328,7 +1325,7 @@ contains
           do ii = 1, nAtomRegion
             iAt = iAtomRegion(ii)
             do jj = 1, orb%nOrbSpecies(species0(iAt))
-              tmpir1(ind) = iDenseStart(iAt) + jj - 1
+              tmpir1(ind) = denseMatIndex%iDenseStart(iAt) + jj - 1
               ind = ind + 1
             end do
           end do
@@ -1625,7 +1622,7 @@ contains
       tLinRespZVect = (input%ctrl%lrespini%tMulliken .or. tForces &
           & .or. input%ctrl%lrespini%tCoeffs .or. tPrintExcitedEigVecs)
 
-      call init(lresp, input%ctrl%lrespini, nAtom, nEl(1), orb)
+      call init(lresp, input%ctrl%lrespini, nAtom, nEl(1), orb, denseMatIndex)
 
     end if
 

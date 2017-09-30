@@ -31,7 +31,7 @@ contains
 
 
   !> Calculates the spin orbit energy for on-site L.S coupling
-  subroutine onsite(Eatom, rho, iAtomStart, xi, orb, species)
+  subroutine onsite(Eatom, rho, iDenseStart, xi, orb, species)
 
     !> returned energy for each atom
     real(dp), intent(out) :: Eatom(:)
@@ -40,7 +40,7 @@ contains
     complex(dp), intent(in) :: rho(:,:)
 
     !> Offset array in the square matrix.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> spin orbit constants for each shell of each species
     real(dp), intent(in) :: xi(:,:)
@@ -64,12 +64,12 @@ contains
     nOrb = size(rho,dim=1)
 
     @:ASSERT(size(rho, dim=1) == size(rho, dim=2))
-    @:ASSERT(size(iAtomStart) == nAtom+1)
+    @:ASSERT(size(iDenseStart) == nAtom+1)
     @:ASSERT(size(xi,dim=2) == nSpecies)
     @:ASSERT(size(xi,dim=1) == orb%mShell)
     @:ASSERT(mod(nOrb,2)==0)
     nOrb = nOrb / 2
-    @:ASSERT(iAtomStart(nAtom+1)==nOrb+1)
+    @:ASSERT(iDenseStart(nAtom+1)==nOrb+1)
 
     allocate(SpeciesZ(orb%mOrb,orb%mOrb,nSpecies))
     SpeciesZ = 0.0_dp
@@ -100,8 +100,8 @@ contains
       jj = species(ii)
       kk = orb%nOrbSpecies(jj)
       ! uu block
-      tmpBlock(1:kk,1:kk) = 0.5_dp*rho(iAtomStart(ii):iAtomStart(ii+1)-1, &
-          & iAtomStart(ii):iAtomStart(ii+1)-1)
+      tmpBlock(1:kk,1:kk) = 0.5_dp*rho(iDenseStart(ii):iDenseStart(ii+1)-1, &
+          & iDenseStart(ii):iDenseStart(ii+1)-1)
       do ll = 1, orb%nOrbSpecies(jj)
         tmpBlock(ll,ll+1:)=conjg(tmpBlock(ll+1:,ll)) ! Hermitize
       end do
@@ -110,8 +110,8 @@ contains
 
       ! dd block
       tmpBlock(1:kk,1:kk) = &
-          & 0.5_dp*rho(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-          & nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1)
+          & 0.5_dp*rho(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+          & nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1)
       do ll = 1, orb%nOrbSpecies(jj)
         tmpBlock(ll,ll+1:)=conjg(tmpBlock(ll+1:,ll)) ! Hermitize
       end do
@@ -120,8 +120,8 @@ contains
 
       ! ud block
       tmpBlock(1:kk,1:kk) = & ! two ud/du blocks so omit 0.5 factor
-          & rho(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-          & iAtomStart(ii):iAtomStart(ii+1)-1)
+          & rho(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+          & iDenseStart(ii):iDenseStart(ii+1)-1)
       Eatom(ii) = Eatom(ii)&
           & + real(sum(SpeciesPlus(1:kk,1:kk,jj) * conjg(tmpBlock(1:kk,1:kk))),&
           & dp)

@@ -351,7 +351,7 @@ contains
 
 
   !> Converts a sparse matrix to its square form and write it to a file.
-  subroutine writeSparseAsSquare_real(fname, sparse, iNeighbor, nNeighbor, iAtomStart, iPair, &
+  subroutine writeSparseAsSquare_real(fname, sparse, iNeighbor, nNeighbor, iDenseStart, iPair, &
       & img2CentCell)
 
     !> Name of the file to write the matrix to.
@@ -367,7 +367,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Offset array in the square matrix.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Offset array in the sparse matrix
     integer, intent(in) :: iPair(0:,:)
@@ -380,7 +380,7 @@ contains
     character(mc) :: strForm
     integer :: fd, nOrb
 
-    nOrb = iAtomStart(size(nNeighbor) + 1) - 1
+    nOrb = iDenseStart(size(nNeighbor) + 1) - 1
 
     allocate(square(nOrb, nOrb))
     fd = getFileId()
@@ -389,9 +389,8 @@ contains
     write(fd, "(1X,L10,I10,I10,I10)") .true., nOrb, 1
 
     write (strForm, "(A,I0,A)") "(", nOrb, "ES24.15)"
-    call unpackHS(square, sparse, iNeighbor, nNeighbor, iAtomStart, iPair, &
-        &img2CentCell)
-    call blockSymmetrizeHS(square, iAtomStart)
+    call unpackHS(square, sparse, iNeighbor, nNeighbor, iDenseStart, iPair, img2CentCell)
+    call blockSymmetrizeHS(square, iDenseStart)
     write(fd, "(A1,A10,A10)") "#", "IKPOINT"
     write(fd, "(1X,I10,I10)") 1
     write(fd, "(A1,A)") "#", " MATRIX"
@@ -402,7 +401,7 @@ contains
 
 
   !> Converts a sparse matrix to its square form and write it to a file.
-  subroutine writeSparseAsSquare_cplx(fname, sparse, kPoints, iNeighbor, nNeighbor, iAtomStart, &
+  subroutine writeSparseAsSquare_cplx(fname, sparse, kPoints, iNeighbor, nNeighbor, iDenseStart, &
       & iPair, img2CentCell, iCellVec, cellVec)
 
     !> Name of the file to write the matrix into.
@@ -421,7 +420,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Offset array in the square matrix.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Pair indexing array.
     integer, intent(in) :: iPair(0:,:)
@@ -440,7 +439,7 @@ contains
     integer :: fd, nOrb, nKPoint
     integer :: iK
 
-    nOrb = iAtomStart(size(nNeighbor) + 1) - 1
+    nOrb = iDenseStart(size(nNeighbor) + 1) - 1
     nKPoint = size(kPoints, dim =2)
 
     allocate(square(nOrb, nOrb))
@@ -451,9 +450,9 @@ contains
 
     write (strForm, "(A,I0,A)") "(", 2 * nOrb, "ES24.15)"
     do iK = 1, nKPoint
-      call unpackHS(square, sparse, kPoints(:,iK), iNeighbor, nNeighbor, &
-          &iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
-      call blockHermitianHS(square, iAtomStart)
+      call unpackHS(square, sparse, kPoints(:,iK), iNeighbor, nNeighbor, iCellVec, cellVec,&
+          & iDenseStart, iPair, img2CentCell)
+      call blockHermitianHS(square, iDenseStart)
       write(fd, "(A1,A10,A10)") "#", "IKPOINT"
       write(fd, "(1X,I10,I10)") iK
       write(fd, "(A1,A)") "#", " MATRIX"
@@ -465,7 +464,7 @@ contains
 
 
   !> Writes a sparse matrix to a file.
-  subroutine writeSparse(fname, sparse, iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell, &
+  subroutine writeSparse(fname, sparse, iNeighbor, nNeighbor, iDenseStart, iPair, img2CentCell, &
       & iCellVec, cellVec)
 
     !> Name of the file to write the matrix to.
@@ -481,7 +480,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Offset array in the square matrix.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Pair indexing array.
     integer, intent(in) :: iPair(0:,:)
@@ -507,17 +506,17 @@ contains
     write(fd, "(1X,I10)") nAtom
     write(fd, "(A1,A10,A10,A10)") "#", "IATOM", "NNEIGH", "NORB"
     do iAt1 = 1, nAtom
-      write(fd, "(1X,I10,I10,I10)") iAt1, nNeighbor(iAt1) + 1, &
-          &iAtomStart(iAt1+1) - iAtomStart(iAt1)
+      write(fd, "(1X,I10,I10,I10)") iAt1, nNeighbor(iAt1) + 1,&
+          & iDenseStart(iAt1+1) - iDenseStart(iAt1)
     end do
 
     do iAt1 = 1, nAtom
-      nOrb1 = iAtomStart(iAt1+1) - iAtomStart(iAt1)
+      nOrb1 = iDenseStart(iAt1+1) - iDenseStart(iAt1)
       do iNeigh = 0, nNeighbor(iAt1)
         iOrig = iPair(iNeigh,iAt1) + 1
         iAt2 = iNeighbor(iNeigh, iAt1)
         iAt2f = img2CentCell(iAt2)
-        nOrb2 = iAtomStart(iAt2f+1) - iAtomStart(iAt2f)
+        nOrb2 = iDenseStart(iAt2f+1) - iDenseStart(iAt2f)
         write(strForm, "(A,I0,A)") "(", nOrb2, "ES24.15)"
         write(fd, "(A1,A10,A10,A10,3A10)") "#", "IATOM1", "INEIGH", "IATOM2F", &
             &"ICELL(1)", "ICELL(2)", "ICELL(3)"

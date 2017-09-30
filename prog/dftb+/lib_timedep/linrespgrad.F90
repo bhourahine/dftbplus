@@ -72,10 +72,10 @@ contains
 
   !> This subroutine analytically calculates excitations and gradients of excited state energies
   !> based on Time Dependent DFRT
-  subroutine LinRespGrad_old(tSpin, natom, iAtomStart, grndEigVecs, grndEigVal, sccCalc, dq,&
+  subroutine LinRespGrad_old(tSpin, natom, iDenseStart, grndEigVecs, grndEigVal, sccCalc, dq,&
       & coord0, nexc, nstat0, symc, SSqr, filling, species0, HubbardU, spinW, rnel, iNeighbor, &
-      & img2CentCell, orb, tWriteTagged, fdTagged, fdMulliken, fdCoeffs, tGrndState, fdXplusY, &
-      & fdTrans, fdSPTrans, fdTradip, tArnoldi, fdArnoldi, fdArnoldiDiagnosis, fdExc, &
+      & img2CentCell, orb, nOrb, tWriteTagged, fdTagged, fdMulliken, fdCoeffs, tGrndState,&
+      & fdXplusY,  fdTrans, fdSPTrans, fdTradip, tArnoldi, fdArnoldi, fdArnoldiDiagnosis, fdExc, &
       & tEnergyWindow, energyWindow,tOscillatorWindow, oscillatorWindow, omega, shift, skHamCont, &
       & skOverCont, excgrad, derivator, rhoSqr, occNatural, naturalOrbs)
 
@@ -86,7 +86,7 @@ contains
     integer, intent(in) :: natom
 
     !> index vector for S and H matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> ground state MO-coefficients
     real(dp), intent(in) :: grndEigVecs(:,:,:)
@@ -139,6 +139,9 @@ contains
     !> data type for atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> number of ground state spatial basis functions
+    integer, intent(in) :: norb
+    
     !> print tag information
     logical, intent(in) :: tWriteTagged
 
@@ -235,7 +238,6 @@ contains
 
     integer :: nocc, nocc_r, nvir_r, nxoo_r, nxvv_r
     integer :: nxov, nxov_ud(2), nxov_r, nxov_d, nxov_rd
-    integer :: norb
     integer :: i, j, iSpin, isym
     integer :: nSpin
     character :: sym
@@ -288,8 +290,6 @@ contains
 
     nSpin = size(grndEigVal, dim=2)
     @:ASSERT(nSpin > 0 .and. nSpin <=2)
-
-    norb = orb%nOrb
 
     @:ASSERT(present(excgrad) .eqv. present(shift))
     @:ASSERT(present(excgrad) .eqv. present(skHamCont))
@@ -412,7 +412,7 @@ contains
     wij = wij(win)
 
     ! dipole strength of transitions between K-S states
-    call calcTransitionDipoles(coord0, win, nxov_ud(1), getij, iAtomStart, stimc, grndEigVecs, &
+    call calcTransitionDipoles(coord0, win, nxov_ud(1), getij, iDenseStart, stimc, grndEigVecs, &
         & snglPartTransDip)
 
     ! single particle excitation oscillator strengths
@@ -506,7 +506,7 @@ contains
     do isym = 1, size(symmetries)
 
       sym = symmetries(isym)
-      call buildAndDiagExcMatrix(tSpin, wij(:nxov_rd), sym, win, nxov_ud(1), nxov_rd, iAtomStart, &
+      call buildAndDiagExcMatrix(tSpin, wij(:nxov_rd), sym, win, nxov_ud(1), nxov_rd, iDenseStart, &
           & stimc, grndEigVecs, filling, getij, gammaMat, species0, spinW, fdArnoldiDiagnosis, &
           & eval, evec )
 
@@ -593,14 +593,14 @@ contains
       call rindxov_array(win, nocc, nxov, getij, iatrans)
 
       ! solve for Z
-      call getZVectorEqRHS(xpy, xmy, win, iAtomStart, nocc, nocc_r, nxov_ud(1), getij, iatrans, &
+      call getZVectorEqRHS(xpy, xmy, win, iDenseStart, nocc, nocc_r, nxov_ud(1), getij, iatrans, &
           & natom, species0, grndEigVal(:,1), stimc, grndEigVecs, gammaMat, spinW, omega, sym, &
           & rhs, t, wov, woo, wvv)
-      call solveZVectorEq(rhs, win, nxov_ud(1), getij, natom, iAtomStart, stimc, gammaMat, &
+      call solveZVectorEq(rhs, win, nxov_ud(1), getij, natom, iDenseStart, stimc, gammaMat, &
           & wij(:nxov_rd), grndEigVecs)
 
       ! solve for W
-      call calcWVectorZ(rhs, win, nocc, nocc_r, nxov_ud(1), getij, iAtomStart, stimc, grndEigVecs, &
+      call calcWVectorZ(rhs, win, nocc, nocc_r, nxov_ud(1), getij, iDenseStart, stimc, grndEigVecs, &
           & gammaMat, grndEigVal(:,1), wov, woo, wvv)
 
       ! transition density matrix in MO basis
@@ -613,13 +613,13 @@ contains
       call makeSimiliarityTrans(pc, grndEigVecs(:,:,1))
 
       ! Muliken population for excited density matrix
-      call getExcMulliken(iAtomStart, pc, SSqr, dqex)
+      call getExcMulliken(iDenseStart, pc, SSqr, dqex)
       if (tMulliken) then
         call writeExcMulliken(sym, nstat, dq, dqex, coord0, fdMulliken)
       end if
 
       if (tForces) then
-        call addGradients(sym, nxov_rd, natom, species0, iAtomStart, norb, nocc, nocc_r, &
+        call addGradients(sym, nxov_rd, natom, species0, iDenseStart, norb, nocc, nocc_r, &
             & nxov_ud(1), getij, win, grndEigVecs, pc, stimc, dq, dqex, gammaMat, HubbardU, spinW, &
             & shift, woo, wov, wvv, xpy, coord0, orb, skHamCont, skOverCont, derivator, &
             & rhoSqr(:,:,1), excgrad)
@@ -631,7 +631,7 @@ contains
 
 
   !> Builds and diagonalizes the excitation matrix via iterative technique.
-  subroutine buildAndDiagExcMatrix(tSpin, wij, sym, win, nmatup, nxov, iAtomStart, stimc, &
+  subroutine buildAndDiagExcMatrix(tSpin, wij, sym, win, nmatup, nxov, iDenseStart, stimc, &
       & grndEigVecs, filling, getij, gammaMat, species0, spinW, fdArnoldiDiagnosis, eval, evec)
 
     !> spin polarisation?
@@ -653,7 +653,7 @@ contains
     integer, intent(in) :: nxov
 
     !> indexing array for square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> overlap times ground state eigenvectors
     real(dp), intent(in) :: stimc(:,:,:)
@@ -748,7 +748,7 @@ contains
 
       ! Action of excitation supermatrix on supervector
       call omegatvec(tSpin, workd(ipntr(1):ipntr(1)+nxov-1), workd(ipntr(2):ipntr(2)+nxov-1),&
-          & wij, sym, win, nmatup, iAtomStart, stimc, grndEigVecs, filling, getij, gammaMat, &
+          & wij, sym, win, nmatup, iDenseStart, stimc, grndEigVecs, filling, getij, gammaMat, &
           & species0, spinW)
 
     end do
@@ -789,7 +789,7 @@ contains
       write(fdArnoldiDiagnosis,"(A)")'State Ei deviation    Evec deviation  Norm deviation  Max &
           &non-orthog'
       do iState = 1, nExc
-        call omegatvec(tSpin, evec(:,iState), Hv, wij, sym, win, nmatup, iAtomStart, stimc, &
+        call omegatvec(tSpin, evec(:,iState), Hv, wij, sym, win, nmatup, iDenseStart, stimc, &
             & grndEigVecs, filling, getij, gammaMat, species0, spinW)
         write(fdArnoldiDiagnosis,"(I4,4E16.8)")iState, dot_product(Hv,evec(:,iState))-eval(iState),&
             & sqrt(sum( (Hv-evec(:,iState)*eval(iState) )**2 )), orthnorm(iState,iState) - 1.0_dp, &
@@ -1042,7 +1042,7 @@ contains
 
   !> Build right hand side of the equation for the Z-vector and those parts of the W-vectors which
   !> do not depend on Z.
-  subroutine getZVectorEqRHS(xpy, xmy, win, iAtomStart, homo, nocc, nmatup, getij, iatrans, natom, &
+  subroutine getZVectorEqRHS(xpy, xmy, win, iDenseStart, homo, nocc, nmatup, getij, iatrans, natom, &
       & species0, grndEigVal, stimc, c, gammaMat, spinW, omega, sym, rhs, t, wov, woo, wvv)
 
     !> X+Y Furche term
@@ -1055,7 +1055,7 @@ contains
     integer, intent(in) :: win(:)
 
     !> index vector for S and H matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> highest occupied level
     integer, intent(in) :: homo
@@ -1180,7 +1180,7 @@ contains
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, c, qij)
+      call transq(i, a, iDenseStart, updwn, stimc, c, qij)
       xpyq(:) = xpyq + xpy(ia) * qij
     end do
 
@@ -1189,13 +1189,13 @@ contains
       call hemv(gamxpyq, gammaMat,  xpyq)
       do ab = 1, nxvv
         call indxvv(homo, ab, a, b)
-        call transq(a, b, iAtomStart, updwn, stimc, c, qij)
+        call transq(a, b, iDenseStart, updwn, stimc, c, qij)
         qgamxpyq(ab) = 2.0_dp * sum(qij * gamxpyq)
       end do
     else
       do ab = 1, nxvv
         call indxvv(homo, ab, a, b)
-        call transq(a, b, iAtomStart, updwn, stimc, c, qij)
+        call transq(a, b, iDenseStart, updwn, stimc, c, qij)
         qgamxpyq(ab) = 2.0_dp * sum(qij * xpyq * spinW(species0))
       end do
     end if
@@ -1219,7 +1219,7 @@ contains
       do ij = 1, nxoo
         qgamxpyq(ij) = 0.0_dp
         call indxoo(homo, nocc, ij, i, j)
-        call transq(i, j, iAtomStart, updwn, stimc, c, qij)
+        call transq(i, j, iDenseStart, updwn, stimc, c, qij)
         ! qgamxpyq(ij) = sum_kb K_ij,kb (X+Y)_kb
         qgamxpyq(ij) = 2.0_dp * sum(qij * gamxpyq)
       end do
@@ -1227,7 +1227,7 @@ contains
       do ij = 1, nxoo
         qgamxpyq(ij) = 0.0_dp
         call indxoo(homo, nocc, ij, i, j)
-        call transq(i, j, iAtomStart, updwn, stimc, c, qij)
+        call transq(i, j, iDenseStart, updwn, stimc, c, qij)
         qgamxpyq(ij) = 2.0_dp * sum(qij * xpyq * spinW(species0))
       end do
     end if
@@ -1254,7 +1254,7 @@ contains
     gamxpyq(:) = 0.0_dp
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
-      call transq(i, j, iAtomStart, updwn, stimc, c, qij)
+      call transq(i, j, iDenseStart, updwn, stimc, c, qij)
       if (i == j) then
         gamxpyq(:) = gamxpyq(:) + t(i,j) * qij(:)
       else
@@ -1266,7 +1266,7 @@ contains
     ! gamxpyq(iAt2) += sum_ab q_ab(iAt2) T_ab
     do ab = 1, nxvv
       call indxvv(homo, ab, a, b)
-      call transq(a, b, iAtomStart, updwn, stimc, c, qij)
+      call transq(a, b, iDenseStart, updwn, stimc, c, qij)
       if (a == b) then
         gamxpyq(:) = gamxpyq(:) + t(a,b) * qij(:)
       else
@@ -1282,14 +1282,14 @@ contains
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, c, qij)
+      call transq(i, a, iDenseStart, updwn, stimc, c, qij)
       rhs(ia) = rhs(ia) - 4.0_dp * sum(qij * gamqt)
     end do
 
     ! Furche vectors
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
-      call transq(i, j, iAtomStart, updwn, stimc, c, qij)
+      call transq(i, j, iDenseStart, updwn, stimc, c, qij)
       woo(ij) = woo(ij) + 4.0_dp * sum(qij * gamqt)
     end do
 
@@ -1297,7 +1297,7 @@ contains
 
 
   !> Solving the (A+B) Z = -R equation via conjugate gradient
-  subroutine solveZVectorEq(rhs, win, nmatup, getij, natom, iAtomStart, stimc, gammaMat, wij, c)
+  subroutine solveZVectorEq(rhs, win, nmatup, getij, natom, iDenseStart, stimc, gammaMat, wij, c)
 
     !> on entry -R, on exit Z
     real(dp), intent(inout) :: rhs(:)
@@ -1315,7 +1315,7 @@ contains
     integer, intent(in) :: natom
 
     !> index vector for S and H0 matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> overlap times ground state mo-coefficients
     real(dp), intent(in) :: stimc(:,:,:)
@@ -1344,7 +1344,7 @@ contains
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, c, qij)
+      call transq(i, a, iDenseStart, updwn, stimc, c, qij)
       call hemv(qTmp, gammaMat, qij)
       rs = 4.0_dp * dot_product(qij, qTmp) + wij(ia)
       rhs2(ia) = rhs(ia) / rs
@@ -1357,7 +1357,7 @@ contains
     deallocate(qij)
 
     ! action of matrix on vector
-    call apbw(rkm1, rhs2, wij, nxov, natom, win, nmatup, getij, iAtomStart, &
+    call apbw(rkm1, rhs2, wij, nxov, natom, win, nmatup, getij, iDenseStart, &
         & stimc, c, gammaMat)
 
     rkm1 = rhs - rkm1
@@ -1368,7 +1368,7 @@ contains
 
       ! action of matrix on vector
       call apbw(apk, pkm1, wij, nxov, natom,&
-          & win, nmatup, getij, iAtomStart, stimc, c, gammaMat)
+          & win, nmatup, getij, iDenseStart, stimc, c, gammaMat)
 
       tmp1 = dot_product(rkm1, rkm1)
       tmp2 = dot_product(pkm1, apk)
@@ -1402,7 +1402,7 @@ contains
 
   !> Calculate Z-dependent parts of the W-vectors and divide diagonal elements of W_ij and W_ab by
   !> 2.
-  subroutine calcWvectorZ(zz, win, homo, nocc, nmatup, getij, iAtomStart, stimc, c, gammaMat, &
+  subroutine calcWvectorZ(zz, win, homo, nocc, nmatup, getij, iDenseStart, stimc, c, gammaMat, &
       & grndEigVal, wov, woo, wvv)
 
     !> Z vector
@@ -1424,7 +1424,7 @@ contains
     integer, intent(in) :: getij(:,:)
 
     !> index array for S and H0 ground state square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> overlap times ground state wavefunctions
     real(dp), intent(in) :: stimc(:,:,:)
@@ -1472,7 +1472,7 @@ contains
       do ia = 1, nxov
         call indxov(win, ia, getij, i, a)
         updwn = (win(ia) <= nmatup)
-        call transq(i, a, iAtomStart, updwn, stimc, c, qij)
+        call transq(i, a, iDenseStart, updwn, stimc, c, qij)
         zq(iAt1) = zq(iAt1) + zz(ia) * qij(iAt1)
       end do
     end do
@@ -1482,7 +1482,7 @@ contains
     ! sum_iAt1 qij(iAt1) gamxpyq(iAt1)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
-      call transq(i, j, iAtomStart, updwn, stimc, c, qij)
+      call transq(i, j, iDenseStart, updwn, stimc, c, qij)
       do iAt1 = 1, natom
         ! W contains 1/2 for i == j.
         woo(ij) = woo(ij) + 4.0_dp * qij(iAt1) * gamxpyq(iAt1)
@@ -1510,10 +1510,10 @@ contains
 
   !> Mulliken population for a square density matrix and overlap
   !> Note: assumes both triangles of both square matrices are filled
-  subroutine getExcMulliken(iAtomStart, pc, s, dqex)
+  subroutine getExcMulliken(iDenseStart, pc, s, dqex)
 
     !> indexing array for atoms
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> density matrix
     real(dp), intent(in) :: pc(:,:)
@@ -1532,7 +1532,7 @@ contains
     tmp = sum(pc * s,dim=2)
     dqex(:) = 0.0_dp
     do iAt1 = 1, size(dqex)
-      dqex(iAt1) = sum(tmp(iAtomStart(iAt1):iAtomStart(iAt1 + 1) -1))
+      dqex(iAt1) = sum(tmp(iDenseStart(iAt1):iDenseStart(iAt1 + 1) -1))
     end do
 
   end subroutine getExcMulliken
@@ -1603,7 +1603,7 @@ contains
 
   !> Calculate transition moments for transitions between Kohn-Sham states, including spin-flipping
   !> transitions
-  subroutine calcTransitionDipoles(coord0, win, nmatup, getij, iAtomStart, stimc, grndEigVecs, &
+  subroutine calcTransitionDipoles(coord0, win, nmatup, getij, iDenseStart, stimc, grndEigVecs, &
       & snglPartTransDip)
 
     !> Atomic positions
@@ -1616,7 +1616,7 @@ contains
     integer, intent(in) :: nmatup
 
     !> index array for ground state square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> index array for excitation pairs
     integer, intent(in) :: getij(:,:)
@@ -1644,7 +1644,7 @@ contains
     do indm = 1, nxov
       call indxov(win, indm, getij, ii, jj)
       updwn = (win(indm) <= nmatup)
-      call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+      call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
       snglPartTransDip(indm, :) = matmul(coord0, qij)
     end do
 
@@ -1656,7 +1656,7 @@ contains
   !> 2. we need P,(T,Z),W, X + Y from linear response
   !> 3. calculate dsmndr, dhmndr (dS/dR, dh/dR), dgabda (dGamma_{IAt1,IAt2}/dR_{IAt1}),
   !> dgext (dGamma-EXT_{IAt1,k}/dR_{IAt1})
-  subroutine addGradients(sym, nxov, natom, species0, iAtomStart, norb, homo, &
+  subroutine addGradients(sym, nxov, natom, species0, iDenseStart, norb, homo, &
       & nocc, nmatup, getij, win, grndEigVecs, pc, stimc, dq, dqex, gammaMat, &
       & HubbardU, spinW, shift, woo, wov, wvv, xpy, coord0, orb, &
       & skHamCont, skOverCont, derivator, rhoSqr, excgrad)
@@ -1674,7 +1674,7 @@ contains
     integer, intent(in) :: species0(:)
 
     !> index array for S and H0 ground state square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> number of orbitals for ground state system
     integer, intent(in) :: norb
@@ -1794,7 +1794,7 @@ contains
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, grndEigVecs, qij)
+      call transq(i, a, iDenseStart, updwn, stimc, grndEigVecs, qij)
       xpyq(:) = xpyq(:) + xpy(ia) * qij(:)
     end do
 
@@ -1877,13 +1877,13 @@ contains
 
     ! BA: only for non-periodic systems!
     do iAt1 = 1, nAtom
-      indalpha = iAtomStart(iAt1)
-      indalpha1 = iAtomStart(iAt1 + 1) -1
+      indalpha = iDenseStart(iAt1)
+      indalpha1 = iDenseStart(iAt1 + 1) -1
       iSp1 = species0(iAt1)
 
       do iAt2 = 1, iAt1 - 1
-        indbeta = iAtomStart(iAt2)
-        indbeta1 = iAtomStart(iAt2 + 1) -1
+        indbeta = iDenseStart(iAt2)
+        indbeta1 = iDenseStart(iAt2 + 1) -1
         iSp2 = species0(iAt2)
 
         diffvec = coord0(:,iAt1) - coord0(:,iAt2)

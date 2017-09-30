@@ -100,7 +100,7 @@ contains
 
 
   !> Performs Pipek-Mezey localisation for a molecule.
-  subroutine calcCoeffsReal(this, ci, SSqrReal, iAtomStart)
+  subroutine calcCoeffsReal(this, ci, SSqrReal, iDenseStart)
 
     !> Instance
     class(TPipekMezey), intent(in) :: this
@@ -112,17 +112,17 @@ contains
     real(dp), intent(in) :: SSqrReal(:,:)
 
     !> Atom offset for the squared Hamiltonian
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     integer :: ii
 
     if (allocated(this%sparseTols)) then
       do ii = 1, size(this%sparseTols)
-        call PipekMezeySuprtRegion_real(ci, SSqrReal, iAtomStart, this%tolerance, this%maxIter,&
+        call PipekMezeySuprtRegion_real(ci, SSqrReal, iDenseStart, this%tolerance, this%maxIter,&
             & this%sparseTols(ii))
       end do
     else
-      call pipekMezeyOld_real(ci, SSqrReal, iAtomStart, this%tolerance, this%maxIter)
+      call pipekMezeyOld_real(ci, SSqrReal, iDenseStart, this%tolerance, this%maxIter)
     end if
 
   end subroutine calcCoeffsReal
@@ -130,7 +130,7 @@ contains
 
   !> Performs Pipek-Mezey localisation for a periodic system.
   subroutine calcCoeffsKPoints(this, ci, SSqrCplx, over, kPoints, kWeights, neighborList,&
-      & nNeighbor, iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+      & nNeighbor, iCellVec, cellVec, iDenseStart, iPair, img2CentCell)
 
     !> Instance.
     class(TPipekMezey), intent(in) :: this
@@ -163,7 +163,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> index for the square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> index for the sparse matrices
     integer, intent(in) :: iPair(0:,:)
@@ -172,14 +172,14 @@ contains
     integer, intent(in) :: img2CentCell(:)
 
     call PipekMezeyOld_kpoints(ci, SSqrCplx, over, kPoints, kWeights, neighborList%iNeighbor,&
-        & nNeighbor, iCellVec, cellVec, iAtomStart, iPair, img2CentCell, this%tolerance,&
+        & nNeighbor, iCellVec, cellVec, iDenseStart, iPair, img2CentCell, this%tolerance,&
         & this%maxIter)
 
   end subroutine calcCoeffsKPoints
 
 
   !> Localisation value of square of Mulliken charges summed over all levels
-  function getLocalisationReal(ci, SSqrReal, iAtomStart) result(locality)
+  function getLocalisationReal(ci, SSqrReal, iDenseStart) result(locality)
 
     !> wavefunction coefficients
     real(dp), intent(in) :: ci(:,:)
@@ -188,12 +188,12 @@ contains
     real(dp), intent(in) :: SSqrReal(:,:)
 
     !> Atom offset for the squared Hamiltonian
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Calculated locality
     real(dp) :: locality
 
-    locality = PipekMezyLocality_real(ci, SSqrReal, iAtomStart)
+    locality = PipekMezyLocality_real(ci, SSqrReal, iDenseStart)
 
   end function getLocalisationReal
 
@@ -201,7 +201,7 @@ contains
 
   !> Localisation value of square of Mulliken charges summed over all levels for each k-point.
   function getLocalisationKPoints(ci, SSqrCplx, over, kpoints, kweights, neighborList, nNeighbor, &
-      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)  result (locality)
+      & iCellVec, cellVec, iDenseStart, iPair, img2CentCell)  result (locality)
 
     !> wavefunction coefficients
     complex(dp), intent(in) :: ci(:,:,:)
@@ -231,7 +231,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> index for the square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> index for the sparse matrices
     integer, intent(in) :: iPair(0:,:)
@@ -243,7 +243,7 @@ contains
     real(dp) :: locality(size(kweights))
 
     locality = PipekMezyLocality_kpoints(ci, SSqrCplx, over, kpoints, kweights,&
-        & neighborList%iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+        & neighborList%iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart, iPair, img2CentCell)
 
   end function getLocalisationKPoints
 
@@ -256,7 +256,7 @@ contains
 
   !> Performs conventional Pipek-Mezey localisation for a molecule given the square overlap matrix
   !> using iterative sweeps over each pair of orbitals
-  subroutine PipekMezeyOld_real(ci, S, iAtomStart, pipekTol, mIter)
+  subroutine PipekMezeyOld_real(ci, S, iDenseStart, pipekTol, mIter)
 
     !> wavefunction coefficients
     real(dp), intent(inout) :: ci(:,:)
@@ -265,7 +265,7 @@ contains
     real(dp), intent(in) :: S(:,:)
 
     !> Atom offset for the squared Hamiltonian
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> tollerance for halting localisation iterations
     real(dp), intent(in) :: pipekTol
@@ -291,9 +291,9 @@ contains
 
     nOrb = size(ci,dim=1)
     nLev = size(ci,dim=2)
-    nAtom = size(iAtomStart) -1
+    nAtom = size(iDenseStart) -1
 
-    @:ASSERT(iAtomStart(nAtom+1)-1 == nOrb)
+    @:ASSERT(iDenseStart(nAtom+1)-1 == nOrb)
 
     if (present(mIter)) then
       nIter = mIter
@@ -326,8 +326,8 @@ contains
           Ast = 0.0_dp
           Bst = 0.0_dp
           do iAtom1 = 1, nAtom
-            iOrb1 = iAtomStart(iAtom1)
-            iOrb2 = iAtomStart(iAtom1+1) - 1
+            iOrb1 = iDenseStart(iAtom1)
+            iOrb2 = iDenseStart(iAtom1+1) - 1
             Pst = 0.5_dp * (sum(ci(iOrb1:iOrb2,iLev1)*Sci2(iOrb1:iOrb2,iLev2))&
                 & + sum(ci(iOrb1:iOrb2,iLev2)*Sci1(iOrb1:iOrb2)))
             Pss = sum ( ci(iOrb1:iOrb2,iLev1)*Sci1(iOrb1:iOrb2) )
@@ -379,7 +379,7 @@ contains
 
 
   !> performs Pipek-Mezey localisation for a molecule given the square overlap matrix, using a
-  subroutine PipekMezeySuprtRegion_real(ci, S, iAtomStart, convergence, mIter, RegionTol)
+  subroutine PipekMezeySuprtRegion_real(ci, S, iDenseStart, convergence, mIter, RegionTol)
 
     !> support region for each molecular orbital
     real(dp), intent(inout) :: ci(:,:)
@@ -388,7 +388,7 @@ contains
     real(dp), intent(in) :: S(:,:)
 
     !> overlap matrix in square form
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Atom offset for the squared Hamiltonian
     real(dp), intent(in) :: convergence
@@ -426,7 +426,7 @@ contains
 
     write(stdout, *)'Pipek Mezey localisation'
 
-    Localisation = PipekMezyLocality_real(ci,S,iAtomStart)
+    Localisation = PipekMezyLocality_real(ci,S,iDenseStart)
     write(stdout, *)'Initial', Localisation
 
     @:ASSERT(size(ci,dim=1)>=size(ci,dim=2))
@@ -435,9 +435,9 @@ contains
 
     nOrb = size(ci,dim=1)
     nLev = size(ci,dim=2)
-    nAtom = size(iAtomStart) -1
+    nAtom = size(iDenseStart) -1
 
-    @:ASSERT(iAtomStart(nAtom+1)-1 == nOrb)
+    @:ASSERT(iDenseStart(nAtom+1)-1 == nOrb)
 
     if (present(mIter)) then
       nIter = mIter
@@ -474,8 +474,8 @@ contains
     SitesLev(:,:) = 0
     do iLev1 = 1, nLev
       do iAtom1 = 1, nAtom
-        iOrb1 = iAtomStart(iAtom1)
-        iOrb2 = iAtomStart(iAtom1+1) - 1
+        iOrb1 = iDenseStart(iAtom1)
+        iOrb2 = iDenseStart(iAtom1+1) - 1
         if (sum(abs(Sci2(iOrb1:iOrb2,iLev1)))>=RegionTol) then
           nSitesLev(iLev1) = nSitesLev(iLev1) + 1
           SitesLev(nSitesLev(iLev1),iLev1) = iAtom1
@@ -547,8 +547,8 @@ contains
           do ll = 1, kk
             iAtom1 = union(ll)
             !  regions
-            iOrb1 = iAtomStart(iAtom1)
-            iOrb2 = iAtomStart(iAtom1+1) - 1
+            iOrb1 = iDenseStart(iAtom1)
+            iOrb2 = iDenseStart(iAtom1+1) - 1
 
             Pst = 0.5_dp * (sum(ci(iOrb1:iOrb2,iLev1)*Sci1(iOrb1:iOrb2,2))&
                 & + sum(ci(iOrb1:iOrb2,iLev2)*Sci1(iOrb1:iOrb2,1)))
@@ -594,8 +594,8 @@ contains
           SitesLev(:,jj) = 0
           do kk = 1, nOldSites(1)
             iAtom1 = oldSites(kk,1)
-            iOrb1 = iAtomStart(iAtom1)
-            iOrb2 = iAtomStart(iAtom1+1) - 1
+            iOrb1 = iDenseStart(iAtom1)
+            iOrb2 = iDenseStart(iAtom1+1) - 1
             if (sum(abs(Sci2(iOrb1:iOrb2,jj)))>=RegionTol) then
               nSitesLev(jj) = nSitesLev(jj) + 1
               SitesLev(nSitesLev(jj),jj) = iAtom1
@@ -608,8 +608,8 @@ contains
           SitesLev(:,jj) = 0
           do kk = 1, nOldSites(2)
             iAtom1 = oldSites(kk,2)
-            iOrb1 = iAtomStart(iAtom1)
-            iOrb2 = iAtomStart(iAtom1+1) - 1
+            iOrb1 = iDenseStart(iAtom1)
+            iOrb2 = iDenseStart(iAtom1+1) - 1
             if (sum(abs(Sci2(iOrb1:iOrb2,jj)))>=RegionTol) then
               nSitesLev(jj) = nSitesLev(jj) + 1
               SitesLev(nSitesLev(jj),jj) = iAtom1
@@ -662,7 +662,7 @@ contains
       end do
 
       oldLocalisation = Localisation
-      Localisation = PipekMezyLocality_real(ci,S,iAtomStart)
+      Localisation = PipekMezyLocality_real(ci,S,iDenseStart)
       write(stdout, "(A,F12.6,1X,A,E20.12)")'Current localisation ',Localisation,&
           & 'change ',Localisation-oldLocalisation
 
@@ -685,7 +685,7 @@ contains
 
     end do lpLocalise
 
-    Localisation = PipekMezyLocality_real(ci,S,iAtomStart)
+    Localisation = PipekMezyLocality_real(ci,S,iDenseStart)
     write(stdout, *)'Final',Localisation
 
     if (.not.tConverged) then
@@ -697,7 +697,7 @@ contains
 
 
   !> Localisation value of square of Mulliken charges summed over all levels
-  function PipekMezyLocality_real(ci,S,iAtomStart) result(PipekMezyLocality)
+  function PipekMezyLocality_real(ci,S,iDenseStart) result(PipekMezyLocality)
 
     !> Localisation
     real(dp) :: PipekMezyLocality
@@ -709,12 +709,12 @@ contains
     real(dp), intent(in) :: S(:,:)
 
     !> Atom offset for the squared Hamiltonian
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     real(dp), allocatable :: Sci(:,:)
     integer :: nAtom, iAtom, iOrbStart, iOrbEnd, nOrb, nLev
 
-    nAtom = size(iAtomStart) -1
+    nAtom = size(iDenseStart) -1
     nOrb = size(ci,dim=1)
     nLev = size(ci,dim=2)
 
@@ -726,8 +726,8 @@ contains
 
     Sci = ci * Sci
     do iAtom = 1, nAtom
-      iOrbStart = iAtomStart(iAtom)
-      iOrbEnd = iAtomStart(iAtom+1) - 1
+      iOrbStart = iDenseStart(iAtom)
+      iOrbEnd = iDenseStart(iAtom+1) - 1
       PipekMezyLocality = PipekMezyLocality &
           & + sum(sum(Sci(iOrbStart:iOrbEnd,1:nLev),dim=1)**2)
     end do
@@ -737,7 +737,7 @@ contains
 
   !> Localisation value of square of Mulliken charges summed over all levels
   function PipekMezyLocality_kpoints(ci, S, over, kpoints, kweights, iNeighbor, nNeighbor, &
-      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)  result (PipekMezyLocality)
+      & iCellVec, cellVec, iDenseStart, iPair, img2CentCell)  result (PipekMezyLocality)
 
     !> wavefunction coefficients
     complex(dp), intent(in) :: ci(:,:,:)
@@ -767,7 +767,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> index for the square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> index for the sparse matrices
     integer, intent(in) :: iPair(0:,:)
@@ -784,7 +784,7 @@ contains
 
     @:ASSERT(size(ci,dim=1)>=size(ci,dim=2))
 
-    nAtom = size(iAtomStart) -1
+    nAtom = size(iDenseStart) -1
     nOrb = size(ci,dim=1)
     nLev = size(ci,dim=2)
     nKpt = size(ci,dim=3)
@@ -803,15 +803,15 @@ contains
       tmp = 0.0_dp
 
       call unpackHS(S, over, kPoints(:,iKpt), iNeighbor, nNeighbor, iCellVec, &
-          & cellVec, iAtomStart, iPair, img2CentCell)
+          & cellVec, iDenseStart, iPair, img2CentCell)
 
       call hemm(Sci,'L',S,ci(:,:,iKpt),'L')
       Sci = conjg(ci(:,:,iKpt)) * Sci
 
       do iLev = 1, nLev
         do iAtom = 1, nAtom
-          iOrbStart = iAtomStart(iAtom)
-          iOrbEnd = iAtomStart(iAtom+1) - 1
+          iOrbStart = iDenseStart(iAtom)
+          iOrbEnd = iDenseStart(iAtom+1) - 1
           tmp(iAtom, iLev) = tmp(iAtom, iLev) + & ! kweights(iKpt) * &
               & sum(real(Sci(iOrbStart:iOrbEnd,iLev)))
         end do
@@ -826,7 +826,7 @@ contains
   !> Performs conventional Pipek-Mezey localisation for a supercell using iterative sweeps over each
   !> pair of orbitals
   subroutine PipekMezeyOld_kpoints(ci, S, over, kpoints, kweights, iNeighbor, nNeighbor, iCellVec, &
-      & cellVec, iAtomStart, iPair, img2CentCell, convergence, mIter)
+      & cellVec, iDenseStart, iPair, img2CentCell, convergence, mIter)
 
     !> wavefunction coefficients
     complex(dp), intent(inout) :: ci(:,:,:)
@@ -856,7 +856,7 @@ contains
     real(dp), intent(in) :: cellVec(:,:)
 
     !> index for the square matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> index for the sparse matrices
     integer, intent(in) :: iPair(0:,:)
@@ -892,10 +892,10 @@ contains
 
     nOrb = size(ci,dim=1)
     nLev = size(ci,dim=2)
-    nAtom = size(iAtomStart) -1
+    nAtom = size(iDenseStart) -1
     nKpt = size(ci,dim=3)
 
-    @:ASSERT(iAtomStart(nAtom+1)-1 == nOrb)
+    @:ASSERT(iDenseStart(nAtom+1)-1 == nOrb)
     @:ASSERT(all(shape(kpoints) == [3,nKpt]))
     @:ASSERT(size(kweights) == nKpt)
     @:ASSERT(all(shape(S) == [nOrb,nOrb]))
@@ -926,7 +926,7 @@ contains
         alphamax = 0.0_dp
 
         call unpackHS(S, over, kPoints(:,iKpt), iNeighbor, nNeighbor, &
-            & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+            & iCellVec, cellVec, iDenseStart, iPair, img2CentCell)
 
         ! sweep over all pairs of levels at that k-point
         do iLev1 = 1, nLev
@@ -945,8 +945,8 @@ contains
             Ast = 0.0_dp
             Bst = 0.0_dp
             do iAtom1 = 1, nAtom
-              iOrb1 = iAtomStart(iAtom1)
-              iOrb2 = iAtomStart(iAtom1+1) - 1
+              iOrb1 = iDenseStart(iAtom1)
+              iOrb2 = iDenseStart(iAtom1+1) - 1
               Pst = 0.5_dp * ( &
                   & sum(ci(iOrb1:iOrb2,iLev1,iKpt)*Sci2(iOrb1:iOrb2,iLev2))&
                   &+sum(ci(iOrb1:iOrb2,iLev2,iKpt)*Sci1(iOrb1:iOrb2)) )
@@ -994,11 +994,11 @@ contains
       write(stdout, *)'Localisations at each k-point'
       write(stdout, "(6E12.4)") &
           & PipekMezyLocality_kpoints(ci, S, over, kpoints, kweights, &
-          & iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart, iPair, &
+          & iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart, iPair, &
           & img2CentCell)
       write(stdout, "(1X,A,E12.4)")'Total', &
           & sum(PipekMezyLocality_kpoints(ci, S, over, kpoints, kweights, &
-          & iNeighbor, nNeighbor, iCellVec, cellVec, iAtomStart, iPair, &
+          & iNeighbor, nNeighbor, iCellVec, cellVec, iDenseStart, iPair, &
           & img2CentCell))
 
       if (all(tConverged .eqv. .true.)) then

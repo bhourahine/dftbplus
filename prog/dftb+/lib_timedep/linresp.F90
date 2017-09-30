@@ -136,23 +136,11 @@ module linresp_module
     module procedure LinResp_init
   end interface init
 
-
-  !> actually calculate excitations
-  interface calcExcitations
-    module procedure LinResp_calcExcitations
-  end interface calcExcitations
-
-
-  !> excitations plus forces and some other properties (excited
-  interface addGradients
-    module procedure LinResp_addGradients
-  end interface addGradients
-
 contains
 
 
   !> Initialize an internal data type for linear response excitations
-  subroutine LinResp_init(self, ini, nAtom, nEl, orb)
+  subroutine LinResp_init(self, ini, nAtom, nEl, orb, denseMatIndex)
 
     !> data structure for linear response
     type(linresp), intent(out) :: self
@@ -168,6 +156,9 @@ contains
 
     !> data on atomic orbitals
     type(TOrbitals), intent(in) :: orb
+
+    !> data type for dense matrix indexing
+    type(TdenseMatIndex), intent(in) :: denseMatIndex
 
 #:if WITH_ARPACK
     self%nExc = ini%nExc
@@ -227,7 +218,7 @@ contains
     self%nAtom = nAtom
     self%nEl = nEl
     self%nOcc = ceiling(nEl / 2.0_dp)
-    self%nVir = orb%nOrb - self%nOcc
+    self%nVir = denseMatIndex%nOrb - self%nOcc
     self%fdExc = getFileId() ! file for excitations
 
     ! Write to disc
@@ -245,8 +236,8 @@ contains
 
 
   !> Wrapper to call the actual linear response routine for excitation energies
-  subroutine LinResp_calcExcitations(tSpin, self, iAtomStart, eigVec, eigVal, SSqrReal, filling, &
-      & coords0, sccCalc, dqAt, species0, iNeighbor, img2CentCell, orb, tWriteTagged, fdTagged, &
+  subroutine calcExcitations(tSpin, self, eigVec, eigVal, SSqrReal, filling, coords0, sccCalc,&
+      & dqAt, species0, iNeighbor, img2CentCell, orb, denseMatIndex, tWriteTagged, fdTagged,&
       & excEnergy)
 
     !> is this a spin-polarized calculation
@@ -254,9 +245,6 @@ contains
 
     !> data structure with additional linear response values
     type(linresp), intent(inout) :: self
-
-    !> indexing array for ground state square matrices
-    integer, intent(in) :: iAtomStart(:)
 
     !> ground state eigenvectors
     real(dp), intent(in) :: eigVec(:,:,:)
@@ -291,6 +279,9 @@ contains
     !> data type with atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> data type for dense matrix indexing
+    type(TdenseMatIndex), intent(in) :: denseMatIndex
+    
     !> print tag information
     logical, intent(in) :: tWriteTagged
 
@@ -302,36 +293,31 @@ contains
 
 #:if WITH_ARPACK
     @:ASSERT(self%tInit)
-    call LinRespGrad_old(tSpin, self%nAtom, iAtomStart, eigVec, eigVal, sccCalc, dqAt, coords0, &
-        & self%nExc, self%nStat, self%symmetry, SSqrReal, filling, species0, self%HubbardU, &
-        & self%spinW, self%nEl, iNeighbor, img2CentCell, orb, tWriteTagged, fdTagged, &
-        & self%fdMulliken, self%fdCoeffs, self%tGrndState, self%fdXplusY, self%fdTrans, &
-        & self%fdSPTrans, self%fdTradip, self%tArnoldi, self%fdArnoldi,  self%fdArnoldiDiagnosis, &
-        & self%fdExc, self%tEnergyWindow, self%energyWindow, self%tOscillatorWindow, &
-        & self%oscillatorWindow, excEnergy)
+    call LinRespGrad_old(tSpin, self%nAtom, denseMatIndex%iDenseStart, eigVec, eigVal, sccCalc,&
+        & dqAt, coords0, self%nExc, self%nStat, self%symmetry, SSqrReal, filling, species0,&
+        & self%HubbardU, self%spinW, self%nEl, iNeighbor, img2CentCell, orb, denseMatIndex%nOrb,&
+        & tWriteTagged, fdTagged,  self%fdMulliken, self%fdCoeffs, self%tGrndState, self%fdXplusY,&
+        & self%fdTrans, self%fdSPTrans, self%fdTradip, self%tArnoldi, self%fdArnoldi,&
+        & self%fdArnoldiDiagnosis, self%fdExc, self%tEnergyWindow, self%energyWindow,&
+        & self%tOscillatorWindow, self%oscillatorWindow, excEnergy)
 
 #:else
-    call error('Internal error: Illegal routine call to &
-        &LinResp_calcExcitations')
+    call error('Internal error: Illegal routine call to calcExcitations')
 #:endif
 
-  end subroutine LinResp_calcExcitations
+  end subroutine calcExcitations
 
 
   !> Wrapper to call linear response calculations of excitations and forces in excited states
-  subroutine LinResp_addGradients(tSpin, self, iAtomStart, eigVec, eigVal, SSqrReal, filling, &
-      & coords0, sccCalc, dqAt, species0, iNeighbor, img2CentCell, orb, skHamCont, skOverCont, &
-      & tWriteTagged, fdTagged, excEnergy, excgradient, derivator, rhoSqr, occNatural, &
-      & naturalOrbs)
+  subroutine addGradients(tSpin, self, eigVec, eigVal, SSqrReal, filling, coords0, sccCalc, dqAt,&
+      & species0, iNeighbor, img2CentCell, orb, denseMatIndex, skHamCont, skOverCont, tWriteTagged,&
+      & fdTagged, excEnergy, excgradient, derivator, rhoSqr, occNatural, naturalOrbs)
 
     !> is this a spin-polarized calculation
     logical, intent(in) :: tSpin
 
     !> data for the actual calculation
     type(linresp), intent(inout) :: self
-
-    !> indexing array for ground state square matrices
-    integer, intent(in) :: iAtomStart(:)
 
     !> ground state eigenvectors
     real(dp), intent(in) :: eigVec(:,:,:)
@@ -366,6 +352,9 @@ contains
     !> orbital data structure
     type(TOrbitals), intent(in) :: orb
 
+    !> data type for dense matrix indexing
+    type(TdenseMatIndex), intent(in) :: denseMatIndex
+    
     !> non-SCC H0 data
     type(OSlakoCont), intent(in) :: skHamCont
 
@@ -409,19 +398,19 @@ contains
     call sccCalc%getShiftPerL(shiftPerL)
     shiftPerAtom = shiftPerAtom + shiftPerL(1,:)
 
-    call LinRespGrad_old(tSpin, self%nAtom, iAtomStart, eigVec, eigVal, sccCalc, dqAt, coords0, &
-        & self%nExc, self%nStat, self%symmetry, SSqrReal, filling, species0, self%HubbardU, &
-        & self%spinW, self%nEl, iNeighbor, img2CentCell, orb, tWriteTagged, fdTagged, &
-        & self%fdMulliken, self%fdCoeffs, self%tGrndState, self%fdXplusY, self%fdTrans, &
-        & self%fdSPTrans, self%fdTradip, self%tArnoldi, self%fdArnoldi, self%fdArnoldiDiagnosis, &
-        & self%fdExc, self%tEnergyWindow, self%energyWindow, self%tOscillatorWindow, &
-        & self%oscillatorWindow, excEnergy, shiftPerAtom, skHamCont, skOverCont, excgradient, &
-        & derivator, rhoSqr, occNatural, naturalOrbs)
+    call LinRespGrad_old(tSpin, self%nAtom, denseMatIndex%iDenseStart, eigVec, eigVal, sccCalc,&
+        & dqAt, coords0, self%nExc, self%nStat, self%symmetry, SSqrReal, filling, species0,&
+        & self%HubbardU, self%spinW, self%nEl, iNeighbor, img2CentCell, orb, denseMatIndex%nOrb,&
+        & tWriteTagged, fdTagged, self%fdMulliken, self%fdCoeffs, self%tGrndState, self%fdXplusY,&
+        & self%fdTrans, self%fdSPTrans, self%fdTradip, self%tArnoldi, self%fdArnoldi,&
+        & self%fdArnoldiDiagnosis, self%fdExc, self%tEnergyWindow, self%energyWindow,&
+        & self%tOscillatorWindow, self%oscillatorWindow, excEnergy, shiftPerAtom, skHamCont,&
+        & skOverCont, excgradient, derivator, rhoSqr, occNatural, naturalOrbs)
 
 #:else
-    call error('Internal error: Illegal routine call to LinResp_addGradients.')
+    call error('Internal error: Illegal routine call to addGradients.')
 #:endif
 
-  end subroutine LinResp_addGradients
+  end subroutine addGradients
 
 end module linresp_module

@@ -120,7 +120,7 @@ contains
 
   !> Write the real eigenvectors into text and binary output files.
   subroutine writeRealEigvecs(fdEigvec, runId, nAtom, nSpin, neighlist, &
-      &nNeighbor, iAtomStart, iPair, img2CentCell, orb, species, speciesName, &
+      &nNeighbor, iPair, img2CentCell, orb, denseMatIndex, species, speciesName, &
       &over, HSqrReal, SSqrReal, storeEigvecs, fileName)
 
     !> Fileid (file not yet opened) to use.
@@ -141,9 +141,6 @@ contains
     !> Nr. of neighbors for SK-interaction.
     integer, intent(in) :: nNeighbor(:)
 
-    !> Positions of atoms int the dense matrices.
-    integer, intent(in) :: iAtomStart(:)
-
     !> Positions of interactions in the sparse matrices.
     integer, intent(in) :: iPair(:,:)
 
@@ -153,6 +150,9 @@ contains
     !> Orbital information.
     type(TOrbitals), intent(in) :: orb
 
+    !> Orbital information.
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
+    
     !> Species.
     integer, intent(in) :: species(:)
 
@@ -213,10 +213,10 @@ contains
       end if
       allocate(rVecTemp(size(HSqrReal, dim=1)))
       call unpackHS(SSqrReal, over, neighlist%iNeighbor, nNeighbor, &
-          &iAtomStart, iPair, img2CentCell)
+          &denseMatIndex%iDenseStart, iPair, img2CentCell)
       do iSpin = 1, nSpin
         call getH(iSpin, HSqrReal, iSpin2, storeEigvecs)
-        do ii = 1, orb%nOrb
+        do ii = 1, denseMatIndex%nOrb
           call hemv(rVecTemp, SSqrReal, HSqrReal(:,ii,iSpin2))
           write(fdEigvec, "('Eigenvector:',I4,4X,'(',A,')'/)") ii, &
               &trim(spinName(iSpin2))
@@ -250,10 +250,9 @@ contains
 
 
   !> Write the complex eigenvectors into text and binary output files.
-  subroutine writeCplxEigvecs(fdEigvec, runId, nAtom, nSpin, neighlist, &
-      &nNeighbor, cellVec, iCellVec, iAtomStart, iPair, img2CentCell, orb, &
-      &species, speciesName, over, kpoint, HSqrCplx, SSqrCplx, storeEigvecs, &
-      & fileName)
+  subroutine writeCplxEigvecs(fdEigvec, runId, nAtom, nSpin, neighlist, nNeighbor, cellVec,&
+      & iCellVec, iPair, img2CentCell, orb, denseMatIndex, species, speciesName, over,&
+      & kpoint, HSqrCplx, SSqrCplx, storeEigvecs, fileName)
 
     !> Fileid (file not yet opened) to use.
     integer, intent(in) :: fdEigvec
@@ -279,9 +278,6 @@ contains
     !> Cell vector index of every atom.
     integer, intent(in) :: iCellVec(:)
 
-    !> Positions of atoms int the dense matrices.
-    integer, intent(in) :: iAtomStart(:)
-
     !> Positions of interactions in the sparse matrices.
     integer, intent(in) :: iPair(:,:)
 
@@ -291,6 +287,9 @@ contains
     !> Orbital information.
     type(TOrbitals), intent(in) :: orb
 
+    !> Orbital information.
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
+    
     !> Species.
     integer, intent(in) :: species(:)
 
@@ -373,10 +372,10 @@ contains
           work = 0.0_dp
           call unpackHS(work, over, kPoint(:,iK), &
               & neighlist%iNeighbor, nNeighbor, iCellVec, cellVec, &
-              & iAtomStart, iPair, img2CentCell)
+              & denseMatIndex%iDenseStart, iPair, img2CentCell)
           SSqrCplx(:nOrb,:nOrb) = work
           SSqrCplx(nOrb+1:,nOrb+1:) = work
-          do ii = 1, 2*orb%nOrb
+          do ii = 1, 2*denseMatIndex%nOrb
             call hemv(cVecTemp, SSqrCplx, HSqrCplx(:,ii,iK2,iSpin2))
             write(fdEigvec, "(A,I4,4X,A,I4)") "K-point: ", ik, &
                 &"Eigenvector: ", ii
@@ -432,8 +431,8 @@ contains
           do iK = 1, nK
             call getH(iSpin, iK, HSqrCplx, iSpin2, iK2, storeEigvecs)
             call unpackHS(SSqrCplx, over, kPoint(:,iK), neighlist%iNeighbor, &
-                &nNeighbor, iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
-            do ii = 1, orb%nOrb
+                &nNeighbor, iCellVec, cellVec, denseMatIndex%iDenseStart, iPair, img2CentCell)
+            do ii = 1, denseMatIndex%nOrb
               call hemv(cVecTemp, SSqrCplx, HSqrCplx(:,ii,iK2,iSpin2))
               write(fdEigvec, "(A,I4,4X,A,I4,4X,'(',A,')'/)") "K-point: ", ik, &
                   &"Eigenvector: ", ii, trim(spinName(iSpin))
@@ -474,9 +473,9 @@ contains
 
 
   !> Write the projected eigenstates into text files
-  subroutine writeProjRealEigvecs(filenames, fdProjEig, ei, nSpin, neighlist, &
-      &nNeighbor, iAtomStart, iPair, img2CentCell, orb, &
-      &over, HSqrReal, SSqrReal, iOrbRegion, storeEigvecs)
+  subroutine writeProjRealEigvecs(filenames, fdProjEig, ei, nSpin, neighlist, nNeighbor,&
+      & iPair, img2CentCell, orb, denseMatIndex, over, HSqrReal, SSqrReal, iOrbRegion,&
+      & storeEigvecs)
 
     !> List with filenames for each region
     type(listCharLc), intent(inout) :: filenames
@@ -496,9 +495,6 @@ contains
     !> Nr. of neighbors for SK-interaction
     integer, intent(in) :: nNeighbor(:)
 
-    !> Positions of atoms int the dense matrices
-    integer, intent(in) :: iAtomStart(:)
-
     !> Positions of interactions in the sparse matrices
     integer, intent(in) :: iPair(:,:)
 
@@ -507,6 +503,9 @@ contains
 
     !> Orbital information
     type(TOrbitals), intent(in) :: orb
+
+    !> Orbital information.
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
 
     !> Sparse overlap matrix
     real(dp), intent(in) :: over(:)
@@ -544,7 +543,7 @@ contains
 
     allocate(rVecTemp(size(HSqrReal, dim=1)))
     call unpackHS(SSqrReal, over, neighlist%iNeighbor, nNeighbor, &
-        &iAtomStart, iPair, img2CentCell)
+        &denseMatIndex%iDenseStart, iPair, img2CentCell)
     do iSpin = 1, nSpin
       do ii = 1, nReg
         if (nSpin <= 2) then
@@ -554,7 +553,7 @@ contains
         endif
       end do
       call getH(iSpin, HSqrReal, iSpin2, storeEigvecs)
-      do iLev = 1, orb%nOrb
+      do iLev = 1, denseMatIndex%nOrb
         call hemv(rVecTemp, SSqrReal, HSqrReal(:,iLev,iSpin2))
         rVecTemp = rVecTemp * HSqrReal(:,iLev,iSpin2)
         do ii = 1, nReg
@@ -582,9 +581,9 @@ contains
 
 
   !> Write the projected complex eigenstates into text files.
-  subroutine writeProjCplxEigvecs(filenames, fdProjEig, ei, nSpin, neighlist, &
-      & nNeighbor, cellVec, iCellVec, iAtomStart, iPair, img2CentCell, orb, &
-      & over, kpoint, kweight, HSqrCplx, SSqrCplx, iOrbRegion, storeEigvecs)
+  subroutine writeProjCplxEigvecs(filenames, fdProjEig, ei, nSpin, neighlist, nNeighbor, cellVec,&
+      & iCellVec, iPair, img2CentCell, orb, denseMatIndex, over, kpoint, kweight,&
+      & HSqrCplx, SSqrCplx, iOrbRegion, storeEigvecs)
 
     !> list of region names
     type(ListCharLc), intent(inout) :: filenames
@@ -610,9 +609,6 @@ contains
     !> Cell vector index of every atom.
     integer, intent(in) :: iCellVec(:)
 
-    !> Positions of first basis function of each atom in the dense matrices.
-    integer, intent(in) :: iAtomStart(:)
-
     !> Positions of interactions in the sparse matrices.
     integer, intent(in) :: iPair(:,:)
 
@@ -621,7 +617,10 @@ contains
 
     !> Orbital information.
     type(TOrbitals), intent(in) :: orb
-
+    
+    !> Orbital information.
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
+    
     !> Sparse overlap matrix.
     real(dp), intent(in) :: over(:)
 
@@ -678,8 +677,8 @@ contains
 
           call getH(iSpin, iK, HSqrCplx, iSpin2, iK2, storeEigvecs)
           call unpackHS(SSqrCplx, over, kPoint(:,iK), neighlist%iNeighbor, &
-              & nNeighbor, iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
-          do iLev = 1, orb%nOrb
+              & nNeighbor, iCellVec, cellVec, denseMatIndex%iDenseStart, iPair, img2CentCell)
+          do iLev = 1, denseMatIndex%nOrb
             call hemv(cVecTemp, SSqrCplx, HSqrCplx(:,iLev,iK2,iSpin2))
             cVecTemp = conjg(HSqrCplx(:,iLev,iK2,iSpin2)) * cVecTemp
             do ii = 1, nReg
@@ -703,7 +702,7 @@ contains
     else
 
       iSpin = 1
-      nOrb = orb%nOrb
+      nOrb = denseMatIndex%nOrb
       allocate(work(nOrb,nOrb))
 
       do iK = 1, nK
@@ -715,7 +714,7 @@ contains
         SSqrCplx = 0.0_dp
         work = 0.0_dp
         call unpackHS(work, over, kPoint(:,iK), neighlist%iNeighbor, &
-            & nNeighbor, iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+            & nNeighbor, iCellVec, cellVec, denseMatIndex%iDenseStart, iPair, img2CentCell)
         SSqrCplx(:nOrb,:nOrb) = work
         SSqrCplx(nOrb+1:,nOrb+1:) = work
         do iLev = 1, 2*nOrb
@@ -2097,7 +2096,7 @@ contains
 
   !> Writes Hamiltonian and overlap matrices and stops program execution.
   subroutine writeHSAndStop(tWriteHS, tWriteRealHS, tRealHS, over, neighborList, nNeighbor,&
-      & iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, ham, iHam)
+      & iDenseStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, ham, iHam)
 
     !> Write dense hamiltonian and overlap matrices
     logical, intent(in) :: tWriteHS
@@ -2118,7 +2117,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> dense matrix indexing for atomic blocks
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> sparse matrix indexing for atomic blocks
     integer, intent(in) :: iPair(:,:)
@@ -2157,10 +2156,10 @@ contains
     ! Write out matrices if necessary and quit.
     if (allocated(iHam)) then
       call writeHS(tWriteHS, tWriteRealHS, tRealHS, hamUpDown, over, neighborList%iNeighbor,&
-          & nNeighbor, iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam=iHam)
+          & nNeighbor, iDenseStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam=iHam)
     else
       call writeHS(tWriteHS, tWriteRealHS, tRealHS, hamUpDown, over, neighborList%iNeighbor,&
-          & nNeighbor, iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec)
+          & nNeighbor, iDenseStart, iPair, img2CentCell, kPoint, iCellVec, cellVec)
     end if
     write(stdOut, "(A)") "Hamilton/Overlap written, exiting program."
     stop
@@ -2169,7 +2168,7 @@ contains
 
 
   !> Invokes the writing routines for the Hamiltonian and overlap matrices.
-  subroutine writeHS(tWriteHS, tWriteRealHS, tRealHS, ham, over, iNeighbor, nNeighbor, iAtomStart,&
+  subroutine writeHS(tWriteHS, tWriteRealHS, tRealHS, ham, over, iNeighbor, nNeighbor, iDenseStart,&
       & iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam)
 
     !> Should the hamiltonian and overlap be written out as dense matrices
@@ -2194,7 +2193,7 @@ contains
     integer, intent(in) :: nNeighbor(:)
 
     !> Index array for start of atomic block in dense matrices
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Index array for start of atomic block in sparse matrices
     integer, intent(in) :: iPair(0:,:)
@@ -2221,32 +2220,32 @@ contains
     if (tWriteRealHS) then
       do iS = 1, nSpin
         call writeSparse("hamreal" // i2c(iS) // ".dat", ham(:,iS), iNeighbor, &
-            &nNeighbor, iAtomStart, iPair, img2CentCell, iCellVec, cellVec)
+            &nNeighbor, iDenseStart, iPair, img2CentCell, iCellVec, cellVec)
         if (present(iHam)) then
           call writeSparse("hamimag" // i2c(iS) // ".dat", iHam(:,iS),&
-              & iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell,iCellVec,&
+              & iNeighbor, nNeighbor, iDenseStart, iPair, img2CentCell,iCellVec,&
               & cellVec)
         end if
       end do
       call writeSparse("overreal.dat", over, iNeighbor, &
-          &nNeighbor, iAtomStart, iPair, img2CentCell, iCellVec, cellVec)
+          &nNeighbor, iDenseStart, iPair, img2CentCell, iCellVec, cellVec)
     end if
     if (tWriteHS) then
       if (tRealHS) then
         do iS = 1, nSpin
           call writeSparseAsSquare("hamsqr" // i2c(iS) // ".dat", ham(:,iS), &
-              &iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell)
+              &iNeighbor, nNeighbor, iDenseStart, iPair, img2CentCell)
         end do
         call writeSparseAsSquare("oversqr.dat", over, iNeighbor, nNeighbor, &
-            &iAtomStart, iPair, img2CentCell)
+            &iDenseStart, iPair, img2CentCell)
       else
         do iS = 1, nSpin
           call writeSparseAsSquare("hamsqr" // i2c(iS) // ".dat", ham(:,iS), &
-              &kPoint, iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell, &
+              &kPoint, iNeighbor, nNeighbor, iDenseStart, iPair, img2CentCell, &
               &iCellVec, cellVec)
         end do
         call writeSparseAsSquare("oversqr.dat", over, kPoint, iNeighbor, &
-            &nNeighbor, iAtomStart, iPair, img2CentCell, iCellVec, cellVec)
+            &nNeighbor, iDenseStart, iPair, img2CentCell, iCellVec, cellVec)
       end if
     end if
 
@@ -2255,8 +2254,8 @@ contains
 
   !> Writes the eigenvectors to disc.
   subroutine writeEigenvectors(nSpin, fdEigvec, runId, nAtom, neighborList, nNeighbor, cellVec,&
-      & iCellVec, iAtomStart, iPair, img2CentCell, species, speciesName, orb, kPoint, over,&
-      & HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, storeEigvecsReal, storeEigvecsCplx)
+      & iCellVec, iPair, img2CentCell, species, speciesName, orb, denseMatIndex,&
+      & kPoint, over, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, storeEigvecsReal, storeEigvecsCplx)
 
     !> Number of spin channels
     integer, intent(in) :: nSpin
@@ -2282,9 +2281,6 @@ contains
     !> map from image atoms to the original unique atom
     integer, intent(in) :: img2CentCell(:)
 
-    !> Index of start of atom blocks in dense matrices
-    integer, intent(in) :: iAtomStart(:)
-
     !> Index array for the start of atomic blocks in sparse arrays
     integer, intent(in) :: iPair(:,:)
 
@@ -2300,6 +2296,9 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> Orbital information.
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
+    
     !> k-points
     real(dp), intent(in) :: kPoint(:,:)
 
@@ -2328,12 +2327,13 @@ contains
     if (present(HSqrCplx)) then
       !> Complex Pauli-Hamiltonian without k-points
       call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, cellVec, iCellVec,&
-          & iAtomStart, iPair, img2CentCell, orb, species, speciesName, over, kPoint, HSqrCplx,&
+          & iPair, img2CentCell, orb, denseMatIndex, species, speciesName, over, kPoint, HSqrCplx,&
           & SSqrCplx, storeEigvecsCplx)
     else
       !> Real Hamiltonian
-      call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, iAtomStart, iPair,&
-          & img2CentCell, orb, species, speciesName, over, HSqrReal, SSqrReal, storeEigvecsReal)
+      call writeEigvecs(fdEigvec, runId, nAtom, nSpin, neighborList, nNeighbor, iPair,&
+          & img2CentCell, orb, denseMatIndex, species, speciesName, over, HSqrReal, SSqrReal,&
+          & storeEigvecsReal)
     end if
 
   end subroutine writeEigenvectors
@@ -2341,10 +2341,17 @@ contains
 
   !> Write projected eigenvectors.
   subroutine writeProjectedEigenvectors(regionLabels, fdProjEig, eigen, nSpin, neighborList,&
-      & nNeighbor, cellVec, iCellVec, iAtomStart, iPair, img2CentCell, orb, over, kPoint, kWeight,&
-      & iOrbRegion, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, storeEigvecsReal, storeEigvecsCplx)
+      & nNeighbor, cellVec, iCellVec, iPair, img2CentCell, orb, denseMatIndex, over,&
+      & kPoint, kWeight, iOrbRegion, HSqrReal, SSqrReal, HSqrCplx, SSqrCplx, storeEigvecsReal,&
+      & storeEigvecsCplx)
+
+    !> Labels for projection regions
     type(ListCharLc), intent(inout) :: regionLabels
+
+    !> File handle for writing projections
     integer, intent(in) :: fdProjEig(:)
+
+    !> eigenvalues
     real(dp), intent(in) :: eigen(:,:,:)
 
     !> Number of spin channels
@@ -2362,9 +2369,6 @@ contains
     !> Index for which unit cell atoms are associated with
     integer, intent(in) :: iCellVec(:)
 
-    !> Index of start of atom blocks in dense matrices
-    integer, intent(in) :: iAtomStart(:)
-
     !> Index array for the start of atomic blocks in sparse arrays
     integer, intent(in) :: iPair(:,:)
 
@@ -2374,6 +2378,9 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> Orbital information.
+    type(TDenseMatIndex), intent(in) :: denseMatIndex
+    
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
 
@@ -2395,7 +2402,11 @@ contains
 
     !> Storage for dense overlap matrix (complex case)
     complex(dp), intent(inout), optional :: SSqrCplx(:,:)
+
+    !> storage for eigenvectors to disc
     type(OFifoRealR2), intent(inout), optional :: storeEigvecsReal(:)
+
+    !> storage for eigenvectors to disc    
     type(OFifoCplxR2), intent(inout), optional :: storeEigvecsCplx(:)
 
     @:ASSERT(present(HSqrReal) .neqv. present(HSqrCplx))
@@ -2406,11 +2417,11 @@ contains
 
     if (present(SSqrCplx)) then
       call writeProjEigvecs(regionLabels, fdProjEig, eigen, nSpin, neighborList, nNeighbor,&
-          & cellVec, iCellVec, iAtomStart, iPair, img2CentCell, orb, over, kpoint, kWeight,&
+          & cellVec, iCellVec, iPair, img2CentCell, orb, denseMatIndex, over, kpoint, kWeight,&
           & HSqrCplx, SSqrCplx, iOrbRegion, storeEigvecsCplx)
     else
       call writeProjEigvecs(regionLabels, fdProjEig, eigen, nSpin, neighborList, nNeighbor,&
-          & iAtomStart, iPair, img2CentCell, orb, over, HSqrReal, SSqrReal, iOrbRegion,&
+          & iPair, img2CentCell, orb, denseMatIndex, over, HSqrReal, SSqrReal, iOrbRegion,&
           & storeEigvecsReal)
     end if
 

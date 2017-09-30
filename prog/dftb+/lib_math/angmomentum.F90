@@ -89,7 +89,7 @@ contains
 
 
   !> Calculates the on-site orbital angular momentum
-  subroutine onsite(Lshell, rho, iAtomStart, orb, species)
+  subroutine onsite(Lshell, rho, iDenseStart, orb, species)
 
     !> resulting orbital angular momentum (cartesian component, atomic shell, atom)
     real(dp), intent(out) :: Lshell(:,:,:)
@@ -98,7 +98,7 @@ contains
     complex(dp), intent(in) :: rho(:,:)
 
     !> Offset array in the square matrix
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> Information about the orbitals in the system.
     type(TOrbitals), intent(in) :: orb
@@ -120,7 +120,7 @@ contains
     nOrb = size(rho,dim=1)
 
     @:ASSERT(size(rho, dim=1) == size(rho, dim=2))
-    @:ASSERT(size(iAtomStart) == nAtom+1)
+    @:ASSERT(size(iDenseStart) == nAtom+1)
     @:ASSERT(mod(nOrb,2)==0)
     nOrb = nOrb / 2
 
@@ -157,10 +157,10 @@ contains
 
       ! I block
       tmpBlock = 0.0_dp
-      tmpBlock(1:jj,1:jj) = 0.5_dp * ( rho(iAtomStart(ii):iAtomStart(ii+1)-1, &
-          & iAtomStart(ii):iAtomStart(ii+1)-1) &
-          & + rho(nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1, &
-          & nOrb+iAtomStart(ii):nOrb+iAtomStart(ii+1)-1) )
+      tmpBlock(1:jj,1:jj) = 0.5_dp * ( rho(iDenseStart(ii):iDenseStart(ii+1)-1, &
+          & iDenseStart(ii):iDenseStart(ii+1)-1) &
+          & + rho(nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1, &
+          & nOrb+iDenseStart(ii):nOrb+iDenseStart(ii+1)-1) )
       do ll = 1, orb%nOrbSpecies(iSp)
         tmpBlock(ll,ll+1:) = conjg(tmpBlock(ll+1:,ll)) ! Hermitize
       end do

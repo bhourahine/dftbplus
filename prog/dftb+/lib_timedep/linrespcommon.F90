@@ -321,7 +321,7 @@ contains
   !> S the overlap matrix. Since qij is atomic quantity (so far) the corresponding values are summed
   !> up.
   !> Note: the parameters 'updwn' were added for spin alpha and beta channels.
-  subroutine transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+  subroutine transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
 
     !> Index of inital state.
     integer, intent(in) :: ii
@@ -330,7 +330,7 @@ contains
     integer, intent(in) :: jj
 
     !> Starting position of each atom in the list of orbitals.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> up spin channel (T) or down spin channel (F)
     logical, intent(in) :: updwn
@@ -354,8 +354,8 @@ contains
     qTmp(:) =  grndEigVecs(:,ii,ss) * stimc(:,jj,ss) &
         & + grndEigVecs(:,jj,ss) * stimc(:,ii,ss)
     do kk = 1, size(qij)
-      aa = iAtomStart(kk)
-      bb = iAtomStart(kk + 1) -1
+      aa = iDenseStart(kk)
+      bb = iDenseStart(kk + 1) -1
       qij(kk) = 0.5_dp * sum(qTmp(aa:bb))
     end do
 
@@ -434,7 +434,7 @@ contains
   !>
   !> Note: In order not to store the entire supermatrix (nmat, nmat), the various pieces are
   !> assembled individually and multiplied directly with the corresponding part of the supervector.
-  subroutine omegatvec(spin, vin, vout, wij, sym, win, nmatup, iAtomStart, stimc, grndEigVecs, &
+  subroutine omegatvec(spin, vin, vout, wij, sym, win, nmatup, iDenseStart, stimc, grndEigVecs, &
       & occNr, getij, gamma, species0, spinW )
 
     !> logical spin polarization
@@ -459,7 +459,7 @@ contains
     integer, intent(in) :: nmatup
 
     !> Starting position of each atom in the list of orbitals.
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> overlap times eigenvector. (nOrb, nOrb)
     real(dp), intent(in) :: stimc(:,:,:)
@@ -507,7 +507,7 @@ contains
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
-      call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+      call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
       otmp = otmp + vin(ia) * wnij(ia) * qij
     end do
     !$OMP  END PARALLEL DO
@@ -523,7 +523,7 @@ contains
         do ia = 1, nmat
           call indxov(win, ia, getij, ii, jj)
           updwn = (win(ia) <= nmatup)
-          call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+          call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
           vout(ia) = 2.0_dp * wnij(ia) * dot_product(qij, gtmp)
         end do
         !$OMP  END PARALLEL DO
@@ -536,7 +536,7 @@ contains
         do ia = 1, nmat
           call indxov(win, ia, getij, ii, jj)
           updwn = (win(ia) <= nmatup)
-          call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+          call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
           ! Note: 2 times atomic magnetization m_A
           ! vout = sum_A q_A^ia m_A * otmp(A)
           vout(ia) = vout(ia) + wnij(ia) * dot_product(qij, otmp)
@@ -558,7 +558,7 @@ contains
         call indxov(win, ia, getij, ii, jj)
         updwn = (win(ia) <= nmatup)
 
-        call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+        call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
 
         !singlet gamma part (S)
         vout(ia) = 2.0_dp * wnij(ia) * dot_product(qij, gtmp)
@@ -582,7 +582,7 @@ contains
 
         call indxov(win, ia, getij, ii, jj)
         updwn = (win(ia) <= nmatup)
-        call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+        call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
         if (updwn) then
           fact = 1.0_dp
         else
@@ -601,7 +601,7 @@ contains
 
 
   !> Multiplies the supermatrix (A+B) with a given vector.
-  subroutine apbw(rkm1, rhs2, wij, nmat, natom, win, nmatup, getij, iAtomStart, stimc, grndEigVecs,&
+  subroutine apbw(rkm1, rhs2, wij, nmat, natom, win, nmatup, getij, iDenseStart, stimc, grndEigVecs,&
       & gamma)
 
     !> Resulting vector on return.
@@ -629,7 +629,7 @@ contains
     integer, intent(in) :: getij(:,:)
 
     !> indexing array for atomic basis functions
-    integer, intent(in) :: iAtomStart(:)
+    integer, intent(in) :: iDenseStart(:)
 
     !> overlap times ground state wavefunction
     real(dp), intent(in) :: stimc(:,:,:)
@@ -653,7 +653,7 @@ contains
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
-      call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+      call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
       tmp(:) = tmp + rhs2(ia) * qij
     end do
     !$OMP  END PARALLEL DO
@@ -666,7 +666,7 @@ contains
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
-      call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
+      call transq(ii, jj, iDenseStart, updwn, stimc, grndEigVecs, qij)
       rkm1(ia) = 4.0_dp * dot_product(gtmp, qij)
     end do
     !$OMP  END PARALLEL DO
