@@ -65,6 +65,9 @@ module commontypes
     !> Lattice vectors
     real(dp), allocatable :: latVec(:,:)
 
+    !> Lattice vectors at start of calculation, if needed
+    real(dp) :: origLatVec(3,3)
+
   end type TBoundaryConditions
 
 end module commontypes

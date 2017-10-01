@@ -562,7 +562,7 @@ contains
         if (tLatOpt) then
           ! Only include the extLatDerivs contribution if not MD, as the barostat would otherwise
           ! take care of this, hence add it here rather than to totalLatDeriv itself
-          call constrainLatticeDerivs(totalLatDeriv + extLatDerivs, normOrigLatVec,&
+          call constrainLatticeDerivs(totalLatDeriv + extLatDerivs, boundaryConditions,&
               & tLatOptFixAng, tLatOptFixLen, tLatOptIsotropic, constrLatDerivs)
           call printMaxLatticeForce(maxval(abs(constrLatDerivs)))
         end if
@@ -608,9 +608,9 @@ contains
               tCoordStep = .false.
             end if
           else
-            call getNextLatticeOptStep(pGeoLatOpt, energy%EGibbs, constrLatDerivs, origLatVec,&
-                & tLatOptFixAng, tLatOptFixLen, tLatOptIsotropic, indMovedAtom,&
-                & boundaryConditions%latVec, coord0, diffGeo, tGeomEnd)
+            call getNextLatticeOptStep(pGeoLatOpt, energy%EGibbs, constrLatDerivs,&
+                & boundaryConditions, tLatOptFixAng, tLatOptFixLen, tLatOptIsotropic,&
+                & indMovedAtom, coord0, diffGeo, tGeomEnd)
             iLatGeoStep = iLatGeoStep + 1
             tLatticeChanged = .true.
             if (.not. tGeomEnd .and. tCoordOpt) then
@@ -4652,14 +4652,14 @@ contains
 
 
   !> Flattens lattice components and applies lattice optimisation constraints.
-  subroutine constrainLatticeDerivs(totalLatDerivs, normLatVecs, tLatOptFixAng,&
+  subroutine constrainLatticeDerivs(totalLatDerivs, boundaryConditions, tLatOptFixAng,&
       & tLatOptFixLen, tLatOptIsotropic, constrLatDerivs)
 
     !> energy derivative with respect to lattice vectors
     real(dp), intent(in) :: totalLatDerivs(:,:)
 
-    !> unit normals parallel to lattice vectors
-    real(dp), intent(in) :: normLatVecs(:,:)
+    !> boundary conditions on the unit cell
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
 
     !> Are the angles of the lattice being fixed during optimisation?
     logical, intent(in) :: tLatOptFixAng
@@ -4673,42 +4673,44 @@ contains
     !> lattice vectors returned by the optimizer
     real(dp), intent(out) :: constrLatDerivs(:)
 
-    real(dp) :: tmpLatDerivs(3, 3)
+    real(dp) :: tmpLatDerivs(3), normLatVecs(3,3)
     integer :: ii
 
-    tmpLatDerivs(:,:) = totalLatDerivs
-    constrLatDerivs = reshape(tmpLatDerivs, [9])
+    @:ASSERT(boundaryConditions%tPeriodic)
+    @:ASSERT(size(constrLatDerivs) == 9)
+
+    constrLatDerivs = 0.0_dp
+    if (tLatOptFixAng .or. tLatOptIsotropic) then
+      do ii = 1, 3
+        normLatVecs(:,ii) = boundaryConditions%origLatVec(:,ii) &
+            & / sqrt(sum(boundaryConditions%origLatVec(:,ii)**2))
+      end do
+      ! project forces to be along original lattice vectors
+      tmpLatDerivs = sum(totalLatDerivs * normLatVecs,dim=1)
+    end if
     if (tLatOptFixAng) then
-      ! project forces to be along original lattice
-      tmpLatDerivs(:,:) = tmpLatDerivs * normLatVecs
-      constrLatDerivs(:) = 0.0_dp
-      if (any(tLatOptFixLen)) then
-        do ii = 1, 3
-          if (.not. tLatOptFixLen(ii)) then
-            constrLatDerivs(ii) = sum(tmpLatDerivs(:,ii))
-          end if
-        end do
-      else
-        constrLatDerivs(1:3) = sum(tmpLatDerivs, dim=1)
-      end if
+      constrLatDerivs(:3) = tmpLatDerivs
+      where (tLatOptFixLen) constrLatDerivs = 0.0_dp
     elseif (tLatOptIsotropic) then
-      tmpLatDerivs(:,:) = tmpLatDerivs * normLatVecs
-      constrLatDerivs(:) = 0.0_dp
+      ! Optimization uses scaling factor for the whole unit cell
       constrLatDerivs(1) = sum(tmpLatDerivs)
+    else
+      ! use the vectors with no processing
+      constrLatDerivs = reshape(totalLatDerivs, [9])
     end if
 
   end subroutine constrainLatticeDerivs
 
 
   !> Unfold contrained lattice vectors to full one.
-  subroutine unconstrainLatticeVectors(constrLatVecs, origLatVecs, tLatOptFixAng, tLatOptFixLen,&
-      & tLatOptIsotropic, newLatVecs)
+  subroutine unconstrainLatticeVectors(constrLatVecs, boundaryConditions, tLatOptFixAng,&
+      & tLatOptFixLen, tLatOptIsotropic, newLatVecs)
 
     !> packaged up lattice vectors (depending on optimisation mode)
     real(dp), intent(in) :: constrLatVecs(:)
 
-    !> original vectors at start
-    real(dp), intent(in) :: origLatVecs(:,:)
+    !> Boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
 
     !> Are the angles of the lattice vectors fixed
     logical, intent(in) :: tLatOptFixAng
@@ -4722,32 +4724,34 @@ contains
     !> resulting lattice vectors
     real(dp), intent(out) :: newLatVecs(:,:)
 
-    real(dp) :: tmpLatVecs(9)
     integer :: ii
 
-    tmpLatVecs(:) = constrLatVecs
+    @:ASSERT(boundaryConditions%tPeriodic)
+    @:ASSERT(size(constrLatVecs) == 9)
+    @:ASSERT(all(shape(newLatVecs) == [3,3]))
+    
     if (tLatOptFixAng) then
-      ! Optimization uses scaling factor of lattice vectors
+      ! Optimization uses scaling factors and original lattice vectors
       if (any(tLatOptFixLen)) then
-        do ii = 3, 1, -1
-          if (.not. tLatOptFixLen(ii)) then
-            tmpLatVecs(3 * ii - 2 : 3 * ii) =  tmpLatVecs(ii) * origLatVecs(:,ii)
+        ! if any of the lattice vector magnitudes are fixed then do not update them
+        do ii = 1,3
+          if (tLatOptFixLen(ii)) then
+            newLatVecs(:,ii) =  boundaryConditions%origLatVec(:,ii)
           else
-            tmpLatVecs(3 * ii - 2 : 3 * ii) =  origLatVecs(:,ii)
+            newLatVecs(:,ii) =  constrLatVecs(ii) * boundaryConditions%origLatVec(:,ii)
           end if
         end do
       else
-        tmpLatVecs(7:9) =  tmpLatVecs(3) * origLatVecs(:,3)
-        tmpLatVecs(4:6) =  tmpLatVecs(2) * origLatVecs(:,2)
-        tmpLatVecs(1:3) =  tmpLatVecs(1) * origLatVecs(:,1)
+        ! scale original lattice vectors by optimising variables
+        newLatVecs = spread(constrLatVecs(:3),1,3) * boundaryConditions%origLatVec
       end if
     else if (tLatOptIsotropic) then
-      ! Optimization uses scaling factor unit cell
-      do ii = 3, 1, -1
-        tmpLatVecs(3 * ii - 2 : 3 * ii) =  tmpLatVecs(1) * origLatVecs(:,ii)
-      end do
+      ! Optimization uses scaling factor for the whole unit cell
+      newLatVecs = constrLatVecs(1) * boundaryConditions%origLatVec
+    else
+      ! use the vectors with no processing
+      newLatVecs = reshape(constrLatVecs,[3,3])
     end if
-    newLatVecs(:,:) = reshape(tmpLatVecs, [3, 3])
 
   end subroutine unconstrainLatticeVectors
 
@@ -4817,8 +4821,8 @@ contains
 
 
   !> Returns the coordinates and lattice vectors for the next lattice optimisation step.
-  subroutine getNextLatticeOptStep(pGeoLatOpt, EGibbs, constrLatDerivs, origLatVec, tLatOptFixAng,&
-      & tLatOptFixLen, tLatOptIsotropic, indMovedAtom, latVec, coord0, diffGeo, tGeomEnd)
+  subroutine getNextLatticeOptStep(pGeoLatOpt, EGibbs, constrLatDerivs, boundaryConditions,&
+      & tLatOptFixAng, tLatOptFixLen, tLatOptIsotropic, indMovedAtom, coord0, diffGeo, tGeomEnd)
 
     !> lattice vector optimising object
     type(OGeoOpt), intent(inout) :: pGeoLatOpt
@@ -4829,8 +4833,8 @@ contains
     !> lattice vectors returned by the optimizer
     real(dp), intent(in) :: constrLatDerivs(:)
 
-    !> Starting lattice vectors
-    real(dp), intent(in) :: origLatVec(:,:)
+    !> Boundary conditions
+    type(tBoundaryConditions), intent(inout) :: boundaryConditions
 
     !> Fix angles between lattice vectors
     logical, intent(in) :: tLatOptFixAng
@@ -4844,9 +4848,6 @@ contains
     !> numbers of the moving atoms
     integer, intent(in) :: indMovedAtom(:)
 
-    !> lattice vectors
-    real(dp), intent(inout) :: latVec(:,:)
-
     !> central cell coordinates of atoms
     real(dp), intent(inout) :: coord0(:,:)
 
@@ -4858,14 +4859,14 @@ contains
 
     real(dp) :: newLatVecsFlat(9), newLatVecs(3, 3), oldMovedCoords(3, size(indMovedAtom))
 
-    call next(pGeoLatOpt, EGibbs, constrLatDerivs, newLatVecsFlat,tGeomEnd)
-    call unconstrainLatticeVectors(newLatVecsFlat, origLatVec, tLatOptFixAng, tLatOptFixLen,&
-        & tLatOptIsotropic, newLatVecs)
+    call next(pGeoLatOpt, EGibbs, constrLatDerivs, newLatVecsFlat, tGeomEnd)
+    call unconstrainLatticeVectors(newLatVecsFlat, boundaryConditions, tLatOptFixAng,&
+        & tLatOptFixLen, tLatOptIsotropic, newLatVecs)
     oldMovedCoords(:,:) = coord0(:, indMovedAtom)
-    call cart2frac(coord0, latVec)
-    latVec(:,:) = newLatVecs
-    call frac2cart(coord0, latVec)
-    diffGeo = max(maxval(abs(newLatVecs - latVec)),&
+    call cart2frac(coord0, boundaryConditions%latVec)
+    boundaryConditions%latVec(:,:) = newLatVecs
+    call frac2cart(coord0, boundaryConditions%latVec)
+    diffGeo = max(maxval(abs(newLatVecs - boundaryConditions%latVec)),&
         & maxval(abs(oldMovedCoords - coord0(:, indMovedAtom))))
 
   end subroutine getNextLatticeOptStep

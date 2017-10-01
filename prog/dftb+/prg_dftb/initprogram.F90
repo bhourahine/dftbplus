@@ -69,7 +69,6 @@ module initprogram
   use pmlocalisation
   implicit none
 
-
   !> file name for charge data
   character(*), parameter :: fCharges = "charges.bin"
 
@@ -78,7 +77,6 @@ module initprogram
 
   !> file to stop code during scc cycle
   character(*), parameter :: fStopSCC = "stop_scc"
-
 
   !> Is the calculation SCC?
   logical :: tSccCalc
@@ -140,7 +138,6 @@ module initprogram
   !> Should central cell coordinates be output?
   logical :: tShowFoldedCoord
 
-
   !> How to calculate forces
   integer :: forceType
 
@@ -152,12 +149,6 @@ module initprogram
 
   !> reciprocal lattice vectors as columns
   real(dp), allocatable, target :: recVec(:,:)
-
-  !> original lattice vectors used for optimizing
-  real(dp) :: origLatVec(3,3)
-
-  !> normalized vectors in those directions
-  real(dp) :: normOrigLatVec(3,3)
 
   !> reciprocal vectors in 2 pi units
   real(dp), allocatable :: invLatVec(:,:)
@@ -176,7 +167,6 @@ module initprogram
 
   !> index in cellVec for each atom
   integer, allocatable :: iCellVec(:)
-
 
   !> ADT for neighbor parameters
   type(TNeighborList), allocatable, save :: neighborList
@@ -202,7 +192,6 @@ module initprogram
   !> list of atomic masses for each species
   real(dp), allocatable :: speciesMass(:)
 
-
   !> Raw H^0 hamiltonian data
   type(OSlakoCont) :: skHamCont
 
@@ -218,10 +207,8 @@ module initprogram
   !> Cut off distance for repulsive interactions
   real(dp) :: skRepCutoff
 
-
   !> longest pair interaction
   real(dp) :: mCutoff
-
 
   !> Sparse hamiltonian matrix
   real(dp), allocatable :: ham(:,:)
@@ -235,7 +222,6 @@ module initprogram
   !> sparse overlap
   real(dp), allocatable :: over(:)
 
-
   !> nr. of K-points
   integer :: nKPoint
 
@@ -244,7 +230,6 @@ module initprogram
 
   !> weight of the K-Points
   real(dp), allocatable :: KWeight(:)
-
 
   !> external pressure if periodic
   real(dp) :: extPressure
@@ -255,10 +240,8 @@ module initprogram
   !> Barostat coupling strength
   real(dp) :: BarostatStrength
 
-
   !> H and S are real
   logical :: tRealHS
-
 
   !> nr. of electrons
   real(dp), allocatable :: nEl(:)
@@ -266,13 +249,11 @@ module initprogram
   !> Nr. of all electrons if neutral
   real(dp) :: nEl0
 
-
   !> Spin W values
   real(dp), allocatable :: spinW(:,:,:)
 
   !> Spin orbit constants
   real(dp), allocatable :: xi(:,:)
-
 
   !> is this a DFTB+U calculation?
   logical :: tDFTBU
@@ -292,7 +273,6 @@ module initprogram
   !> l-values of U-J for each block
   integer, allocatable :: iUJ(:,:,:)
 
-
   !> electron temperature
   real(dp) :: tempElec
 
@@ -304,7 +284,6 @@ module initprogram
 
   !> Fermi energy
   real(dp) :: Ef(2)
-
 
   !> Filling temp updated by MD.
   logical :: tSetFillingTemp
@@ -318,13 +297,11 @@ module initprogram
   !> MD stepsize
   real(dp) :: deltaT
 
-
   !> eigensolver
   integer :: solver
 
   !> maximal number of SCC iterations
   integer :: maxSccIter
-
 
   !> is this a spin polarized calculation?
   logical :: tSpin
@@ -344,10 +321,8 @@ module initprogram
   !> is this a two component calculation (spin orbit or non-collinear spin)
   logical :: t2Component
 
-
   !> Common Fermi level accross spin channels
   logical :: tSpinSharedEf
-
 
   !> Geometry optimization needed?
   logical :: tGeoOpt
@@ -430,18 +405,14 @@ module initprogram
   !> socket details
   type(IpiSocketComm), allocatable :: socket
 
-
   !> File containing output geometry
   character(lc) :: geoOutFile
-
 
   !> Append geometries in the output?
   logical :: tAppendGeo
 
-
   !> Only use converged forces if SCC
   logical :: tConvrgForces
-
 
   !> labels of atomic species
   character(mc), allocatable :: speciesName(:)
@@ -452,10 +423,8 @@ module initprogram
   !> Geometry optimizer for lattice consts
   type(OGeoOpt), allocatable :: pGeoLatOpt
 
-
   !> Charge mixer
   type(OMixer), allocatable :: pChrgMixer
-
 
   !> MD Framework
   type(OMDCommon), allocatable :: pMDFrame
@@ -526,7 +495,6 @@ module initprogram
   !> Nr. of external charges
   integer :: nExtChrg
 
-
   !> external electric field
   logical :: tEField = .false.
 
@@ -545,7 +513,6 @@ module initprogram
   !> phase of field at step 0
   integer :: EfieldPhase = 0
 
-
   !> Partial density of states (PDOS) projection regions
   type(listIntR1), save :: iOrbRegion
 
@@ -555,7 +522,6 @@ module initprogram
   !> file units for PDOS results
   integer, allocatable, save :: fdProjEig(:)
 
-
   !> Third order DFTB
   logical :: t3rd
 
@@ -564,7 +530,6 @@ module initprogram
 
   !> data structure for 3rd order
   type(ThirdOrder), allocatable :: thirdOrd
-
 
   !> Calculate Casida linear response excitations
   logical :: tLinResp
@@ -651,7 +616,6 @@ module initprogram
   private :: createRandomGenerators
 
 contains
-
 
   !> Initializes the variables in the module based on the parsed input
   subroutine initProgramVariables(input)
@@ -800,6 +764,7 @@ contains
       allocate(boundaryConditions%latVec(3, 3))
       @:ASSERT(all(shape(input%geom%latVecs) == [3,3]))
       boundaryConditions%latVec = input%geom%latVecs
+      boundaryConditions%origLatVec = boundaryConditions%latVec
       allocate(recVec(3, 3))
       allocate(invLatVec(3, 3))
       invLatVec = boundaryConditions%latVec
@@ -1108,7 +1073,6 @@ contains
     tempAtom = input%ctrl%tempAtom
     deltaT = input%ctrl%deltaT
 
-
     ! Create equivalency relations
     if (tSccCalc) then
       allocate(iEqOrbitals(orb%mOrb, nAtom, nSpin))
@@ -1207,13 +1171,6 @@ contains
       tLatOptFixAng = input%ctrl%tLatOptFixAng
       tLatOptFixLen = input%ctrl%tLatOptFixLen
       tLatOptIsotropic = input%ctrl%tLatOptIsotropic
-      if (tLatOptFixAng .or. any(tLatOptFixLen) .or. tLatOptIsotropic) then
-        origLatVec(:,:) = boundaryConditions%latVec(:,:)
-        do ii = 1, 3
-           normOrigLatVec(:,ii) = origLatVec(:,ii) &
-                & / sqrt(sum(origLatVec(:,ii)**2))
-        end do
-      end if
     end if
     extPressure = input%ctrl%pressure
     tBarostat = input%ctrl%tBarostat
@@ -2509,15 +2466,12 @@ contains
   !!
   subroutine createRandomGenerators(seed, randomInit, randomThermostat)
 
-
     !> Global seed used for initialisation of the random generator pool. If less than one, random
     !! initialisation of the seed will occur.
     integer, intent(inout) :: seed
 
-
     !> Random generator for initprogram.
     type(ORanlux), allocatable, intent(out) :: randomInit
-
 
     !> Random generator for the actual thermostat.
     type(ORanlux), allocatable, intent(out) :: randomThermostat
