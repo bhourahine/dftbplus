@@ -273,7 +273,7 @@ contains
     type(fnode), pointer :: parent
 
     !> Control structure to be filled
-    type(TGeometry), intent(in) :: geom
+    type(TInputGeometry), intent(in) :: geom
 
     !> Nr. of atoms in the system
     type(control), intent(inout) :: ctrl
@@ -933,7 +933,7 @@ contains
     type(fnode), pointer :: node
 
     !> geometry object, which contains atomic species information
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> masses to be returned
     real(dp), allocatable, intent(out) :: masses(:)
@@ -987,7 +987,7 @@ contains
     type(control), intent(inout) :: ctrl
 
     !> Geometry structure to be filled
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> Slater-Koster structure to be filled
     type(slater), intent(inout) :: slako
@@ -1015,7 +1015,7 @@ contains
     type(control), intent(inout) :: ctrl
 
     !> Geometry structure to be filled
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> Slater-Koster structure to be filled
     type(slater), intent(inout) :: slako
@@ -1946,7 +1946,7 @@ contains
       type(fnode), pointer :: node
 
       !> geometry, including atomic type information
-      type(TGeometry), intent(in) :: geo
+      type(TInputGeometry), intent(in) :: geo
 
       !> initial atomic charges
       real(dp), allocatable :: initCharges(:)
@@ -2002,7 +2002,7 @@ contains
       type(fnode), pointer :: node
 
       !> geometry, including atomic information
-      type(TGeometry), intent(in) :: geo
+      type(TInputGeometry), intent(in) :: geo
 
       !> number of spin channels
       integer, intent(in) :: nSpin
@@ -2597,7 +2597,7 @@ contains
     type(fnode), pointer :: node
 
     !> geometry, including atomic information
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> dispersion data on exit
     type(DispersionInp), intent(out) :: input
@@ -2635,7 +2635,7 @@ contains
     type(fnode), pointer :: node
 
     !> Geometry of the current system
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> Contains the input for the dispersion module on exit
     type(DispSlaKirkInp), intent(out) :: input
@@ -2764,7 +2764,7 @@ contains
     type(fnode), pointer :: node
 
     !> Geometry of the system
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> Filled input structure on exit
     type(DispUffInp), intent(out) :: input
@@ -3075,7 +3075,7 @@ contains
     type(control), intent(inout) :: ctrl
 
     !> Geometry of the system
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     type(fnode), pointer :: val, child, child2, child3
     type(fnodeList), pointer :: children
@@ -3183,7 +3183,7 @@ contains
     type(fnode), pointer :: hamNode
 
     !> geometry of the system
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> Slater-Koster structure
     type(slater), intent(in) :: slako
@@ -3244,7 +3244,7 @@ contains
     type(fnode), pointer, intent(in) :: node
 
     !> geometry of the system
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     !> atomic orbital information
     type(TOrbitals), intent(in) :: orb

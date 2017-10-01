@@ -108,9 +108,6 @@ module initprogram
   !> data type for indexing dense large matrices
   type(TDenseMatIndex), target :: denseMatIndex
 
-  !> nr. of orbitals in the system, this is also contained in denseMatIndex
-  integer :: nOrb
-
   !> nr. of orbitals for all atoms
   integer :: nAllOrb
 
@@ -781,9 +778,8 @@ contains
       tLatticeChanged = .false.
     end if
 
+    !> Atomic orbital information
     orb = input%slako%orb
-    nOrb = sum(orb%nOrbSpecies(input%geom%species(:)))
-    denseMatIndex%nOrb = nOrb
 
     ! Slater-Koster tables
     skHamCont = input%slako%skHamCont
@@ -968,6 +964,9 @@ contains
     @:ASSERT(all(shape(species0) == shape(input%geom%species)))
     species0(:) = input%geom%species(:)
 
+    ! can now construct indexing for large dense matrices
+    call buildSquaredAtomIndex(denseMatIndex, nAtom, species0, orb)
+
     allocate(mass(nAtom))
     mass = speciesMass(species0)
     if (allocated(input%ctrl%masses)) then
@@ -987,8 +986,7 @@ contains
     allocate(species(nAllAtom))
     allocate(img2CentCell(nAllAtom))
     allocate(iCellVec(nAllAtom))
-    allocate(denseMatIndex%iDenseStart(nAtom + 1))
-    call buildSquaredAtomIndex(denseMatIndex%iDenseStart, species0, orb)
+
 
     ! Intialize Hamilton and overlap
     tImHam = tDualSpinOrbit .or. (tSpinOrbit .and. tDFTBU) ! .or. tBField
@@ -1045,13 +1043,13 @@ contains
     nEl(:) = 0.0_dp
     if (nSpin == 1 .or. nSpin == 4) then
       nEl(1) = nEl0 - input%ctrl%nrChrg
-      if(ceiling(nEl(1)) > 2.0_dp*nOrb) then
+      if(ceiling(nEl(1)) > 2.0_dp*denseMatIndex%nOrb) then
         call error("More electrons than basis functions!")
       end if
     else
       nEl(1) = 0.5_dp * (nEl0 - input%ctrl%nrChrg + input%ctrl%nrSpinPol)
       nEl(2) = 0.5_dp * (nEl0 - input%ctrl%nrChrg - input%ctrl%nrSpinPol)
-      if (any(ceiling(nEl(:)) > nOrb)) then
+      if (any(ceiling(nEl(:)) > denseMatIndex%nOrb)) then
         call error("More electrons than basis functions!")
       end if
     end if
@@ -1113,7 +1111,7 @@ contains
         end if
       end if
     else
-      nIneqOrb = nOrb
+      nIneqOrb = denseMatIndex%nOrb
       nMixElements = 0
     end if
 

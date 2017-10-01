@@ -11,7 +11,7 @@ module commontypes
   implicit none
   private
 
-  public :: TOrbitals, TDenseMatIndex, TBoundaryConditions
+  public :: TOrbitals, TDenseMatIndex, TBoundaryConditions, TGeometry
 
 
   !> Contains information about the orbitals of the species/atoms in the system
@@ -69,5 +69,16 @@ module commontypes
     real(dp) :: origLatVec(3,3)
 
   end type TBoundaryConditions
+
+  !> Location and chemical types of atoms
+  type TGeometry
+
+    !> Coordinates of physical atoms in the system
+    real(dp), allocatable :: coord(:,:)
+
+    !> chemical types of atoms
+    real(dp), allocatable :: species(:)
+
+  end type TGeometry
 
 end module commontypes

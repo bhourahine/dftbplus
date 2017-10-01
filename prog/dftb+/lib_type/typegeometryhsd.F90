@@ -5,7 +5,7 @@
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
 
-!> Routines to read/write a TGeometry type in HSD and XML format.
+!> Routines to read/write a TInputGeometry type in HSD and XML format.
 module typegeometryhsd
   use typegeometry
   use hsdutils
@@ -28,7 +28,7 @@ module typegeometryhsd
 
 
   !> Types/subroutines from TypeGeometry
-  public :: TGeometry, normalize
+  public :: TInputGeometry, normalize
 
 
   !> Locally defined subroutines
@@ -44,7 +44,7 @@ contains
     type(fnode), pointer :: node
 
     !> The geometry
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     call setChildValue(node, "TypeNames", geo%speciesNames, .false.)
     call setChildValue(node, "TypesAndCoordinates", &
@@ -64,7 +64,7 @@ contains
     type(xmlf_t), intent(inout) :: xf
 
     !> The geometry
-    type(TGeometry), intent(in) :: geo
+    type(TInputGeometry), intent(in) :: geo
 
     call writeChildValue(xf, "TypeNames", geo%speciesNames)
     call writeChildValue(xf, "TypesAndCoordinates", &
@@ -84,7 +84,7 @@ contains
     type(fnode), pointer :: node
 
     !> Contains the geometry on exit
-    type(TGeometry), intent(out) :: geo
+    type(TInputGeometry), intent(out) :: geo
 
     type(string) :: modifier
     integer :: ind
@@ -177,7 +177,7 @@ contains
     type(fnode), pointer :: node
 
     !> Contains the geometry on exit
-    type(TGeometry), intent(out) :: geo
+    type(TInputGeometry), intent(out) :: geo
 
     type(string) :: text
 
@@ -194,7 +194,7 @@ contains
     type(fnode), pointer :: node
 
     !> Contains the geometry on exit
-    type(TGeometry), intent(out) :: geo
+    type(TInputGeometry), intent(out) :: geo
 
     !> Text content of the node
     character(len=*), intent(in) :: text

@@ -11,11 +11,11 @@ module typegeometry
   implicit none
   private
 
-  public :: TGeometry, normalize
+  public :: TInputGeometry, normalize
 
 
   !> Type for containing geometrical information
-  type TGeometry
+  type TInputGeometry
 
     !> number of atoms
     integer :: nAtom
@@ -46,7 +46,7 @@ module typegeometry
 
     !> name(s) of the atomic species
     character(mc), allocatable :: speciesNames(:)
-  end type TGeometry
+  end type TInputGeometry
 
 
   !> Interface for cleaning up a geometry against non-existent atom species
@@ -62,7 +62,7 @@ contains
   subroutine Geometry_normalize(sf)
 
     !> Geometry object
-    type(TGeometry), intent(inout) :: sf
+    type(TInputGeometry), intent(inout) :: sf
 
     logical, allocatable :: inUse(:)
     integer, allocatable :: oldSpecies(:)

@@ -1008,32 +1008,35 @@ contains
   end subroutine reallocateHS_Single
 
 
-  !> Builds an atom offset array for the squared hamiltonain/overlap.
-  subroutine buildSquaredAtomIndex(iDenseStart, species, orb)
+  !> Builds an atom offset array for the squared hamiltonain/overlap matrices.
+  subroutine buildSquaredAtomIndex(denseMatIndex, nAtom, species0, orb)
 
-    !> Returns the offset array for each atom.
-    integer, intent(out) :: iDenseStart(:)
+    !> Dense matrix indexing structure
+    type(TDenseMatIndex), intent(out) :: denseMatIndex
+
+    !> number of atoms
+    integer, intent(in) :: nAtom
 
     !> Species of the atoms in the central cell
-    integer, intent(in) :: species(:)
+    integer, intent(in) :: species0(:)
 
     !> Information about the orbitals in the system.
     type(TOrbitals), intent(in) :: orb
 
     integer :: ind, iAt1, iSp1
-    integer :: nAtom
 
-    nAtom = size(iDenseStart) - 1
+    @:ASSERT(size(species0) >= nAtom)
 
-    @:ASSERT(size(species) >= nAtom)
+    allocate(denseMatIndex%iDenseStart(nAtom + 1))
 
     ind = 1
     do iAt1 = 1, nAtom
-      iSp1 = species(iAt1)
-      iDenseStart(iAt1) = ind
+      iSp1 = species0(iAt1)
+      denseMatIndex%iDenseStart(iAt1) = ind
       ind = ind + orb%nOrbSpecies(iSp1)
     end do
-    iDenseStart(nAtom+1) = ind
+    denseMatIndex%iDenseStart(nAtom+1) = ind
+    denseMatIndex%nOrb = ind - 1
 
   end subroutine buildSquaredAtomIndex
 

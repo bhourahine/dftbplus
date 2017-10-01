@@ -723,7 +723,7 @@ contains
     end if
     if (tWriteDetailedXML) then
       call writeDetailedXml(runId, speciesName, species0, pCoord0Out, boundaryConditions%tPeriodic,&
-          & boundaryConditions%latVec, tRealHS, nKPoint, nSpin, size(eigen, dim=1), nOrb, kPoint,&
+          & boundaryConditions%latVec, tRealHS, nKPoint, nSpin, size(eigen, dim=1), denseMatIndex%nOrb, kPoint,&
           & kWeight, filling, occNatural)
     end if
 
@@ -4690,7 +4690,7 @@ contains
     end if
     if (tLatOptFixAng) then
       constrLatDerivs(:3) = tmpLatDerivs
-      where (tLatOptFixLen) constrLatDerivs = 0.0_dp
+      where (tLatOptFixLen(:3)) constrLatDerivs(:3) = 0.0_dp
     elseif (tLatOptIsotropic) then
       ! Optimization uses scaling factor for the whole unit cell
       constrLatDerivs(1) = sum(tmpLatDerivs)
@@ -4729,7 +4729,7 @@ contains
     @:ASSERT(boundaryConditions%tPeriodic)
     @:ASSERT(size(constrLatVecs) == 9)
     @:ASSERT(all(shape(newLatVecs) == [3,3]))
-    
+
     if (tLatOptFixAng) then
       ! Optimization uses scaling factors and original lattice vectors
       if (any(tLatOptFixLen)) then

@@ -385,7 +385,7 @@ module inputdata_module
   !> container for input data constituents
   type inputData
     type(control) :: ctrl
-    type(TGeometry) :: geom
+    type(TInputGeometry) :: geom
     type(slater) :: slako
     logical :: tInitialized = .false.
   end type inputData
@@ -402,7 +402,7 @@ module inputdata_module
     module procedure InputData_destruct
   end interface destruct
 
-  public :: control, TGeometry, slater, inputData, XLBOMDInp
+  public :: control, TInputGeometry, slater, inputData, XLBOMDInp
   public :: init, destruct
 
 contains
