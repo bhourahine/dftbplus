@@ -10,6 +10,7 @@
 !> Global variables and initialization for the main program.
 module initprogram
   use assert
+  use cli
   use io
   use inputdata_module
   use constants
@@ -664,8 +665,12 @@ contains
 
 
   !> Initializes the variables in the module based on the parsed input
-  subroutine initProgramVariables(input)
+  subroutine initProgramVariables(arguments, input)
 
+    !> Command line arguments
+    type(cliData), intent(in) :: arguments
+    
+    
     !> Holds the parsed input data.
     type(inputData), intent(inout), target :: input
 

@@ -12,6 +12,7 @@ module parser
   use assert
   use accuracy
   use constants
+  use cli, only : cliData
   use io
   use inputdata_module
   use typegeometryhsd
@@ -90,8 +91,11 @@ contains
 
 
   !> Parse input from an HSD/XML file
-  subroutine parseHSDInput(input)
+  subroutine parseHSDInput(arguments,input)
 
+    !> Command line arguments
+    type(cliData), intent(in) :: arguments
+    
     !> Returns initialised input variables on exit
     type(inputData), intent(out) :: input
 
@@ -101,10 +105,11 @@ contains
     logical :: tHSD, missing
 
     write(stdOut, "(/, A, /)") "***  Parsing and initializing"
-
+    
     ! Read in the input
-    call readHSDOrXML(hsdInputName, xmlInputName, rootTag, hsdTree, tHSD, &
-        &missing)
+    call readHSDOrXML(trim(arguments%prefix) // hsdInputName,&
+        & trim(arguments%prefix) // xmlInputName, rootTag, hsdTree, tHSD, &
+        & missing)
 
     !! If input is missing return
     if (missing) then
@@ -113,9 +118,11 @@ contains
 
     write(stdout, '(A,1X,I0,/)') 'Parser version:', parserVersion
     if (tHSD) then
-      write(stdout, "(A)") "Interpreting input file '" // hsdInputName // "'"
+      write(stdout, "(A)") "Interpreting input file '" // &
+          & trim(arguments%prefix) // hsdInputName // "'"
     else
-      write(stdout, "(A)") "Interpreting input file '" // xmlInputName //  "'"
+      write(stdout, "(A)") "Interpreting input file '" // &
+          & trim(arguments%prefix) // xmlInputName //  "'"
     end if
     write(stdout, "(A)") repeat("-", 80)
 
@@ -167,14 +174,14 @@ contains
 
     ! Dump processed tree in HSD and XML format
     if (parserFlags%tWriteHSD) then
-      call dumpHSD(hsdTree, hsdProcInputName)
+      call dumpHSD(hsdTree, trim(arguments%prefix) // hsdProcInputName)
       write(stdout, '(/,/,A)') "Processed input in HSD format written to '" &
-          &// hsdProcInputName // "'"
+          &// trim(arguments%prefix) // hsdProcInputName // "'"
     end if
     if (parserFlags%tWriteXML) then
-      call dumpHSDAsXML(hsdTree, xmlProcInputName)
+      call dumpHSDAsXML(hsdTree, trim(arguments%prefix) // xmlProcInputName)
       write(stdout, '(A,/)') "Processed input in XML format written to '" &
-          &// xmlProcInputName // "'"
+          &// trim(arguments%prefix) // xmlProcInputName // "'"
     end if
 
     ! Stop, if only parsing is required

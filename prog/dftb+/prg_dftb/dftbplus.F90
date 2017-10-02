@@ -7,6 +7,7 @@
 
 program dftbplus
   use main, only : runDftbPlus
+  use cli
   use inputdata_module, only : inputData
   use formatout, only : printDftbHeader
   use parser, only : parseHsdInput
@@ -16,12 +17,14 @@ program dftbplus
   character(len=*), parameter :: RELEASE_VERSION = '17.1'
   integer, parameter :: RELEASE_YEAR = 2017
 
+  type(cliData) :: arguments
   type(inputData), allocatable :: input
 
   call printDftbHeader(RELEASE_VERSION, RELEASE_YEAR)
   allocate(input)
-  call parseHsdInput(input)
-  call initProgramVariables(input)
+  call getCLI(arguments)
+  call parseHsdInput(arguments,input)
+  call initProgramVariables(arguments,input)
   deallocate(input)
   call runDftbPlus()
 
