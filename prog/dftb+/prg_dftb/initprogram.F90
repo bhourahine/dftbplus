@@ -72,7 +72,9 @@ module initprogram
 
 
   !> file name for charge data
-  character(*), parameter :: fCharges = "charges.bin"
+  character(*), parameter :: fChargesPostFix = "charges.bin"
+  character(lc) :: fCharges
+  !character(*), parameter :: fCharges = "charges.bin"
 
   !> file to stop code during geometry driver
   character(*), parameter :: fStopDriver = "stop_driver"
@@ -81,6 +83,9 @@ module initprogram
   character(*), parameter :: fStopSCC = "stop_scc"
 
 
+  character(*), parameter :: userOutTmp = "detailed.out"
+  character(lc) :: userOutComposit
+  
   !> Is the calculation SCC?
   logical :: tSccCalc
 
@@ -669,8 +674,7 @@ contains
 
     !> Command line arguments
     type(cliData), intent(in) :: arguments
-    
-    
+        
     !> Holds the parsed input data.
     type(inputData), intent(inout), target :: input
 
@@ -764,6 +768,9 @@ contains
 
     @:ASSERT(input%tInitialized)
 
+    fCharges = trim(arguments%prefix) // trim(fChargesPostFix)
+    userOutComposit = trim(arguments%prefix) // trim(userOutTmp)
+    
     write(stdOut, "(/, A)") "Starting initialization..."
     write(stdOut, "(A80)") repeat("-", 80)
 

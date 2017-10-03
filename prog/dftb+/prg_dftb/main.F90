@@ -75,7 +75,8 @@ module main
   character(*), parameter :: autotestTag = "autotest.tag"
 
   !> Detailed user output
-  character(*), parameter :: userOut = "detailed.out"
+  !character(*), parameter :: userOut = "detailed.out"
+  character(lc) :: userOut
 
   !> band structure and filling information
   character(*), parameter :: bandOut = "band.out"
@@ -282,6 +283,8 @@ contains
     !> locality measure for the wavefunction
     real(dp) :: localisation
 
+    userOut = userOutComposit
+    
     ! set up output files
     call initOutputFiles(tWriteAutotest, tWriteResultsTag, tWriteBandDat, tDerivs,&
         & tWriteDetailedOut, tMd, tGeoOpt, geoOutFile, fdAutotest, fdResultsTag, fdBand, fdEigvec,&
