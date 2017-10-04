@@ -361,7 +361,7 @@ contains
 
       call resetExternalPotentials(potential)
       if (tEField) then
-        call setUpExternalElectricField(tTDEField, boundaryConditions%tPeriodic, EFieldStrength,&
+        call setUpExternalElectricField(tTDEField, boundaryConditions, EFieldStrength,&
             & EFieldVector, EFieldOmega, EFieldPhase, neighborList, nNeighbor, iCellVec,&
             & img2CentCell, cellVec, deltaT, iGeoStep, coord0Fold, coord, EField,&
             & potential%extAtom(:,1), absEField)
@@ -454,7 +454,7 @@ contains
               & diffElec, sccErrorQ, indMovedAtom, pCoord0Out, q0, qInput, qOutput, eigen, filling,&
               & orb, species, tDFTBU, tImHam, tPrintMulliken, orbitalL, qBlockOut, Ef, Eband, TS,&
               & E0, extPressure, cellVol, tAtomicEnergy, tDispersion, tEField,&
-              & boundaryConditions%tPeriodic, nSpin, tSpinOrbit, tSccCalc)
+              & boundaryConditions, nSpin, tSpinOrbit, tSccCalc)
         end if
 
         if (tConverged .or. tStopScc) then
@@ -631,8 +631,8 @@ contains
               & velocities, tempIon)
           tCoordsChanged = .true.
           tLatticeChanged = tBarostat
-          call printMdInfo(tSetFillingTemp, tEField, boundaryConditions%tPeriodic, tempElec,&
-              & absEField, tempIon, intPressure, extPressure, energy)
+          call printMdInfo(tSetFillingTemp, tEField, boundaryConditions, tempElec, absEField,&
+              & tempIon, intPressure, extPressure, energy)
           if (tWriteRestart) then
             if (boundaryConditions%tPeriodic) then
               cellVol = abs(determinant33(boundaryConditions%latVec))
@@ -1163,7 +1163,7 @@ contains
   subroutine handleLatticeChange(boundaryConditions, sccCalc, tStress, extPressure, mCutoff,&
       & dispersion, recVecs, recVecs2p, cellVol, recCellVol, extLatDerivs, cellVecs, rCellVecs)
 
-    !> lattice vectors,
+    !> lattice vectors and other data
     type(TBoundaryConditions), intent(in) :: BoundaryConditions
 
     !> Module variables
@@ -1535,15 +1535,15 @@ contains
 
 
   !> Sets up electric external field
-  subroutine setUpExternalElectricField(tTimeDepEField, tPeriodic, EFieldStrength, EFieldVector,&
-      & EFieldOmega, EFieldPhase, neighborList, nNeighbor, iCellVec, img2CentCell, cellVec, deltaT,&
-      & iGeoStep, coord0Fold, coord, EField, extAtomPot, absEField)
+  subroutine setUpExternalElectricField(tTimeDepEField, boundaryConditions, EFieldStrength,&
+      & EFieldVector, EFieldOmega, EFieldPhase, neighborList, nNeighbor, iCellVec, img2CentCell,&
+      & cellVec, deltaT, iGeoStep, coord0Fold, coord, EField, extAtomPot, absEField)
 
     !> Is there an electric field that varies with geometry step during MD?
     logical, intent(in) :: tTimeDepEField
-
-    !> Is this a periodic geometry
-    logical, intent(in) :: tPeriodic
+    
+    !> boundary conditions for the system
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
 
     !> What is the field strength
     real(dp), intent(in) :: EFieldStrength
@@ -1606,7 +1606,7 @@ contains
       Efield(:) = Efield * sin(EfieldOmega * deltaT * real(iGeoStep + EfieldPhase, dp))
     end if
     absEfield = sqrt(sum(Efield**2))
-    if (tPeriodic) then
+    if (boundaryConditions%tPeriodic) then
       do iAt1 = 1, nAtom
         do iNeigh = 1, nNeighbor(iAt1)
           iAt2 = neighborList%iNeighbor(iNeigh, iAt1)

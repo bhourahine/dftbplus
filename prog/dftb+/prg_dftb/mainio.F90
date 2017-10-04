@@ -1153,7 +1153,7 @@ contains
       & tMD, tDerivs, tCoordOpt, tLatOpt, iLatGeoStep, iSccIter, energy, diffElec, sccErrorQ,&
       & indMovedAtom, coord0Out, q0, qInput, qOutput, eigen, filling, orb, species,&
       & tDFTBU, tImHam, tPrintMulliken, orbitalL, qBlockOut, Ef, Eband, TS, E0, pressure, cellVol,&
-      & tAtomicEnergy, tDispersion, tEField, tPeriodic, nSpin, tSpinOrbit, tScc)
+      & tAtomicEnergy, tDispersion, tEField, boundaryConditions, nSpin, tSpinOrbit, tScc)
 
     !> File  ID
     integer, intent(in) :: fd
@@ -1269,8 +1269,8 @@ contains
     !> Is there an external electric field
     logical, intent(in) :: tEfield
 
-    !> Is the system periodic
-    logical, intent(in) :: tPeriodic
+    !> boundary conditions
+    type(TBoundaryConditions), intent(in) :: BoundaryConditions
 
     !> Number of spin channels
     integer, intent(in) :: nSpin
@@ -1602,7 +1602,7 @@ contains
     write(fd, format2U) 'Total energy', energy%Etotal, 'H', energy%Etotal * Hartree__eV, 'eV'
     write(fd, format2U) 'Total Mermin free energy', energy%Etotal - sum(TS), 'H',&
         & (energy%Etotal - sum(TS)) * Hartree__eV, 'eV'
-    if (tPeriodic .and. pressure /= 0.0_dp) then
+    if (boundaryConditions%tPeriodic .and. pressure /= 0.0_dp) then
       write(fd, format2U) 'Gibbs free energy', energy%Etotal - sum(TS) + cellVol * pressure,&
           & 'H', Hartree__eV * (energy%Etotal - sum(TS) + cellVol * pressure), 'eV'
     end if
@@ -2692,8 +2692,8 @@ contains
 
 
   !> Prints out info about current MD step.
-  subroutine printMdInfo(tSetFillingTemp, tEField, tPeriodic, tempElec, absEField, tempIon,&
-      & cellPressure, pressure, energy)
+  subroutine printMdInfo(tSetFillingTemp, tEField, boundaryConditions, tempElec, absEField,&
+      & tempIon, cellPressure, pressure, energy)
 
     !> Is the electronic temperature set by the thermostat method?
     logical, intent(in) :: tSetFillingTemp
@@ -2701,8 +2701,8 @@ contains
     !> Is an electric field being applied?
     logical, intent(in) :: tEFIeld
 
-    !> Is the geometry periodic?
-    logical, intent(in) :: tPeriodic
+    !> boundary conditions
+    type(TBoundaryConditions), intent(in) :: BoundaryConditions
 
     !> Electronic temperature
     real(dp), intent(in) :: tempElec
@@ -2732,7 +2732,7 @@ contains
     write(stdOut, format2U) "MD Kinetic Energy", energy%Ekin, "H", Hartree__eV * energy%Ekin, "eV"
     write(stdOut, format2U) "Total MD Energy", energy%EMerminKin, "H",&
         & Hartree__eV * energy%EMerminKin, "eV"
-    if (tPeriodic) then
+    if (boundaryConditions%tPeriodic) then
       write(stdOut, format2Ue) 'Pressure', cellPressure, 'au', cellPressure * au__pascal, 'Pa'
       if (abs(pressure) < epsilon(1.0_dp)) then
         write(stdOut, format2U) 'Gibbs free energy including KE', energy%EGibbsKin, 'H',&
