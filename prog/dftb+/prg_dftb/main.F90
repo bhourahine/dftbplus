@@ -328,7 +328,7 @@ contains
       end if
 
       if (tLatticeChanged) then
-        call handleLatticeChange(boundaryConditions%latVec, sccCalc, tStress, extPressure, mCutoff,&
+        call handleLatticeChange(boundaryConditions, sccCalc, tStress, extPressure, mCutoff,&
             & dispersion, recVec, invLatVec, cellVol, recCellVol, extLatDerivs, cellVec, rCellVec)
       end if
 
@@ -464,7 +464,7 @@ contains
       end do lpSCC
 
       if (tLinResp) then
-        call ensureLinRespConditions(t3rd, tRealHS, boundaryConditions%tPeriodic, tForces)
+        call ensureLinRespConditions(t3rd, tRealHS, boundaryConditions, tForces)
         call calculateLinRespExcitations(lresp, sccCalc, qOutput, q0, over, HSqrReal, eigen(:,1,:),&
             & filling(:,1,:), coord0, species, speciesName, orb, denseMatIndex, skHamCont,&
             & skOverCont, fdAutotest, fdEigvec, runId, neighborList, nNeighbor, iSparseStart,&
@@ -503,8 +503,8 @@ contains
       ! MD geometry files are written only later, once velocities for the current geometry are known
       if (tGeoOpt .and. tWriteRestart) then
         call writeCurrentGeometry(geoOutFile, pCoord0Out, tLatOpt, tMd, tAppendGeo, tFracCoord,&
-            & boundaryConditions%tPeriodic, tPrintMulliken, species0, speciesName,&
-            & boundaryConditions%latVec, iGeoStep, iLatGeoStep, nSpin, qOutput, velocities)
+            & boundaryConditions, tPrintMulliken, species0, speciesName, iGeoStep, iLatGeoStep,&
+            & nSpin, qOutput, velocities)
       end if
 
       call printEnergies(energy)
@@ -642,8 +642,8 @@ contains
                 & energy, boundaryConditions%latVec, cellVol, intPressure, extPressure, tempIon,&
                 & absEField, qOutput, q0, dipoleMoment)
             call writeCurrentGeometry(geoOutFile, pCoord0Out, .false., .true., .true., tFracCoord,&
-                & boundaryConditions%tPeriodic, tPrintMulliken, species0, speciesName,&
-                & boundaryConditions%latVec, iGeoStep, iLatGeoStep, nSpin, qOutput, velocities)
+                & boundaryConditions, tPrintMulliken, species0, speciesName, iGeoStep, iLatGeoStep,&
+                & nSpin, qOutput, velocities)
           end if
           coord0(:,:) = newCoords
           if (tWriteDetailedOut) then
@@ -1160,11 +1160,11 @@ contains
 
 
   !> Does the operations that are necessary after a lattice vector update
-  subroutine handleLatticeChange(latVecs, sccCalc, tStress, extPressure, mCutoff,&
+  subroutine handleLatticeChange(boundaryConditions, sccCalc, tStress, extPressure, mCutoff,&
       & dispersion, recVecs, recVecs2p, cellVol, recCellVol, extLatDerivs, cellVecs, rCellVecs)
 
-    !> lattice vectors
-    real(dp), intent(in) :: latVecs(:,:)
+    !> lattice vectors,
+    type(TBoundaryConditions), intent(in) :: BoundaryConditions
 
     !> Module variables
     type(TScc), allocatable, intent(inout) :: sccCalc
@@ -1202,25 +1202,27 @@ contains
     !> Vectors to unit cells in absolute units
     real(dp), allocatable, intent(out) :: rCellVecs(:,:)
 
-    cellVol = abs(determinant33(latVecs))
-    recVecs2p(:,:) = latVecs
+    @:ASSERT(boundaryConditions%tPeriodic)
+    
+    cellVol = abs(determinant33(boundaryConditions%latVec))
+    recVecs2p(:,:) = boundaryConditions%latVec
     call matinv(recVecs2p)
     recVecs2p = transpose(recVecs2p)
     recVecs = 2.0_dp * pi * recVecs2p
     recCellVol = abs(determinant33(recVecs))
     if (tStress) then
-      call derivDeterminant33(extLatDerivs, latVecs)
+      call derivDeterminant33(extLatDerivs, boundaryConditions%latVec)
       extLatDerivs(:,:) = extPressure * extLatDerivs
     end if
     if (allocated(sccCalc)) then
-      call sccCalc%updateLatVecs(latVecs, recVecs, cellVol)
+      call sccCalc%updateLatVecs(boundaryConditions%latVec, recVecs, cellVol)
       mCutoff = max(mCutoff, sccCalc%getCutoff())
     end if
     if (allocated(dispersion)) then
-      call dispersion%updateLatVecs(latVecs)
+      call dispersion%updateLatVecs(boundaryConditions%latVec)
       mCutoff = max(mCutoff, dispersion%getRCutoff())
     end if
-    call getCellTranslations(cellVecs, rCellVecs, latVecs, recVecs2p, mCutoff)
+    call getCellTranslations(cellVecs, rCellVecs, boundaryConditions%latVec, recVecs2p, mCutoff)
 
   end subroutine handleLatticeChange
 
@@ -3492,7 +3494,7 @@ contains
 
   !> Stop if linear response module can not be invoked due to unimplemented combinations of
   !> features.
-  subroutine ensureLinRespConditions(t3rd, tRealHS, tPeriodic, tForces)
+  subroutine ensureLinRespConditions(t3rd, tRealHS, boundaryConditions, tForces)
 
     !> 3rd order hamiltonian contributions included
     logical, intent(in) :: t3rd
@@ -3500,8 +3502,8 @@ contains
     !> a real hamiltonian
     logical, intent(in) :: tRealHs
 
-    !> periodic boundary conditions
-    logical, intent(in) :: tPeriodic
+    !> boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
 
     !> forces being evaluated
     logical, intent(in) :: tForces
@@ -3512,9 +3514,8 @@ contains
     if (.not. tRealHS) then
       call error("Only real systems are supported for excited state calculations")
     end if
-    if (tPeriodic .and. tForces) then
-      call error("Forces in the excited state for periodic geometries are currently&
-          & unavailable")
+    if (boundaryConditions%tPeriodic .and. tForces) then
+      call error("Forces in the excited state for periodic geometries are currently unavailable")
     end if
 
   end subroutine ensureLinRespConditions

@@ -2430,7 +2430,7 @@ contains
 
   !> Write current geometry to disc
   subroutine writeCurrentGeometry(geoOutFile, pCoord0Out, tLatOpt, tMd, tAppendGeo, tFracCoord,&
-      & tPeriodic, tPrintMulliken, species0, speciesName, latVec, iGeoStep, iLatGeoStep, nSpin,&
+      & boundaryConditions, tPrintMulliken, species0, speciesName, iGeoStep, iLatGeoStep, nSpin,&
       & qOutput, velocities)
 
     !>  file for geometry output
@@ -2451,8 +2451,8 @@ contains
     !> are fractional GEN files expected
     logical, intent(in) :: tFracCoord
 
-    !> Is the geometry periodic?
-    logical, intent(in) :: tPeriodic
+    !> boundary conditions
+    type(TBoundaryConditions), intent(in) :: BoundaryConditions
 
     !> should Mulliken charges be printed
     logical, intent(in) :: tPrintMulliken
@@ -2462,9 +2462,6 @@ contains
 
     !> label for each atomic chemical species
     character(*), intent(in) :: speciesName(:)
-
-    !> lattice vectors
-    real(dp), intent(in) :: latVec(:,:)
 
     !> current geometry step
     integer, intent(in) :: iGeoStep
@@ -2489,11 +2486,7 @@ contains
     nAtom = size(pCoord0Out, dim=2)
 
     fname = trim(geoOutFile) // ".gen"
-    if (tPeriodic) then
-      call writeGenFormat(fname, pCoord0Out, species0, speciesName, latVec, tFracCoord)
-    else
-      call writeGenFormat(fname, pCoord0Out, species0, speciesName)
-    end if
+    call writeGenFormat(fname, pCoord0Out, species0, speciesName, boundaryConditions, tFracCoord)
 
     fname = trim(geoOutFile) // ".xyz"
     if (tLatOpt) then

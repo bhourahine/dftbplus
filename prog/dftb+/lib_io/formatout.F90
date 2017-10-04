@@ -16,6 +16,7 @@ module formatout
   use constants
   use lapackroutines, only: matinv
   use sparse2dense
+  use commontypes
   implicit none
   private
 
@@ -71,7 +72,8 @@ contains
 
 
   !> A wrapper around writeGenFormat_fid to open a file first.
-  subroutine writeGenFormat_fname(fileName, coord, species, speciesName, latVec, tFracCoord)
+  subroutine writeGenFormat_fname(fileName, coord, species, speciesName, boundaryConditions,&
+      & tFracCoord)
 
     !> File name of the file which should be created
     character(len=*), intent(in) :: fileName
@@ -85,28 +87,26 @@ contains
     !> Name of the different species
     character(mc),    intent(in) :: speciesName(:)
 
-    !> Lattice vectors
-    real(dp), intent(in), optional :: latVec(3,3)
+    !> boundary conditions on atomic geometry
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
 
     !> Print out fractional coordinates?
     logical, intent(in), optional :: tFracCoord
 
     integer, save :: fd = -1
 
-    @:ASSERT((.not.(present(tFracCoord).neqv.present(latVec))) .or.(present(latVec)))
-
     if (fd == -1) then
       fd = getFileId()
     end if
     open(fd, file=fileName, form="formatted", action="write", status="replace")
-    call writeGenFormat(fd, coord, species, speciesName, latVec, tFracCoord)
+    call writeGenFormat(fd, coord, species, speciesName, boundaryConditions, tFracCoord)
     close(fd)
 
   end subroutine writeGenFormat_fname
 
 
   !> Writes coordinates in the famous GEN format to a file
-  subroutine writeGenFormat_fid(fd, coord, species, speciesName, latVec, tFracCoord)
+  subroutine writeGenFormat_fid(fd, coord, species, speciesName, boundaryConditions, tFracCoord)
 
     !> File id of an open file where output should be written
     integer, intent(in) :: fd
@@ -120,11 +120,11 @@ contains
     !> Name of the different species
     character(mc),     intent(in) :: speciesName(:)
 
-    !> Lattice vectors
-    real(dp), intent(in), optional :: latVec(:,:)
+    !> boundary conditions on atomic geometry
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
 
-    !> Print out fractional coordinates?
-    logical, intent(in), optional :: tFracCoord
+    !> Print out fractional coordinates? Ignored if not periodic
+    logical, intent(in) :: tFracCoord
 
     integer :: nAtom, nSpecies
     character(6) :: formatSpecies
@@ -144,17 +144,14 @@ contains
     @:ASSERT(size(species) == nAtom)
     @:ASSERT(size(speciesName) == nSpecies)
 #:call ASSERT_CODE
-    if (present(latVec)) then
-      @:ASSERT(all(shape(latVec) == (/3, 3 /)))
+    if (tFracCoord) then
+      @:ASSERT(boundaryConditions%tPeriodic)
     end if
 #:endcall ASSERT_CODE
-    @:ASSERT((.not.(present(tFracCoord).neqv.present(latVec))) .or.(present(latVec)))
 
     tFractional = .false.
-    if (present(latVec)) then
-      if (present(tFracCoord) ) then
-        tFractional = tFracCoord
-      end if
+    if (boundaryConditions%tPeriodic) then
+      tFractional = tFracCoord
       if (tFractional) then
         write(fd, 100) nAtom, "F"
       else
@@ -167,7 +164,7 @@ contains
     write(fd, formatSpecies) (trim(speciesName(ii)), ii = 1, nSpecies)
 
     if (tFractional) then
-      invLatVec(:,:) = latVec(:,:)
+      invLatVec(:,:) = boundaryConditions%latVec
       call matinv(invLatVec)
       do ii = 1, nAtom
         write(fd, 102) ii, species(ii), matmul(invLatVec,coord(:, ii))
@@ -177,10 +174,10 @@ contains
         write(fd, 102) ii, species(ii), (coord(jj, ii) * Bohr__AA, jj = 1, 3)
       end do
     end if
-    if (present(latVec)) then
+    if (boundaryConditions%tPeriodic) then
       write(fd, 103) 0.0_dp, 0.0_dp, 0.0_dp
       do ii = 1, 3
-        write(fd, 103) (latVec(jj, ii) * Bohr__AA, jj = 1, 3)
+        write(fd, 103) (boundaryConditions%latVec(jj, ii) * Bohr__AA, jj = 1, 3)
       end do
     end if
   end subroutine writeGenFormat_fid
