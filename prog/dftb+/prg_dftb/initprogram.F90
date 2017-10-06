@@ -84,7 +84,7 @@ module initprogram
 
 
   character(*), parameter :: userOutTmp = "detailed.out"
-  character(lc) :: userOutComposit
+  character(lc) :: userOut ! Composit
   
   !> Is the calculation SCC?
   logical :: tSccCalc
@@ -769,7 +769,7 @@ contains
     @:ASSERT(input%tInitialized)
 
     fCharges = trim(arguments%prefix) // trim(fChargesPostFix)
-    userOutComposit = trim(arguments%prefix) // trim(userOutTmp)
+    userOut = trim(arguments%prefix) // trim(userOutTmp)
     
     write(stdOut, "(/, A)") "Starting initialization..."
     write(stdOut, "(A80)") repeat("-", 80)

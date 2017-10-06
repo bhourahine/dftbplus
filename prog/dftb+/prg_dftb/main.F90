@@ -76,7 +76,7 @@ module main
 
   !> Detailed user output
   !character(*), parameter :: userOut = "detailed.out"
-  character(lc) :: userOut
+  !character(lc) :: userOut
 
   !> band structure and filling information
   character(*), parameter :: bandOut = "band.out"
@@ -283,12 +283,12 @@ contains
     !> locality measure for the wavefunction
     real(dp) :: localisation
 
-    userOut = userOutComposit
+    !userOut = userOutComposit
     
     ! set up output files
     call initOutputFiles(tWriteAutotest, tWriteResultsTag, tWriteBandDat, tDerivs,&
-        & tWriteDetailedOut, tMd, tGeoOpt, geoOutFile, fdAutotest, fdResultsTag, fdBand, fdEigvec,&
-        & fdHessian, fdDetailedOut, fdMd, fdCharges)
+        & tWriteDetailedOut, userOut, tMd, tGeoOpt, geoOutFile, fdAutotest, fdResultsTag, fdBand,&
+        & fdEigvec, fdHessian, fdDetailedOut, fdMd, fdCharges)
 
     ! set up larger arrays
     call initArrays(tForces, tExtChrg, tLinResp, tLinRespZVect, tMd, tMulliken, tSpinOrbit, tImHam,&
@@ -735,8 +735,8 @@ contains
 
   !> Initialises (clears) output files.
   subroutine initOutputFiles(tWriteAutotest, tWriteResultsTag, tWriteBandDat, tDerivs,&
-      & tWriteDetailedOut, tMd, tGeoOpt, geoOutFile, fdAutotest, fdResultsTag, fdBand, fdEigvec,&
-      & fdHessian, fdDetailedOut, fdMd, fdChargeBin)
+      & tWriteDetailedOut, userOut, tMd, tGeoOpt, geoOutFile, fdAutotest, fdResultsTag, fdBand,&
+      & fdEigvec, fdHessian, fdDetailedOut, fdMd, fdChargeBin)
 
     !> Should tagged regression test data be printed
     logical, intent(in) :: tWriteAutotest
@@ -753,6 +753,9 @@ contains
     !> Write detail on the calculation to file
     logical, intent(in) :: tWriteDetailedOut
 
+    !> Filename for detailed user output
+    character(*), intent(in) :: userOut
+    
     !> Is this a molecular dynamics calculation
     logical, intent(in) :: tMd
 
@@ -787,6 +790,8 @@ contains
     integer, intent(out) :: fdChargeBin
 
 
+    
+    
     call initTaggedWriter()
     if (tWriteAutotest) then
       call initOutputFile(autotestTag, fdAutotest)
