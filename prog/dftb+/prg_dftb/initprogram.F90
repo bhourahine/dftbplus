@@ -21,7 +21,7 @@ module initprogram
   use coulomb
   use message
 
-  use mainio, only : SetEigVecsTxtOutput, receiveGeometryFromSocket
+  use mainio
   use mixer
   use simplemixer
   use andersonmixer
@@ -66,7 +66,9 @@ module initprogram
   use linkedlist
   use xlbomd_module
   use etemp, only : Fermi
+#:if WITH_SOCKETS
   use ipisocket
+#:endif
   use pmlocalisation
   implicit none
 
@@ -444,8 +446,9 @@ module initprogram
   logical :: tSocket
 
   !> socket details
+#:if WITH_SOCKETS
   type(IpiSocketComm), allocatable :: socket
-
+#:endif
 
   !> File containing output geometry
   character(lc) :: geoOutFile
@@ -1240,6 +1243,7 @@ contains
     tBarostat = input%ctrl%tBarostat
     BarostatStrength = input%ctrl%BarostatStrength
 
+#:if WITH_SOCKETS
     tSocket = allocated(input%ctrl%socketInput)
     if (tSocket) then
       write(stdout, *) "Initialising for socket communication to host ", &
@@ -1252,6 +1256,9 @@ contains
       call receiveGeometryFromSocket(socket, tPeriodic, coord0, latVec, tCoordsChanged,&
           & tLatticeChanged, tDummy)
     end if
+#:else
+    tSocket = .false.
+#:endif
 
     tAppendGeo = input%ctrl%tAppendGeo
     tConvrgForces = (input%ctrl%tConvrgForces .and. tSccCalc) ! no point if not SCC

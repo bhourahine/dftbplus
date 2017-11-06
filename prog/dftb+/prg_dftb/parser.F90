@@ -37,7 +37,9 @@ module parser
   use commontypes
   use oldskdata
   use xmlf90
+#:if WITH_SOCKETS
   use ipisocket, only : IPI_PROTOCOLS
+#:endif
   implicit none
 
   private
@@ -710,7 +712,7 @@ contains
 
     case ("socket")
       ! external socket control of the run (once initialised from input)
-
+#:if WITH_SOCKETS
       ctrl%tForces = .true.
       allocate(ctrl%socketInput)
       call getChild(node, 'File', child=child2, requested=.false.)
@@ -746,11 +748,16 @@ contains
           sTmp = unquote(char(buffer2))
           ctrl%socketInput%host = trim(sTmp) // trim(ctrl%socketInput%host)
         end if
+
       case default
         call detailedError(child, "Invalid protocol '" // char(buffer) // "'")
       end select
       call getChildValue(node, "Verbosity", ctrl%socketInput%verbosity, 0)
       call getChildValue(node, "MaxSteps", ctrl%maxRun, 200)
+
+#:else
+      call detailedError(node, "Program had been compiled without socket support")
+#:endif
 
     case default
       call getNodeHSDName(node, buffer)
