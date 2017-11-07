@@ -72,22 +72,55 @@ module initprogram
   use pmlocalisation
   implicit none
 
+  ! Name of the human readable files
 
   !> file name for charge data
   character(*), parameter :: fChargesPostFix = "charges.bin"
+  !> Composite variable name
   character(lc) :: fCharges
-  !character(*), parameter :: fCharges = "charges.bin"
 
   !> file to stop code during geometry driver
-  character(*), parameter :: fStopDriver = "stop_driver"
+  character(*), parameter :: fStopDriverPostFix = "stop_driver"
+  !> Composite variable name
+  character(lc) :: fStopDriver
 
   !> file to stop code during scc cycle
-  character(*), parameter :: fStopSCC = "stop_scc"
+  character(*), parameter :: fStopSCCPostFix = "stop_scc"
+  !> Composite variable name
+  character(lc) :: fStopSCC
 
+  !> Tagged output files (machine readable)
+  character(*), parameter :: autotestTagPostFix = "autotest.tag"
+  !> Composite variable name
+  character(lc) :: autotestTag
 
-  character(*), parameter :: userOutTmp = "detailed.out"
-  character(lc) :: userOut ! Composit
-  
+  !> band structure and filling information
+  character(*), parameter :: bandOutPostFix = "band.out"
+  !> Composite variable name
+  character(lc) :: bandOut
+
+  !> File accumulating data during an MD run
+  character(*), parameter :: mdOutPostFix = "md.out"
+  !> Composite variable name
+  character(lc) :: mdOut
+
+  !> Machine readable tagged output
+  character(*), parameter :: resultsTagPostFix = "results.tag"
+  !> Composite variable name
+  character(lc) :: resultsTag
+
+  !> Second derivative of the energy with respect to atomic positions
+  character(*), parameter :: hessianOutPostFix = "hessian.out"
+  !> Composite variable name
+  character(lc) :: hessianOut
+
+  !> Detailed user output
+  character(*), parameter :: userOutPostFix = "detailed.out"
+  !> Composite variable name
+  character(lc) :: userOut
+
+  ! control variables
+
   !> Is the calculation SCC?
   logical :: tSccCalc
 
@@ -677,7 +710,7 @@ contains
 
     !> Command line arguments
     type(cliData), intent(in) :: arguments
-        
+
     !> Holds the parsed input data.
     type(inputData), intent(inout), target :: input
 
@@ -772,8 +805,15 @@ contains
     @:ASSERT(input%tInitialized)
 
     fCharges = trim(arguments%prefix) // trim(fChargesPostFix)
-    userOut = trim(arguments%prefix) // trim(userOutTmp)
-    
+    fStopDriver = trim(arguments%prefix) // trim(fStopDriverPostFix)
+    fStopSCC = trim(arguments%prefix) // trim(fStopSCCPostFix)
+    autotestTag = trim(arguments%prefix) // trim(autotestTagPostFix)
+    bandOut = trim(arguments%prefix) // trim(bandOutPostFix)
+    mdOut = trim(arguments%prefix) // trim(mdOutPostFix)
+    resultsTag = trim(arguments%prefix) // trim(resultsTagPostFix)
+    hessianOut = trim(arguments%prefix) // trim(hessianOutPostFix)
+    userOut = trim(arguments%prefix) // trim(userOutPostFix)
+
     write(stdOut, "(/, A)") "Starting initialization..."
     write(stdOut, "(A80)") repeat("-", 80)
 

@@ -69,33 +69,11 @@ module main
 
   public :: runDftbPlus
 
-  ! Name of the human readable files
-
-  !> Tagged output files (machine readable)
-  character(*), parameter :: autotestTag = "autotest.tag"
-
-  !> Detailed user output
-  !character(*), parameter :: userOut = "detailed.out"
-  !character(lc) :: userOut
-
-  !> band structure and filling information
-  character(*), parameter :: bandOut = "band.out"
-
-  !> File accumulating data during an MD run
-  character(*), parameter :: mdOut = "md.out"
-
-  !> Machine readable tagged output
-  character(*), parameter :: resultsTag = "results.tag"
-
-  !> Second derivative of the energy with respect to atomic positions
-  character(*), parameter :: hessianOut = "hessian.out"
-
   !> O(N^2) density matrix creation
   logical, parameter :: tDensON2 = .false.
 
   !> Should further output be appended to detailed.out?
   logical, parameter :: tAppendDetailedOut = .false.
-
 
 contains
 
@@ -284,11 +262,12 @@ contains
     real(dp) :: localisation
 
     !userOut = userOutComposit
-    
+
     ! set up output files
     call initOutputFiles(tWriteAutotest, tWriteResultsTag, tWriteBandDat, tDerivs,&
-        & tWriteDetailedOut, userOut, tMd, tGeoOpt, geoOutFile, fdAutotest, fdResultsTag, fdBand,&
-        & fdEigvec, fdHessian, fdDetailedOut, fdMd, fdCharges)
+        & tWriteDetailedOut, userOut, tMd, tGeoOpt, geoOutFile, fdAutotest, autotestTag,&
+        & fdResultsTag, resultsTag, fdBand, bandOut, fdEigvec, fdHessian, hessianOut,&
+        & fdDetailedOut, fdMd, mdOut, fdCharges)
 
     ! set up larger arrays
     call initArrays(tForces, tExtChrg, tLinResp, tLinRespZVect, tMd, tMulliken, tSpinOrbit, tImHam,&
@@ -467,9 +446,9 @@ contains
         call ensureLinRespConditions(t3rd, tRealHS, tPeriodic, tForces)
         call calculateLinRespExcitations(lresp, sccCalc, qOutput, q0, over, HSqrReal, eigen(:,1,:),&
             & filling(:,1,:), coord0, species, speciesName, orb, skHamCont, skOverCont, fdAutotest,&
-            & fdEigvec, runId, neighborList, nNeighbor, iDenseStart, iSparseStart, img2CentCell,&
-            & tWriteAutotest, tForces, tLinRespZVect, tPrintExcitedEigvecs, nonSccDeriv, energy,&
-            & SSqrReal, rhoSqrReal, excitedDerivs, occNatural)
+            & autotestTag, fdEigvec, runId, neighborList, nNeighbor, iDenseStart, iSparseStart,&
+            & img2CentCell, tWriteAutotest, tForces, tLinRespZVect, tPrintExcitedEigvecs,&
+            & nonSccDeriv, energy, SSqrReal, rhoSqrReal, excitedDerivs, occNatural)
       end if
 
       if (tXlbomd) then
@@ -747,8 +726,9 @@ contains
 
   !> Initialises (clears) output files.
   subroutine initOutputFiles(tWriteAutotest, tWriteResultsTag, tWriteBandDat, tDerivs,&
-      & tWriteDetailedOut, userOut, tMd, tGeoOpt, geoOutFile, fdAutotest, fdResultsTag, fdBand,&
-      & fdEigvec, fdHessian, fdDetailedOut, fdMd, fdChargeBin)
+      & tWriteDetailedOut, userOut, tMd, tGeoOpt, geoOutFile, fdAutotest, autotestTag,&
+      & fdResultsTag, resultsTag, fdBand, bandOut, fdEigvec, fdHessian, hessianOut,&
+      & fdDetailedOut, fdMd, mdOut, fdCharges)
 
     !> Should tagged regression test data be printed
     logical, intent(in) :: tWriteAutotest
@@ -767,7 +747,7 @@ contains
 
     !> Filename for detailed user output
     character(*), intent(in) :: userOut
-    
+
     !> Is this a molecular dynamics calculation
     logical, intent(in) :: tMd
 
@@ -780,11 +760,20 @@ contains
     !> File unit for autotest data
     integer, intent(out) :: fdAutotest
 
+    !> Filename for regression data
+    character(*), intent(in) :: autotestTag
+
     !> File unit for tagged results data
     integer, intent(out) :: fdResultsTag
 
+    !> Filename for output in machine readable format
+    character(*), intent(in) :: resultsTag
+
     !> File unit for band structure
     integer, intent(out) :: fdBand
+
+    !> Filename for bandstructure
+    character(*), intent(in) :: bandOut
 
     !> File unit for eigenvectors
     integer, intent(out) :: fdEigvec
@@ -792,18 +781,22 @@ contains
     !> File unit for second derivatives information
     integer, intent(out) :: fdHessian
 
+    !> Filename for second derivatives output
+    character(*), intent(in) :: hessianOut
+
     !> File unit for detailed.out
     integer, intent(out) :: fdDetailedOut
 
     !> File unit for information during molecular dynamics
     integer, intent(out) :: fdMd
 
+    !> Filename for detailed molecular dynamics data
+    character(*), intent(in) :: mdOut
+
     !> File descriptor for charge restart file
-    integer, intent(out) :: fdChargeBin
+    integer, intent(out) :: fdCharges
 
 
-    
-    
     call initTaggedWriter()
     if (tWriteAutotest) then
       call initOutputFile(autotestTag, fdAutotest)
@@ -828,7 +821,7 @@ contains
       call clearFile(trim(geoOutFile) // ".gen")
       call clearFile(trim(geoOutFile) // ".xyz")
     end if
-    fdChargeBin = getFileId()
+    fdCharges = getFileId()
 
   end subroutine initOutputFiles
 
@@ -3516,10 +3509,10 @@ contains
 
   !> Do the linear response excitation calculation.
   subroutine calculateLinRespExcitations(lresp, sccCalc, qOutput, q0, over, HSqrReal, eigen,&
-      & filling, coord0, species, speciesName, orb, skHamCont, skOverCont, fdAutotest, fdEigvec,&
-      & runId, neighborList, nNeighbor, iDenseStart, iSparseStart, img2CentCell, tWriteAutotest,&
-      & tForces, tLinRespZVect, tPrintExcitedEigvecs, nonSccDeriv, energy, SSqrReal, rhoSqrReal,&
-      & excitedDerivs, occNatural)
+      & filling, coord0, species, speciesName, orb, skHamCont, skOverCont, fdAutotest, autotestTag,&
+      & fdEigvec, runId, neighborList, nNeighbor, iDenseStart, iSparseStart, img2CentCell,&
+      & tWriteAutotest, tForces, tLinRespZVect, tPrintExcitedEigvecs, nonSccDeriv, energy,&
+      & SSqrReal, rhoSqrReal, excitedDerivs, occNatural)
 
     !> excited state settings
     type(LinResp), intent(inout) :: lresp
@@ -3565,6 +3558,9 @@ contains
 
     !> file ID for regression data
     integer, intent(in) :: fdAutotest
+
+    !> name of file to write regression data
+    character(*), intent(in) :: autotestTag
 
     !> File ID for ground state eigenvectors
     integer, intent(in) :: fdEigvec
