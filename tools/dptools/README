@@ -29,6 +29,9 @@ xyz2gen
 straingen applies uniaxial, isotropic or shear strains to geometries,
   with principle axes aligned with the cartesian directions.
 
+makecube converts grided data to formats than can be plotted (VTK and
+  Gaussian cube).
+
 Each script can be invoked with the option ``-h`` to obtain a short
 summary about its usage and possible options.
 
