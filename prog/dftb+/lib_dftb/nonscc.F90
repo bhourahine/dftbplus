@@ -100,7 +100,7 @@ contains
     ! Put the on-site energies into the Hamiltonian,
     ! and <lm|l'm'> = delta_l,l' * delta_m',m' for the overlap  !'
     !$OMP PARALLEL DO PRIVATE(iAt1, iSp1, ind, iOrb1) DEFAULT(SHARED) SCHEDULE(RUNTIME)
-    do iAt1 = iAtFirst, iAtLast
+    do iAt1 = 1+env%mpi%groupComm%rank, nAtom, env%mpi%groupComm%size !iAtFirst, iAtLast
       iSp1 = species(iAt1)
       ind = iPair(0, iAt1) + 1
       do iOrb1 = 1, orb%nOrbAtom(iAt1)
@@ -110,8 +110,8 @@ contains
     end do
     !$OMP  END PARALLEL DO
 
-    call buildDiatomicBlocks(iAtFirst, iAtLast, skHamCont, coords, nNeighbors, iNeighbors, species,&
-        & iPair, orb, ham)
+    call buildDiatomicBlocks(env, nAtom, iAtFirst, iAtLast, skHamCont, coords, nNeighbors,&
+        & iNeighbors, species, iPair, orb, ham)
 
     call assembleChunks(env, ham)
 
@@ -157,7 +157,7 @@ contains
 
     ! Put 1.0 for the diagonal elements of the overlap.
     !$OMP PARALLEL DO PRIVATE(iAt1, iSp1, ind, iOrb1) DEFAULT(SHARED) SCHEDULE(RUNTIME)
-    do iAt1 = iAtFirst, iAtLast
+    do iAt1 = 1+env%mpi%groupComm%rank, nAtom, env%mpi%groupComm%size !iAtFirst, iAtLast
       iSp1 = species(iAt1)
       ind = iPair(0,iAt1) + 1
       do iOrb1 = 1, orb%nOrbAtom(iAt1)
@@ -167,8 +167,8 @@ contains
     end do
     !$OMP  END PARALLEL DO
 
-    call buildDiatomicBlocks(iAtFirst, iAtLast, skOverCont, coords, nNeighbors, iNeighbors,&
-        & species, iPair, orb, over)
+    call buildDiatomicBlocks(env, nAtom, iAtFirst, iAtLast, skOverCont, coords, nNeighbors,&
+        & iNeighbors, species, iPair, orb, over)
 
     call assembleChunks(env, over)
 
@@ -280,8 +280,12 @@ contains
 
 
   !> Helper routine to calculate the diatomic blocks for the routines buildH0 and buildS.
-  subroutine buildDiatomicBlocks(firstAtom, lastAtom, skCont, coords, nNeighbors, &
+  subroutine buildDiatomicBlocks(env, nAtom, firstAtom, lastAtom, skCont, coords, nNeighbors, &
       & iNeighbors, species, iPair, orb, out)
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+    integer, intent(in) :: nAtom
     integer, intent(in) :: firstAtom
     integer, intent(in) :: lastAtom
     type(OSlakoCont), intent(in) :: skCont
@@ -302,7 +306,7 @@ contains
     ! Do the diatomic blocks for each of the atoms with its nNeighbors
     !$OMP PARALLEL DO PRIVATE(iAt1,iSp1,nOrb1,iNeigh1,iAt2,iSp2,nOrb2,ind,vect,dist,tmp,interSK) &
     !$OMP& DEFAULT(SHARED) SCHEDULE(RUNTIME)
-    do iAt1 = firstAtom, lastAtom
+    do iAt1 = 1+env%mpi%groupComm%rank, nAtom, env%mpi%groupComm%size
       iSp1 = species(iAt1)
       nOrb1 = orb%nOrbSpecies(iSp1)
       do iNeigh1 = 1, nNeighbors(iAt1)
