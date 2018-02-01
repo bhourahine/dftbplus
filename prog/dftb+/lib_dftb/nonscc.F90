@@ -61,7 +61,7 @@ contains
       & species, iPair, orb)
 
     !> Computational environment settings
-    type(TEnvironment), intent(in) :: env
+    type(TEnvironment), intent(inout) :: env
 
     !> Returns the non-self-consistent Hamiltonian
     real(dp), intent(out) :: ham(:)
@@ -99,6 +99,7 @@ contains
 
     ! Put the on-site energies into the Hamiltonian,
     ! and <lm|l'm'> = delta_l,l' * delta_m',m' for the overlap  !'
+    call env%globalTimer%startTimer(globalTimers%sparseH0SBldOns)
     !$OMP PARALLEL DO PRIVATE(iAt1, iSp1, ind, iOrb1) DEFAULT(SHARED) SCHEDULE(RUNTIME)
     do iAt1 = 1+env%mpi%groupComm%rank, nAtom, env%mpi%groupComm%size !iAtFirst, iAtLast
       iSp1 = species(iAt1)
@@ -109,11 +110,16 @@ contains
       end do
     end do
     !$OMP  END PARALLEL DO
+    call env%globalTimer%stopTimer(globalTimers%sparseH0SBldOns)
 
+    call env%globalTimer%startTimer(globalTimers%sparseH0SBldDia)
     call buildDiatomicBlocks(env, nAtom, iAtFirst, iAtLast, skHamCont, coords, nNeighbors,&
         & iNeighbors, species, iPair, orb, ham)
+    call env%globalTimer%stopTimer(globalTimers%sparseH0SBldDia)
 
+    call env%globalTimer%startTimer(globalTimers%sparseH0SComm)
     call assembleChunks(env, ham)
+    call env%globalTimer%stopTimer(globalTimers%sparseH0SComm)
 
   end subroutine buildH0
 
@@ -122,7 +128,7 @@ contains
       & iPair, orb)
 
     !> Computational environment settings
-    type(TEnvironment), intent(in) :: env
+    type(TEnvironment), intent(inout) :: env
 
     !> Returns the overlap
     real(dp), intent(out) :: over(:)
@@ -155,6 +161,7 @@ contains
 
     call distributeRangeInChunks(env, 1, nAtom, iAtFirst, iAtLast)
 
+    call env%globalTimer%startTimer(globalTimers%sparseH0SBldOns)
     ! Put 1.0 for the diagonal elements of the overlap.
     !$OMP PARALLEL DO PRIVATE(iAt1, iSp1, ind, iOrb1) DEFAULT(SHARED) SCHEDULE(RUNTIME)
     do iAt1 = 1+env%mpi%groupComm%rank, nAtom, env%mpi%groupComm%size !iAtFirst, iAtLast
@@ -166,11 +173,16 @@ contains
       end do
     end do
     !$OMP  END PARALLEL DO
+    call env%globalTimer%stopTimer(globalTimers%sparseH0SBldOns)
 
+    call env%globalTimer%startTimer(globalTimers%sparseH0SBldDia)
     call buildDiatomicBlocks(env, nAtom, iAtFirst, iAtLast, skOverCont, coords, nNeighbors,&
         & iNeighbors, species, iPair, orb, over)
+    call env%globalTimer%stopTimer(globalTimers%sparseH0SBldDia)
 
+    call env%globalTimer%startTimer(globalTimers%sparseH0SComm)
     call assembleChunks(env, over)
+    call env%globalTimer%stopTimer(globalTimers%sparseH0SComm)
 
   end subroutine buildS
 
