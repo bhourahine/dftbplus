@@ -991,7 +991,7 @@ contains
   #:if WITH_SCALAPACK
     call initScalapack(input%ctrl%parallelOpts%blacsOpts, nAtom, nOrb, t2Component, env)
   #:endif
-    call TParallelKS_init(parallelKS, env, nKPoint, nIndepHam)
+    call TParallelKS_init(parallelKS, env, nKPoint, nIndepHam, 1)
 
     sccTol = input%ctrl%sccTol
     tShowFoldedCoord = input%ctrl%tShowFoldedCoord

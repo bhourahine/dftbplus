@@ -39,10 +39,10 @@ module parallelks
   end type TParallelKS
 
 contains
-  
+
   !> Returns the (k-point, spin) tuples to be processed by current processor grid (if parallel) or
   !> put everything in one group if serial.
-  subroutine TParallelKS_init(this, env, nKpoint, nSpin)
+  subroutine TParallelKS_init(this, env, nKpoint, nSpin, nReplicas)
 
     !> Initialised instance on exti.
     type(TParallelKS), intent(out) :: this
@@ -56,14 +56,17 @@ contains
     !> Number of spin channels in calculation
     integer, intent(in) :: nSpin
 
+    !> Number of distinct structures in calculation
+    integer, intent(in) :: nReplicas
+
     integer :: nGroup, myGroup, iGroup
     integer :: maxGroupKS, nKS, res
-    integer :: iS, iK
+    integer :: iS, iK, iR
 
     nGroup = env%nGroup
     myGroup = env%myGroup
 
-    nKS = nKpoint * nSpin
+    nKS = nKpoint * nSpin * nReplicas
     maxGroupKS = nKS / nGroup
     res = nKS - maxGroupKS * nGroup
     if (res > 0) then
@@ -72,13 +75,17 @@ contains
 
     allocate(this%nGroupKS(0 : nGroup - 1))
     this%nGroupKS(:) = 0
-    allocate(this%groupKS(2, maxGroupKS, 0 : nGroup - 1))
+    allocate(this%groupKS(3, maxGroupKS, 0 : nGroup - 1))
     this%groupKS(:,:,:) = 0
-    do iS = 1, nSpin
-      do iK = 1, nKpoint
-        iGroup = mod((iS - 1) * nKpoint + iK - 1, nGroup)
-        this%nGroupKS(iGroup) = this%nGroupKS(iGroup) + 1
-        this%groupKS(:, this%nGroupKS(iGroup), iGroup) = [iK, iS]
+    iGroup = 0
+    do iR = 1, nReplicas
+      do iS = 1, nSpin
+        do iK = 1, nKpoint
+          iGroup = iGroup + 1
+          iGroup = mod(iGroup, nGroup)
+          this%nGroupKS(iGroup) = this%nGroupKS(iGroup) + 1
+          this%groupKS(:, this%nGroupKS(iGroup), iGroup) = [iK, iS, iR]
+        end do
       end do
     end do
     this%maxGroupKS = maxGroupKS
