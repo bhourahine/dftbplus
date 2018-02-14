@@ -240,7 +240,7 @@ contains
           & EFieldVector, EFieldOmega, EFieldPhase, neighborList, nNeighbor, iCellVec,&
           & img2CentCell, cellVec, deltaT, iGeoStep, coord0Fold, coord, EField,&
           & potential%extAtom(:,1), absEField)
-    
+
       call mergeExternalPotentials(orb, species, potential)
 
       call initSccLoop(tSccCalc, xlbomdIntegrator, minSccIter, maxSccIter, sccTol, tConverged)
@@ -1551,7 +1551,7 @@ contains
     !> Number of electrons
     real(dp), intent(in) :: nEl(:)
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> Fermi level(s)
@@ -1702,7 +1702,7 @@ contains
     !> Eigensolver choice
     integer, intent(in) :: solver
 
-    !> K-points and spins to be handled
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> dense hamitonian matrix
@@ -1792,7 +1792,7 @@ contains
     !> Eigensolver choice
     integer, intent(in) :: solver
 
-    !> K-points and spins to be handled
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> dense hamitonian matrix
@@ -1885,7 +1885,7 @@ contains
     !> Eigensolver choice
     integer, intent(in) :: solver
 
-    !> K-points and spins to be handled
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> eigenvalues
@@ -1985,7 +1985,7 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> eigenvectors
@@ -2080,7 +2080,7 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> eigenvectors of the system
@@ -2187,7 +2187,7 @@ contains
     !> species of all atoms in the system
     integer, intent(in) :: species(:)
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> eigenvectors
@@ -3038,7 +3038,7 @@ contains
     !> excited state settings
     type(LinResp), intent(inout) :: lresp
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> SCC module internal variables
@@ -3411,7 +3411,7 @@ contains
     !> Sparse overlap
     real(dp), intent(in) :: over(:)
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     real(dp), intent(out) :: ERhoPrim(:)
@@ -3490,7 +3490,7 @@ contains
     !> Sparse overlap
     real(dp), intent(in) :: over(:)
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> Eigenvectors (NOTE: they will be rewritten with work data on exit!)
@@ -3652,7 +3652,7 @@ contains
     !> Sparse overlap
     real(dp), intent(in) :: over(:)
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     complex(dp), intent(inout) :: eigvecsCplx(:,:,:)
@@ -3810,7 +3810,7 @@ contains
     !> Is the hamitonian real (no k-points/molecule/gamma point)?
     logical, intent(in) :: tRealHS
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> Eigenvectors
@@ -4610,7 +4610,7 @@ contains
     !> label for each atomic chemical species
     character(*), intent(in) :: speciesName(:)
 
-    !> K-points and spins to process
+    !> K-points, spins and structure replicas to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
     !> Localisation measure of single particle states

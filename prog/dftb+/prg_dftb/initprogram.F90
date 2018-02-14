@@ -78,6 +78,7 @@ module initprogram
   use potentials
   use taggedoutput
   use formatout
+  use, intrinsic :: iso_fortran_env, only : output_unit
   implicit none
 
   !> Tagged output files (machine readable)
@@ -884,7 +885,7 @@ contains
     !> flag to check for first cycle through a loop
     logical :: tFirst
 
-    !> Nr. of Hamiltonians to diagonalise independently
+    !> Nr. of Hamiltonians to diagonalise independently for a structure at each k-point
     integer :: nIndepHam
 
     real(dp) :: rTmp
@@ -1207,9 +1208,11 @@ contains
     end if
 
     ! Initial coordinates
+
     allocate(coord0(3, nAtom))
-    @:ASSERT(all(shape(coord0) == shape(input%geom%coords)))
-    coord0(:,:) = input%geom%coords(:,:)
+    @:ASSERT(all(shape(shape(input%geom%coords)) == [3,nAtom,parallelKS%nTotalReplicas]))
+    @:ASSERT(all(parallelKS%localKS(3, :) == parallelKS%localKS(3, 1)))
+    coord0(:,:) = input%geom%coords(:,:, parallelKS%localKS(3, 1))
     tCoordsChanged = .true.
 
     allocate(species0(nAtom))
@@ -2102,6 +2105,7 @@ contains
 
   #:if WITH_SCALAPACK
     associate (blacsOpts => input%ctrl%parallelOpts%blacsOpts)
+      ! need to update atom grid to cope with replicas:
       call getDenseDescBlacs(env, blacsOpts%blockSize, blacsOpts%blockSize, denseDesc)
     end associate
   #:endif
@@ -2228,7 +2232,10 @@ contains
         & env%blacs%orbitalGrid%nRow, env%blacs%orbitalGrid%nCol
     write(stdOut, "('BLACS atom grid size:', T30, I0, ' x ', I0)") &
         & env%blacs%atomGrid%nRow, env%blacs%atomGrid%nCol
-  #:endif  
+  #:endif
+
+    write(output_unit,*)'I am with replica',parallelKS%localKS(3, 1),' of ',&
+        & parallelKS%nTotalReplicas
 
     if (tRandomSeed) then
       write(stdOut, "(A,':',T30,I14)") "Chosen random seed", iSeed

@@ -19,22 +19,31 @@ module parallelks
   !> Contains information about which k-points and spins must be processed by which processor group
   type :: TParallelKS
 
-    !> K-point and spin-channels to be processed by each processor group (groupKS(1:2,iKS,iGroup)).
-    !> Note: third index (group index) starts from 0
+    !> K-point, spin-channels and structure replicas to be processed by each processor group
+    !> (groupKS(1:2,iKS,iGroup)).  Note: third index (group index) starts from 0
     integer, allocatable :: groupKS(:,:,:)
 
-    !> Number of (K, S) tuples to process for each group.
-    !> Note: array index (group index) starts from 0
+    !> Number of (K, S, R) tuples to process for each group.  Note: the array index (group index)
+    !> starts from 0
     integer, allocatable :: nGroupKS(:)
 
     !> Maximal number of KS-indices per processor group
     integer :: maxGroupKS
 
-    !> The (K, S) tuples of the local processor group
+    !> The (K, S, R) tuples of the local processor group
     integer, allocatable :: localKS(:,:)
 
-    !> Number of local (K, S) tuples to process
+    !> Number of local (K, S, R) tuples to process
     integer :: nLocalKS
+
+    !> Total number of kpoints in use
+    integer :: nTotalKpoint
+
+    !> Total number of spin channels in use
+    integer :: nTotalSpin
+
+    !> Total number of structure replicas in use
+    integer :: nTotalReplicas
 
   end type TParallelKS
 
@@ -65,6 +74,10 @@ contains
 
     nGroup = env%nGroup
     myGroup = env%myGroup
+
+    this%nTotalKpoint = nKpoint
+    this%nTotalSpin = nSpin
+    this%nTotalReplicas = nReplicas
 
     nKS = nKpoint * nSpin * nReplicas
     maxGroupKS = nKS / nGroup
