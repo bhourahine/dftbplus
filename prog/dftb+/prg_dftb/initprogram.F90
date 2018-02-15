@@ -910,6 +910,9 @@ contains
     !> Is SCC cycle initialised
     type(TSccInp), allocatable :: sccInp
 
+    !> workspace
+    real(dp), allocatable :: r3Tmp(:,:,:)
+
     !> Used for indexing linear response
     integer :: homoLoc(1)
 
@@ -986,13 +989,26 @@ contains
       tRealHS = .false.
     end if
 
+    ! temporary change for testing purposes
+    if (input%ctrl%nReplicas > 1) then
+      allocate(r3Tmp(3,nAtom,input%ctrl%nReplicas))
+      r3Tmp = 0.0_dp
+      do ii = 1, input%ctrl%nReplicas
+        r3Tmp(:,:,ii) = input%geom%coords(:,:,1)
+      end do
+      call move_alloc(r3Tmp,input%geom%coords)
+      write(*,*)shape(input%geom%coords)
+    elseif (input%ctrl%nReplicas < 0) then
+      call error("Nonsensical replica count")
+    end if
+
   #:if WITH_MPI
-    call env%initMpi(input%ctrl%parallelOpts%nGroup)
+    call env%initMpi(input%ctrl%parallelOpts%nGroup, input%ctrl%nReplicas)
   #:endif
   #:if WITH_SCALAPACK
     call initScalapack(input%ctrl%parallelOpts%blacsOpts, nAtom, nOrb, t2Component, env)
   #:endif
-    call TParallelKS_init(parallelKS, env, nKPoint, nIndepHam, 1)
+    call TParallelKS_init(parallelKS, env, nKPoint, nIndepHam, size(input%geom%coords,dim=3))
 
     sccTol = input%ctrl%sccTol
     tShowFoldedCoord = input%ctrl%tShowFoldedCoord
@@ -1210,7 +1226,8 @@ contains
     ! Initial coordinates
 
     allocate(coord0(3, nAtom))
-    @:ASSERT(all(shape(shape(input%geom%coords)) == [3,nAtom,parallelKS%nTotalReplicas]))
+    @:ASSERT(all(shape(input%geom%coords) == [3,nAtom,parallelKS%nTotalReplicas]))
+    ! assume there is only one replica in this processor's group
     @:ASSERT(all(parallelKS%localKS(3, :) == parallelKS%localKS(3, 1)))
     coord0(:,:) = input%geom%coords(:,:, parallelKS%localKS(3, 1))
     tCoordsChanged = .true.

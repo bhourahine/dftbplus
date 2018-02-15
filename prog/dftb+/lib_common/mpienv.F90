@@ -28,11 +28,20 @@ module mpienv
     !> Communicator to access equivalent processes in other groups
     type(mpifx_comm) :: interGroupComm
 
+    !> Communicator to access processes within a replica
+    type(mpifx_comm) :: intraReplicaComm
+
+    !> Communicator to between replicas
+    type(mpifx_comm) :: interReplicaComm
+
     !> Size of the process groups
     integer :: groupSize
 
     !> Number of processor groups
     integer :: nGroup
+
+    !> Size of the group of replica
+    integer :: replicaCommSize
 
     !> Group index of the current process (starts with 0)
     integer :: myGroup
@@ -46,13 +55,16 @@ module mpienv
     !> Whether current process is the group master
     logical :: tGroupMaster
 
+    !> Whether current process is the replica master
+    logical :: tReplicaMaster
+
   end type TMpiEnv
 
 
 contains
 
   !> Initializes MPI environment.
-  subroutine TMpiEnv_init(this, nGroup)
+  subroutine TMpiEnv_init(this, nGroup, nReplicas)
 
     !> Initialised instance on exit
     type(TMpiEnv), intent(out) :: this
@@ -60,11 +72,14 @@ contains
     !> Number of process groups to create
     integer, intent(in) :: nGroup
 
+    !> Number of structure replicas
+    integer, intent(in) :: nReplicas
+
     character(lc) :: tmpStr
     integer :: myRank, myGroup
 
     call this%globalComm%init()
-    this%nGroup = nGroup
+    this%nGroup = nGroup * nReplicas
     this%groupSize = this%globalComm%size / this%nGroup
     if (this%nGroup * this%groupSize /= this%globalComm%size) then
       write(tmpStr, "(A,I0,A,I0,A)") "Number of groups (", this%nGroup,&
