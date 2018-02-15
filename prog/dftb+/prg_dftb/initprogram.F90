@@ -997,7 +997,6 @@ contains
         r3Tmp(:,:,ii) = input%geom%coords(:,:,1)
       end do
       call move_alloc(r3Tmp,input%geom%coords)
-      write(*,*)shape(input%geom%coords)
     elseif (input%ctrl%nReplicas < 0) then
       call error("Nonsensical replica count")
     end if
