@@ -995,8 +995,11 @@ contains
       r3Tmp = 0.0_dp
       do ii = 1, input%ctrl%nReplicas
         r3Tmp(:,:,ii) = input%geom%coords(:,:,1)
+        ! make small structure difference in images
+        r3Tmp(1,1,ii) = r3Tmp(1,1,ii) + 0.1_dp*(ii-1)
       end do
       call move_alloc(r3Tmp,input%geom%coords)
+      write(*,*)'Coords',input%geom%coords
     elseif (input%ctrl%nReplicas < 0) then
       call error("Nonsensical replica count")
     end if
@@ -1228,7 +1231,9 @@ contains
     @:ASSERT(all(shape(input%geom%coords) == [3,nAtom,parallelKS%nTotalReplicas]))
     ! assume there is only one replica in this processor's group
     @:ASSERT(all(parallelKS%localKS(3, :) == parallelKS%localKS(3, 1)))
-    coord0(:,:) = input%geom%coords(:,:, parallelKS%localKS(3, 1))
+    write(*,*)'HERE ',env%mpi%myReplica,parallelKS%localKS(3, 1)
+    coord0(:,:) = input%geom%coords(:, :, env%mpi%myReplica+1)
+    write(*,*)env%mpi%myReplica,coord0(:,:)
     tCoordsChanged = .true.
 
     allocate(species0(nAtom))

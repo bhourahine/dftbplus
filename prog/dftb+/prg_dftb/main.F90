@@ -279,6 +279,11 @@ contains
             & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
             & eigvecsCplx, rhoSqrReal)
 
+        ! need to move into writeBandOut and modify
+        if (env%mpi%tReplicaMaster) then
+          write(*,*)'Master of replica',env%mpi%myReplica,eigen
+        end if
+
         if (tWriteBandDat) then
           call writeBandOut(fdBand, bandOut, eigen, filling, kWeight)
         end if
@@ -1745,7 +1750,7 @@ contains
 
   #:if WITH_SCALAPACK
     ! Distribute all eigenvalues to all nodes via global summation
-    call mpifx_allreduceip(env%mpi%interGroupComm, eigen, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%interReplicaComm, eigen, MPI_SUM)
   #:endif
 
   end subroutine buildAndDiagDenseRealHam
@@ -1835,7 +1840,7 @@ contains
     end do
 
   #:if WITH_SCALAPACK
-    call mpifx_allreduceip(env%mpi%interGroupComm, eigen, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%interReplicaComm, eigen, MPI_SUM)
   #:endif
 
   end subroutine buildAndDiagDenseCplxHam
@@ -1951,7 +1956,7 @@ contains
     end do
 
   #:if WITH_SCALAPACK
-    call mpifx_allreduceip(env%mpi%interGroupComm, eigen, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%interReplicaComm, eigen, MPI_SUM)
   #:endif
 
   end subroutine buildAndDiagDensePauliHam
@@ -2033,7 +2038,7 @@ contains
 
   #:if WITH_SCALAPACK
     ! Add up and distribute density matrix contribution from each group
-    call mpifx_allreduceip(env%mpi%globalComm, rhoPrim, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%intraReplicaComm, rhoPrim, MPI_SUM)
   #:endif
 
   end subroutine getDensityFromRealEigvecs
@@ -2124,7 +2129,7 @@ contains
 
   #:if WITH_SCALAPACK
     ! Add up and distribute density matrix contribution from each group
-    call mpifx_allreduceip(env%mpi%globalComm, rhoPrim, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%intraReplicaComm, rhoPrim, MPI_SUM)
   #:endif
 
   end subroutine getDensityFromCplxEigvecs
@@ -2291,13 +2296,13 @@ contains
   #:if WITH_SCALAPACK
     call env%globalTimer%startTimer(globalTimers%denseToSparse)
     ! Add up and distribute contributions from each group
-    call mpifx_allreduceip(env%mpi%globalComm, rhoPrim, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%intraReplicaComm, rhoPrim, MPI_SUM)
     if (allocated(iRhoPrim)) then
-      call mpifx_allreduceip(env%mpi%globalComm, iRhoPrim, MPI_SUM)
+      call mpifx_allreduceip(env%mpi%intraReplicaComm, iRhoPrim, MPI_SUM)
     end if
-    call mpifx_allreduceip(env%mpi%globalComm, energy%atomLS, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%intraReplicaComm, energy%atomLS, MPI_SUM)
     if (tMulliken .and. tSpinOrbit .and. .not. tDualSpinOrbit) then
-      call mpifx_allreduceip(env%mpi%globalComm, orbitalL, MPI_SUM)
+      call mpifx_allreduceip(env%mpi%intraReplicaComm, orbitalL, MPI_SUM)
     end if
     call env%globalTimer%stopTimer(globalTimers%denseToSparse)
   #:endif
@@ -2778,8 +2783,8 @@ contains
         call mix(pChrgMixer, qInpRed, qDiffRed)
       #:if WITH_MPI
         ! Synchronise charges in order to avoid mixers that store a history drifting apart
-        call mpifx_allreduceip(env%mpi%globalComm, qInpRed, MPI_SUM)
-        qInpRed(:) = qInpRed / env%mpi%globalComm%size
+        call mpifx_allreduceip(env%mpi%intraReplicaComm, qInpRed, MPI_SUM)
+        qInpRed(:) = qInpRed / env%mpi%intraReplicaComm%size
       #:endif
         call expandCharges(qInpRed, orb, nIneqOrb, iEqOrbitals, qInput, qBlockIn, iEqBlockDftbu,&
             & species0, nUJ, iUJ, niUJ, qiBlockIn, iEqBlockDftbuLS)
@@ -3598,7 +3603,7 @@ contains
 
   #:if WITH_SCALAPACK
     ! Add up and distribute energy weighted density matrix contribution from each group
-    call mpifx_allreduceip(env%mpi%globalComm, ERhoPrim, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%intraReplicaComm, ERhoPrim, MPI_SUM)
   #:endif
 
   end subroutine getEDensityMtxFromRealEigvecs
@@ -3757,7 +3762,7 @@ contains
 
   #:if WITH_SCALAPACK
     ! Add up and distribute energy weighted density matrix contribution from each group
-    call mpifx_allreduceip(env%mpi%globalComm, ERhoPrim, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%intraReplicaComm, ERhoPrim, MPI_SUM)
   #:endif
 
   end subroutine getEDensityMtxFromComplexEigvecs
@@ -3848,7 +3853,7 @@ contains
 
   #:if WITH_SCALAPACK
     ! Add up and distribute energy weighted density matrix contribution from each group
-    call mpifx_allreduceip(env%mpi%globalComm, ERhoPrim, MPI_SUM)
+    call mpifx_allreduceip(env%mpi%intraReplicaComm, ERhoPrim, MPI_SUM)
   #:endif
 
   end subroutine getEDensityMtxFromPauliEigvecs
