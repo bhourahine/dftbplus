@@ -88,7 +88,6 @@ contains
     nProcCol = min(nProcCol, maxProcColMax)
     call getGridMap(myMpiEnv%groupMembers, nProcRow, nProcCol, gridMap)
     call this%atomGrid%initmappedgrids(gridMap)
-
     this%rowBlockSize = rowBlock
     this%columnBlockSize = colBlock
 

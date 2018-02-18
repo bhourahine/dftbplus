@@ -19,21 +19,21 @@ module parallelks
   !> Contains information about which k-points and spins must be processed by which processor group
   type :: TParallelKS
 
-    !> K-point, spin-channels and structure replicas to be processed by each processor group
-    !> (groupKS(1:2,iKS,iGroup)).  Note: third index (group index) starts from 0
+    !> K-points and spin-channels to be processed by each processor group (groupKS(1:2,iKS,iGroup)).
+    !> Note: third index (group index) starts from 0
     integer, allocatable :: groupKS(:,:,:)
 
-    !> Number of (K, S, R) tuples to process for each group.  Note: the array index (group index)
+    !> Number of (K, S) tuples to process for each group.  Note: the array index (group index)
     !> starts from 0
     integer, allocatable :: nGroupKS(:)
 
     !> Maximal number of KS-indices per processor group
     integer :: maxGroupKS
 
-    !> The (K, S, R) tuples of the local processor group
+    !> The (K, S) tuples of the local processor group
     integer, allocatable :: localKS(:,:)
 
-    !> Number of local (K, S, R) tuples to process
+    !> Number of local (K, S) tuples to process
     integer :: nLocalKS
 
     !> Total number of kpoints in use
@@ -42,18 +42,15 @@ module parallelks
     !> Total number of spin channels in use
     integer :: nTotalSpin
 
-    !> Total number of structure replicas in use
-    integer :: nTotalReplicas
-
   end type TParallelKS
 
 contains
 
   !> Returns the (k-point, spin) tuples to be processed by current processor grid (if parallel) or
   !> put everything in one group if serial.
-  subroutine TParallelKS_init(this, env, nKpoint, nSpin, nReplicas)
+  subroutine TParallelKS_init(this, env, nKpoint, nSpin)
 
-    !> Initialised instance on exti.
+    !> Initialised instance on exit
     type(TParallelKS), intent(out) :: this
 
     !> Environenment settings
@@ -65,21 +62,17 @@ contains
     !> Number of spin channels in calculation
     integer, intent(in) :: nSpin
 
-    !> Number of distinct structures in calculation
-    integer, intent(in) :: nReplicas
-
     integer :: nGroup, myGroup, iGroup
     integer :: maxGroupKS, nKS, res
-    integer :: iS, iK, iR
+    integer :: iS, iK
 
     nGroup = env%nGroup
     myGroup = env%myGroup
 
     this%nTotalKpoint = nKpoint
     this%nTotalSpin = nSpin
-    this%nTotalReplicas = nReplicas
 
-    nKS = nKpoint * nSpin * nReplicas
+    nKS = nKpoint * nSpin
     maxGroupKS = nKS / nGroup
     res = nKS - maxGroupKS * nGroup
     if (res > 0) then
@@ -88,17 +81,15 @@ contains
 
     allocate(this%nGroupKS(0 : nGroup - 1))
     this%nGroupKS(:) = 0
-    allocate(this%groupKS(3, maxGroupKS, 0 : nGroup - 1))
+    allocate(this%groupKS(2, maxGroupKS, 0 : nGroup - 1))
     this%groupKS(:,:,:) = 0
     iGroup = 0
-    do iR = 1, nReplicas
-      do iS = 1, nSpin
-        do iK = 1, nKpoint
-          iGroup = iGroup + 1
-          iGroup = mod(iGroup, nGroup)
-          this%nGroupKS(iGroup) = this%nGroupKS(iGroup) + 1
-          this%groupKS(:, this%nGroupKS(iGroup), iGroup) = [iK, iS, iR]
-        end do
+    do iS = 1, nSpin
+      do iK = 1, nKpoint
+        iGroup = iGroup + 1
+        iGroup = mod(iGroup, nGroup)
+        this%nGroupKS(iGroup) = this%nGroupKS(iGroup) + 1
+        this%groupKS(:, this%nGroupKS(iGroup), iGroup) = [iK, iS]
       end do
     end do
     this%maxGroupKS = maxGroupKS

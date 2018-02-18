@@ -37,6 +37,9 @@ module mpienv
     !> Group index of the current process (starts with 0)
     integer :: myGroup
 
+    !> Rank within my group
+    integer :: myGroupRank
+
     !> Global rank of the processes in the given group
     integer, allocatable :: groupMembers(:)
 
@@ -57,6 +60,9 @@ module mpienv
 
     !> Replica group index the current process belongs to (starts with 0)
     integer :: myReplica
+
+    !> Rank within my replica
+    integer :: myReplicaRank
 
     !> Global rank of the processes in the given replica group
     integer, allocatable :: replicaMembers(:)
@@ -82,53 +88,61 @@ contains
     integer, intent(in) :: nReplicas
 
     character(lc) :: tmpStr
-    integer :: myRank, myGroup
 
     call this%globalComm%init()
 
-    this%nGroup = nGroup * nReplicas
-    this%groupSize = this%globalComm%size / this%nGroup
+    ! processors in a replica group
+    this%replicaCommSize = this%globalComm%size / nReplicas
 
-    if (this%nGroup * this%groupSize /= this%globalComm%size) then
-      write(tmpStr, "(A,I0,A,I0,A)") "Number of groups (", this%nGroup,&
+    if (nReplicas * this%replicaCommSize /= this%globalComm%size) then
+      write(tmpStr, "(A,I0,A,I0,A)") "Number of replicas (", nReplicas,&
           & ") not compatible with number of processes (", this%globalComm%size, ")"
       call error(tmpStr)
     end if
 
-    ! group this process belongs to
-    this%myGroup = this%globalComm%rank / this%groupSize
-
-    ! rank within the group
-    myRank = mod(this%globalComm%rank, this%groupSize)
-
-    ! communicator within this group
-    call this%globalComm%split(this%myGroup, myRank, this%groupComm)
-
-    ! array of global process ids within this group
-    allocate(this%groupMembers(this%groupSize))
-    call mpifx_allgather(this%groupComm, this%globalComm%rank, this%groupMembers)
-
-    myGroup = myRank
-    myRank = this%myGroup
-    call this%globalComm%split(myGroup, myRank, this%interGroupComm)
-
-    ! processors in a replica group
-    this%replicaCommSize = this%globalComm%size / nReplicas
     ! replica group this process belongs to
-    this%myReplica = this%globalComm%rank / max(nReplicas-1,1)
+    this%myReplica = this%globalComm%rank / this%replicaCommSize
+
     ! rank within the replica group
-    myRank = mod(this%globalComm%rank, this%replicaCommSize)
+    this%myReplicaRank = mod(this%globalComm%rank, this%replicaCommSize)
+
     ! communicator within this replica
-    call this%globalComm%split(this%myReplica, myRank, this%intraReplicaComm)
+    call this%globalComm%split(this%myReplica, this%myReplicaRank, this%intraReplicaComm)
 
     ! array of global process ids within this replica
     allocate(this%replicaMembers(this%replicaCommSize))
     call mpifx_allgather(this%intraReplicaComm, this%globalComm%rank, this%replicaMembers)
 
     ! communicator to equivalent processors in different replicas
-    myGroup = myRank
-    myRank = this%myReplica
-    call this%globalComm%split(myGroup, myRank, this%interReplicaComm)
+    call this%globalComm%split(this%myReplicaRank, this%myReplica, this%interReplicaComm)
+
+    ! groups within a replica
+    this%nGroup = nGroup
+
+    this%groupSize = this%intraReplicaComm%size / this%nGroup
+
+    if (this%nGroup * this%groupSize /= this%intraReplicaComm%size) then
+      write(tmpStr, "(A,I0,A,I0,A)") "Number of groups (", this%nGroup,&
+          & ") not compatible with number of processes per replica (",&
+          & this%globalComm%size/nReplicas, ")"
+      call error(tmpStr)
+    end if
+
+    ! group this process belongs to
+    this%myGroup = this%intraReplicaComm%rank / this%groupSize
+
+    ! rank within the group
+    this%myGroupRank = mod(this%intraReplicaComm%rank, this%groupSize)
+
+    ! communicator within this group
+    call this%intraReplicaComm%split(this%myGroup, this%myGroupRank, this%groupComm)
+
+    ! array of global process ids within this group
+    allocate(this%groupMembers(this%groupSize))
+    call mpifx_allgather(this%groupComm, this%globalComm%rank, this%groupMembers)
+
+    ! communicator to equivalent processors in different groups of the same replica
+    call this%intraReplicaComm%split(this%myGroupRank, this%myGroup, this%interGroupComm)
 
     this%tGlobalMaster = this%globalComm%master
     this%tGroupMaster = this%groupComm%master
@@ -137,11 +151,9 @@ contains
     if (this%tGlobalMaster .and. .not. this%tGroupMaster) then
       call error("Internal error: Global master process is not a group master process")
     end if
-
     if (this%tGlobalMaster .and. .not. this%tReplicaMaster) then
       call error("Internal error: Global master process is not a replica master process")
     end if
-
     if (this%tReplicaMaster .and. .not. this%tGroupMaster) then
       call error("Internal error: Replica master process is not a group master process")
     end if

@@ -79,6 +79,7 @@ module initprogram
   use taggedoutput
   use formatout
   use, intrinsic :: iso_fortran_env, only : output_unit
+  use mpifx
   implicit none
 
   !> Tagged output files (machine readable)
@@ -930,7 +931,6 @@ contains
 
     call env%initGlobalTimer(input%ctrl%timingLevel, "DFTB+ running times", stdOut)
     call env%globalTimer%startTimer(globalTimers%globalInit)
-
     ! Basic variables
     tSccCalc = input%ctrl%tScc
     tDFTBU = input%ctrl%tDFTBU
@@ -995,23 +995,26 @@ contains
       r3Tmp = 0.0_dp
       do ii = 1, input%ctrl%nReplicas
         r3Tmp(:,:,ii) = input%geom%coords(:,:,1)
-        ! make small structure difference in images
+        ! make small structure difference in images -- test case, to be replaced
         r3Tmp(1,1,ii) = r3Tmp(1,1,ii) + 0.1_dp*(ii-1)
       end do
       call move_alloc(r3Tmp,input%geom%coords)
-      write(*,*)'Coords',input%geom%coords
     elseif (input%ctrl%nReplicas < 0) then
       call error("Nonsensical replica count")
     end if
 
   #:if WITH_MPI
+    if (input%ctrl%parallelOpts%nGroup > nIndepHam * nKPoint) then
+      write(tmpStr,"('More processor sub-groups than spins and/or k-points:&
+          & ',I0,' vs ',I0,' x ',I0)")input%ctrl%parallelOpts%nGroup, nIndepHam, nKPoint
+      call error(tmpStr)
+    end if
     call env%initMpi(input%ctrl%parallelOpts%nGroup, input%ctrl%nReplicas)
   #:endif
   #:if WITH_SCALAPACK
     call initScalapack(input%ctrl%parallelOpts%blacsOpts, nAtom, nOrb, t2Component, env)
   #:endif
-    call TParallelKS_init(parallelKS, env, nKPoint, nIndepHam, size(input%geom%coords,dim=3))
-
+    call TParallelKS_init(parallelKS, env, nKPoint, nIndepHam)
     sccTol = input%ctrl%sccTol
     tShowFoldedCoord = input%ctrl%tShowFoldedCoord
     if (tShowFoldedCoord .and. .not. tPeriodic) then
@@ -1047,7 +1050,6 @@ contains
       recCellVol = 0.0_dp
       tLatticeChanged = .false.
     end if
-
     ! Slater-Koster tables
     skHamCont = input%slako%skHamCont
     skOverCont = input%slako%skOverCont
@@ -1228,12 +1230,8 @@ contains
     ! Initial coordinates
 
     allocate(coord0(3, nAtom))
-    @:ASSERT(all(shape(input%geom%coords) == [3,nAtom,parallelKS%nTotalReplicas]))
-    ! assume there is only one replica in this processor's group
-    @:ASSERT(all(parallelKS%localKS(3, :) == parallelKS%localKS(3, 1)))
-    write(*,*)'HERE ',env%mpi%myReplica,parallelKS%localKS(3, 1)
+    @:ASSERT(all(shape(input%geom%coords) == [3,nAtom,input%ctrl%nReplicas]))
     coord0(:,:) = input%geom%coords(:, :, env%mpi%myReplica+1)
-    write(*,*)env%mpi%myReplica,coord0(:,:)
     tCoordsChanged = .true.
 
     allocate(species0(nAtom))
@@ -2255,8 +2253,8 @@ contains
         & env%blacs%atomGrid%nRow, env%blacs%atomGrid%nCol
   #:endif
 
-    write(output_unit,*)'I am with replica',parallelKS%localKS(3, 1),' of ',&
-        & parallelKS%nTotalReplicas
+    write(output_unit,*)'I am with replica',env%mpi%myReplica+1,' of ',&
+        & input%ctrl%nReplicas
 
     if (tRandomSeed) then
       write(stdOut, "(A,':',T30,I14)") "Chosen random seed", iSeed
