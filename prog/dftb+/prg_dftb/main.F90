@@ -223,12 +223,6 @@ contains
       call buildS(env, over, skOverCont, coord, nNeighbor, neighborList%iNeighbor, species,&
           & iSparseStart, orb)
       call env%globalTimer%stopTimer(globalTimers%sparseH0S)
-
-      if (env%mpi%tReplicaMaster) then
-        write(*,*)'Master of replica',env%mpi%myReplica,'COORD',coord0
-        write(*,*)'Master of replica',env%mpi%myReplica,'HAM',h0
-      end if
-
       
       if (tSetFillingTemp) then
         call getTemperature(temperatureProfile, tempElec)
