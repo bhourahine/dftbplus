@@ -21,6 +21,7 @@ module sparse2dense
 #:if WITH_SCALAPACK
   use scalapackfx
   use blacsenv
+  use bisect
 #:endif
   implicit none
   private
@@ -1467,7 +1468,7 @@ contains
     integer :: nAtom
     integer :: iOrig, ii, jj, nOrb1, nOrb2
     integer :: iNeigh
-    integer :: iAtom1, iAtom2, iAtom2f
+    integer :: iAtom1, iAtom2, iAtom2f, iGlob, iAtStart, iAtEnd
 
     nAtom = size(iNeighbor, dim=2)
 
@@ -1477,7 +1478,19 @@ contains
 
     square(:,:) = 0.0_dp
 
-    do iAtom1 = 1, nAtom
+    ! Map local matrix start to atom number containing that orbital
+    iGlob = scalafx_indxl2g(1, desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtStart, desc%iAtomStart, iGlob)
+    iAtEnd = max(iAtStart, 1)
+
+    ! local part of matrix may be only partly used, but safe to overshoot due to later parts
+    iGlob = scalafx_indxl2g(size(square,dim=2), desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtEnd, desc%iAtomStart, iGlob)
+    iAtEnd = min(iAtEnd + 1, nAtom)
+
+    do iAtom1 = iAtStart, iAtEnd
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
@@ -1545,7 +1558,7 @@ contains
     integer :: iOrig, nOrb1, nOrb2, ii, jj
     integer :: iNeigh
     integer :: iOldVec, iVec
-    integer :: iAtom1, iAtom2, iAtom2f
+    integer :: iAtom1, iAtom2, iAtom2f, iGlob, iAtStart, iAtEnd
     real(dp) :: kPoint2p(3)
 
     nAtom = size(iNeighbor, dim=2)
@@ -1559,7 +1572,20 @@ contains
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+
+    ! Map local matrix start to atom number containing that orbital
+    iGlob = scalafx_indxl2g(1, desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtStart, desc%iAtomStart, iGlob)
+    iAtEnd = max(iAtStart, 1)
+
+    ! local part of matrix may be only partly used, but safe to overshoot due to later parts
+    iGlob = scalafx_indxl2g(size(square,dim=2), desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtEnd, desc%iAtomStart, iGlob)
+    iAtEnd = min(iAtEnd + 1, nAtom)
+
+    do iAtom1 = iAtStart, iAtEnd
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
@@ -1893,7 +1919,7 @@ contains
     integer :: iOrig, ii, jj, kk
     integer :: iNeigh
     integer :: iAtom1, iAtom2, iAtom2f
-    integer :: nOrb1, nOrb2
+    integer :: nOrb1, nOrb2, iGlob, iAtStart, iAtEnd
     real(dp) :: tmpSqr(mOrb,mOrb)
   #:call ASSERT_CODE
     integer :: sizePrim
@@ -1906,7 +1932,19 @@ contains
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(nNeighbor) == nAtom)
 
-    do iAtom1 = 1, nAtom
+    ! Map local matrix start to atom number containing that orbital
+    iGlob = scalafx_indxl2g(1, desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtStart, desc%iAtomStart, iGlob)
+    iAtEnd = max(iAtStart, 1)
+
+    ! local part of matrix may be only partly used, but safe to overshoot due to later parts
+    iGlob = scalafx_indxl2g(size(square,dim=2), desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtEnd, desc%iAtomStart, iGlob)
+    iAtEnd = min(iAtEnd + 1, nAtom)
+
+    do iAtom1 = iAtStart, iAtEnd
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
@@ -1983,7 +2021,7 @@ contains
     integer :: iNeigh
     integer :: iOldVec, iVec
     integer :: iAtom1, iAtom2, iAtom2f
-    integer :: nOrb1, nOrb2
+    integer :: nOrb1, nOrb2, iGlob, iAtStart, iAtEnd
     real(dp) :: kPoint2p(3)
     complex(dp) :: tmpSqr(mOrb,mOrb)
   #:call ASSERT_CODE
@@ -2004,7 +2042,20 @@ contains
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+
+    ! Map local matrix start to atom number containing that orbital
+    iGlob = scalafx_indxl2g(1, desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtStart, desc%iAtomStart, iGlob)
+    iAtEnd = max(iAtStart, 1)
+
+    ! local part of matrix may be only partly used, but safe to overshoot due to later parts
+    iGlob = scalafx_indxl2g(size(square,dim=2), desc%blacsOrbSqr(NB_), myBlacs%orbitalGrid%mycol,&
+        & desc%blacsOrbSqr(CSRC_), myBlacs%orbitalGrid%ncol)
+    call bisection(iAtEnd, desc%iAtomStart, iGlob)
+    iAtEnd = min(iAtEnd + 1, nAtom)
+
+    do iAtom1 = iAtStart, iAtEnd
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbor(iAtom1)
