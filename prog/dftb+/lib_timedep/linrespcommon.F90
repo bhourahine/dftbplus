@@ -107,8 +107,7 @@ contains
     do ii = 2, nxov
       call indxov(win, ii, getij, iOcc, iVrt)
       ! check if this is a still within a degenerate group, otherwise process the group
-      if ( abs(grndEigVal(iOcc,1)-eOcc) > epsilon(0.0) .or. &
-          & abs(wij(ii)-eExc) > epsilon(0.0) ) then
+      if ( abs(grndEigVal(iOcc,1)-eOcc) > epsilon(0.0) .or. abs(wij(ii)-eExc) > epsilon(0.0) ) then
         eOcc = grndEigVal(iOcc,1)
         eExc = wij(ii)
         mu = 0.0_dp
@@ -118,7 +117,7 @@ contains
           mu = mu + sposz(jj)
         end do
         ! if something in the group is bright, so include them all
-        if (mu>threshold) then
+        if (mu > threshold) then
           do jj = iStart, ii-1
             nxov_r = nxov_r + 1
             win(nxov_r) = win(jj)
@@ -177,7 +176,7 @@ contains
     no = 0
     nv = 0
 
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj) SCHEDULE(RUNTIME) REDUCTION(+:nv,no)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj) SCHEDULE(STATIC) REDUCTION(+:nv,no)
     do ia = 1, nxov
       call indxov(win, ia, getij, ii, jj)
       if (ii == homo) nv = nv +1
@@ -316,7 +315,7 @@ contains
     ! Store reverse indices
 
     ! If wij was not sorted, it would be a trivial transformation.
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia) SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia) SCHEDULE(STATIC)
     do ia = 1, nxov
       iatrans( getij(win(ia),1), getij(win(ia),2) ) = ia
     end do
@@ -424,7 +423,7 @@ contains
     logical :: updwn
     real(dp) :: docc_ij
 
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia, ii, jj, updwn, docc_ij) SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia, ii, jj, updwn, docc_ij) SCHEDULE(STATIC)
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
@@ -444,7 +443,7 @@ contains
   !>
   !> Note: In order not to store the entire supermatrix (nmat, nmat), the various pieces are
   !> assembled individually and multiplied directly with the corresponding part of the supervector.
-  subroutine omegatvec(spin, vin, vout, wij, sym, win, nmatup, iAtomStart, stimc, grndEigVecs, &
+  subroutine omegatvec(spin, vin, vout, wij, sym, win, nmatup, iAtomStart, stimc, grndEigVecs,&
       & occNr, getij, gamma, species0, spinW )
 
     !> logical spin polarization
@@ -512,8 +511,8 @@ contains
     wnij = sqrt(wnij) ! always used as root(wnij) after this
 
     otmp = 0.0_dp
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) &
-    !$OMP& SCHEDULE(RUNTIME) REDUCTION(+:otmp)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(STATIC)&
+    !$OMP& REDUCTION(+:otmp)
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
@@ -528,8 +527,7 @@ contains
 
         call hemv(gtmp, gamma, otmp)
 
-        !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) &
-        !$OMP& SCHEDULE(RUNTIME)
+        !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(STATIC)
         do ia = 1, nmat
           call indxov(win, ia, getij, ii, jj)
           updwn = (win(ia) <= nmatup)
@@ -541,8 +539,7 @@ contains
 
         otmp = 2.0_dp * otmp * spinW(species0)
 
-        !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) &
-        !$OMP& SCHEDULE(RUNTIME)
+        !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(STATIC)
         do ia = 1, nmat
           call indxov(win, ia, getij, ii, jj)
           updwn = (win(ia) <= nmatup)
@@ -561,8 +558,8 @@ contains
 
       otmp(:) = 0.0_dp
 
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij,fact) &
-      !$OMP& SCHEDULE(RUNTIME) REDUCTION(+:otmp)
+      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij,fact) SCHEDULE(STATIC)&
+      !$OMP& REDUCTION(+:otmp)
       do ia = 1,nmat
 
         call indxov(win, ia, getij, ii, jj)
@@ -586,8 +583,7 @@ contains
 
       otmp = 2.0_dp * otmp * spinW(species0)
 
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij,fact) &
-      !$OMP& SCHEDULE(RUNTIME)
+      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij,fact) SCHEDULE(STATIC)
       do ia = 1,nmat
 
         call indxov(win, ia, getij, ii, jj)
@@ -658,7 +654,7 @@ contains
     @:ASSERT(size(rkm1) == nmat)
 
     tmp(:) = 0.0_dp
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(RUNTIME) REDUCTION(+:tmp)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(STATIC) REDUCTION(+:tmp)
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
@@ -670,7 +666,7 @@ contains
     call hemv(gtmp, gamma, tmp)
 
     rkm1 = 0.0_dp
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(STATIC)
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
@@ -709,10 +705,34 @@ contains
     nSpin = size(grndEigVal, dim=2)
 
     ind = 0
-
     do iSpin = 1, nSpin
-      do ii = 1, norb - 1
-        do jj = ii, norb
+
+      !do ii = 1, norb - 1
+      !  ! assumes Fermi-like filling
+      !  if (filling(ii,iSpin) < elecTolMax) then
+      !    exit
+      !  end if
+      !  do jj = norb, ii + 1, -1
+      !    if (filling(jj, iSpin) > maxval(filling(1,:)) - elecTolMax) then
+      !      exit
+      !    end if
+      !    if (filling(ii,iSpin) > filling(jj,iSpin) + elecTolMax) then
+      !      ind = ind + 1
+      !      wij(ind) = grndEigVal(jj,iSpin) - grndEigVal(ii,iSpin)
+      !      getij(ind,:) = [ii,jj]
+      !    end if
+      !  end do
+      !end do
+
+      do jj = norb, 1, -1
+        if (filling(jj, iSpin) > maxval(filling(1,:)) - elecTolMax) then
+          exit
+        end if
+        do ii = 1, jj - 1
+          ! assumes Fermi-like filling
+          if (filling(ii,iSpin) < elecTolMax) then
+            exit
+          end if
           if (filling(ii,iSpin) > filling(jj,iSpin) + elecTolMax) then
             ind = ind + 1
             wij(ind) = grndEigVal(jj,iSpin) - grndEigVal(ii,iSpin)
@@ -775,7 +795,7 @@ contains
     integer :: ii, ll
 
     tdip(:,:) = 0.0_dp
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii,rtmp) SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii,rtmp) SCHEDULE(STATIC)
     do ii = 1, size(evec, dim=2)
       rtmp = eval(ii)**(-4) ! 1._dp / sqrt(sqrt(eval(ii)))
       do ll = 1, 3

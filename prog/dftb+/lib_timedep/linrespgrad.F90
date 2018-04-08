@@ -309,7 +309,7 @@ contains
     ! count initial number of transitions from occupied to empty states
     nxov_ud = 0
     do iSpin = 1, nSpin
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i,j) SCHEDULE(RUNTIME) REDUCTION(+:nxov_ud)
+      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(i,j) SCHEDULE(GUIDED) REDUCTION(+:nxov_ud)
       do i = 1, norb - 1
         do j = i, norb
           if (filling(i,iSpin) > filling(j,iSpin) + elecTolMax) then
@@ -460,6 +460,14 @@ contains
     ! just in case energy/dipole windows add no extra states, and is due to an arpack solver
     ! requirement combined with the need to get at least nexc states
     nxov_rd = max(nxov_rd,min(nexc+1,nxov))
+
+    !if (tOscillatorWindow .or. tEnergyWindow) then
+    !  ! re-sort on single particles in the transitions
+    !  call merge_sort(win(:nxov_rd),getij(:nxov_rd ,2))
+    !  call merge_sort(win(:nxov_rd),getij(:nxov_rd ,1))
+    !
+    !end if
+
 
     if (fdXplusY >  0) then
       open(fdXplusY, file=XplusYOut, position="rewind", status="replace")
@@ -883,7 +891,7 @@ contains
 
     call wtdn(wij, filling, win, nmatup, nmat, getij, wnij)
 
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(STATIC)
     do ii = 1, size(evec, dim=2)
       osz(ii) = oscillatorStrength(snglPartTransDip, wnij, evec(:,ii))
     end do
@@ -955,7 +963,7 @@ contains
 
     call wtdn(wij, filling, win, nmatup, nmat, getij, wnij)
 
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC)&
     !$OMP& PRIVATE(rsqw, TDvec, TDvnorm, TDvec_sq, TDvin, s_iaja, k, ia, ud_ia, l, jb, ud_jb, ii,&
     !$OMP& aa, jj, bb, tmp, m, s_iaib, s_iajb)
     do i = 1, nexc
@@ -1161,7 +1169,7 @@ contains
     ! Build T_ab = 0.5 * sum_i (X+Y)_ia (X+Y)_ib + (X-Y)_ia (X-Y)_ib
     ! and w_ab = Q_ab with Q_ab as in (B16) but with corrected sign.
     ! factor 1 / (1 + delta_ab) follows later
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(GUIDED)&
     !$OMP& PRIVATE(i, a, b, ib, ab, tmp1, tmp2, j, ja, ij) REDUCTION(+:wvv,woo,T)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
@@ -1215,7 +1223,7 @@ contains
     ! qgamxpyq(ab) = sum_jc K_ab,jc (X+Y)_jc
     if (sym == "S") then
       call hemv(gamxpyq, gammaMat,  xpyq)
-      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(a, b, qij)
+      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(a, b, qij)
       do ab = 1, nxvv
         call indxvv(homo, ab, a, b)
         call transq(a, b, iAtomStart, updwn, stimc, c, qij)
@@ -1223,7 +1231,7 @@ contains
       end do
       !$OMP  END PARALLEL DO
     else
-      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(a, b, qij)
+      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(a, b, qij)
       do ab = 1, nxvv
         call indxvv(homo, ab, a, b)
         call transq(a, b, iAtomStart, updwn, stimc, c, qij)
@@ -1233,7 +1241,7 @@ contains
     end if
 
     ! rhs(ia) -= Qia = sum_b (X+Y)_ib * qgamxpyq(ab))
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, a, b, ab, ib) REDUCTION(+:rhs)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(GUIDED) PRIVATE(i, a, b, ab, ib) REDUCTION(+:rhs)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       do b = homo + 1, a
@@ -1250,7 +1258,7 @@ contains
 
     ! -rhs = -rhs - sum_j (X + Y)_ja H + _ij[X + Y]
     if (sym == "S") then
-      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, j, qij)
+      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, j, qij)
       do ij = 1, nxoo
         call indxoo(homo, nocc, ij, i, j)
         call transq(i, j, iAtomStart, updwn, stimc, c, qij)
@@ -1259,7 +1267,7 @@ contains
       end do
       !$OMP  END PARALLEL DO
     else
-      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, j, qij)
+      !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, j, qij)
       do ij = 1, nxoo
         call indxoo(homo, nocc, ij, i, j)
         call transq(i, j, iAtomStart, updwn, stimc, c, qij)
@@ -1270,7 +1278,7 @@ contains
 
     ! rhs(ia) += Qai = sum_j (X+Y)_ja qgamxpyq(ij)
     ! add Qai to Wia as well.
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, a, j, ja, ij, tmp1, tmp2)&
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(GUIDED) PRIVATE(i, a, j, ja, ij, tmp1, tmp2)&
     !$OMP&  REDUCTION(+:rhs,wov)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
@@ -1291,7 +1299,7 @@ contains
 
     ! gamxpyq(iAt2) = sum_ij q_ij(iAt2) T_ij
     gamxpyq(:) = 0.0_dp
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, j, qij) REDUCTION(+:gamxpyq)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, j, qij) REDUCTION(+:gamxpyq)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
       call transq(i, j, iAtomStart, updwn, stimc, c, qij)
@@ -1305,7 +1313,7 @@ contains
     !$OMP  END PARALLEL DO
 
     ! gamxpyq(iAt2) += sum_ab q_ab(iAt2) T_ab
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(a, b, qij) REDUCTION(+:gamxpyq)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(a, b, qij) REDUCTION(+:gamxpyq)
     do ab = 1, nxvv
       call indxvv(homo, ab, a, b)
       call transq(a, b, iAtomStart, updwn, stimc, c, qij)
@@ -1322,7 +1330,7 @@ contains
     call hemv(gamqt, gammaMat, gamxpyq)
 
     ! rhs -= sum_q^ia(iAt1) gamxpyq(iAt1)
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, a, updwn, qij)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, a, updwn, qij)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
@@ -1332,7 +1340,7 @@ contains
     !$OMP  END PARALLEL DO
 
     ! Furche vectors
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, j, qij)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, j, qij)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
       call transq(i, j, iAtomStart, updwn, stimc, c, qij)
@@ -1388,7 +1396,7 @@ contains
 
     ! Choosing a start value
     ! rhs2 = rhs / (A+B)_ia,ia (diagonal of the supermatrix sum A+B)
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, a, updwn, qij, rhs)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, a, updwn, qij, rhs)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
@@ -1508,7 +1516,7 @@ contains
     ALLOCATE(zq(natom))
 
     ! Adding missing epsilon_i * Z_ia term to W_ia
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, a)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, a)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       wov(ia) = wov(ia) + zz(ia) * grndEigVal(i)
@@ -1531,7 +1539,7 @@ contains
     call hemv(gamxpyq, gammaMat, zq)
 
     ! sum_iAt1 qij(iAt1) gamxpyq(iAt1)
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, j, qij)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, j, qij)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
       call transq(i, j, iAtomStart, updwn, stimc, c, qij)
@@ -1541,7 +1549,7 @@ contains
     !$OMP  END PARALLEL DO
 
     ! Divide diagonal elements of W_ij by 2.
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(i, j)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(i, j)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
       if (i == j) then
@@ -1551,7 +1559,7 @@ contains
     !$OMP  END PARALLEL DO
 
     ! Divide diagonal elements of W_ab by 2.
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME) PRIVATE(a, b)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC) PRIVATE(a, b)
     do ab = 1, nxvv
       call indxvv(homo, ab, a, b)
       if (a == b) then
@@ -1585,7 +1593,7 @@ contains
     @:ASSERT(all(shape(pc)==shape(s)))
 
     tmp = sum(pc * s,dim=2)
-    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(STATIC)
     do iAt1 = 1, size(dqex)
       dqex(iAt1) = sum(tmp(iAtomStart(iAt1):iAtomStart(iAt1 + 1) -1))
     end do
@@ -1695,7 +1703,7 @@ contains
     ALLOCATE(qij(natom))
 
     ! Calculate transition dipole elements
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(updwn, ii, jj, qij) SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(updwn, ii, jj, qij) SCHEDULE(STATIC)
     do indm = 1, nxov
       call indxov(win, indm, getij, ii, jj)
       updwn = (win(indm) <= nmatup)
@@ -1878,7 +1886,7 @@ contains
 
     ! xpycc(mu,nu) = sum_ia (X+Y)_ia grndEigVecs(mu,i) grndEigVecs(nu,a)
     ! xpycc(mu, nu) += sum_ia (X+Y)_ia grndEigVecs(mu,a) grndEigVecs(nu,i)
-    !$OMP PARALLEL DO PRIVATE(i, a) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP PARALLEL DO PRIVATE(i, a) DEFAULT(SHARED) SCHEDULE(STATIC)&
     !$OMP& REDUCTION(+:xpycc)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
@@ -1902,7 +1910,7 @@ contains
     wcc(:,:) = 0.0_dp
 
     ! calculate the occ-occ part
-    !$OMP PARALLEL DO PRIVATE(i, j) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP PARALLEL DO PRIVATE(i, j) DEFAULT(SHARED) SCHEDULE(STATIC)&
     !$OMP& REDUCTION(+:wcc)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
@@ -1918,7 +1926,7 @@ contains
     !$OMP  END PARALLEL DO
 
     ! calculate the occ-virt part : the same way as for xpycc
-    !$OMP PARALLEL DO PRIVATE(i, a) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP PARALLEL DO PRIVATE(i, a) DEFAULT(SHARED) SCHEDULE(STATIC)&
     !$OMP& REDUCTION(+:wcc)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
@@ -1933,7 +1941,7 @@ contains
     !$OMP  END PARALLEL DO
 
     ! calculate the virt - virt part
-    !$OMP PARALLEL DO PRIVATE(a, b) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP PARALLEL DO PRIVATE(a, b) DEFAULT(SHARED) SCHEDULE(STATIC)&
     !$OMP& REDUCTION(+:wcc)
     do ab = 1, nxvv
       call indxvv(homo, ab, a, b)
@@ -1958,7 +1966,7 @@ contains
     ! BA: only for non-periodic systems!
 
     !$OMP PARALLEL DO PRIVATE(iSp1, iAt2, iSp2, diffvec, rab, dgab, tmp3a, tmp3b) DEFAULT(SHARED)&
-    !$OMP& SCHEDULE(RUNTIME) REDUCTION(+:excgrad)
+    !$OMP& SCHEDULE(GUIDED) REDUCTION(+:excgrad)
     do iAt1 = 1, nAtom
       iSp1 = species0(iAt1)
 
@@ -1991,7 +1999,7 @@ contains
 
     ! BA: only for non-periodic systems!
 
-    !$OMP PARALLEL DO SCHEDULE(RUNTIME) REDUCTION(+:excgrad) DEFAULT(SHARED)&
+    !$OMP PARALLEL DO SCHEDULE(GUIDED) REDUCTION(+:excgrad) DEFAULT(SHARED)&
     !$OMP& PRIVATE(indalpha, indalpha1, indbeta, indbeta1, norb1, norb2, dH0, dS)&
     !$OMP& PRIVATE(sqrDMTmp, sqrPcTmp, sqrEDMTmp, sqrXPYTmp, sqrTmp, xyz, tmp1, tmp2)
     do iAt1 = 1, nAtom
