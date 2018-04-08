@@ -335,7 +335,6 @@ contains
       end if
     end if
 
-
     !> is a z vector required?
     tZVector = tForces .or. tMulliken .or. tCoeffs .or. present(naturalOrbs)
 
@@ -611,12 +610,12 @@ contains
         ! solve for Z and W to get excited state density matrix
         call getZVectorEqRHS(xpy, xmy, win, iAtomStart, nocc, nocc_r, nxov_ud(1), getij, iatrans,&
             & natom, species0,grndEigVal(:,1), stimc, grndEigVecs, gammaMat, spinW, omega, sym,&
-            & rhs, t, wov, woo, wvv)
+            & rhs, T, wov, woo, wvv)
         call solveZVectorEq(rhs, win, nxov_ud(1), getij, natom, iAtomStart, stimc, gammaMat,&
             & wij(:nxov_rd), grndEigVecs)
         call calcWVectorZ(rhs, win, nocc, nocc_r, nxov_ud(1), getij, iAtomStart, stimc,&
             & grndEigVecs, gammaMat, grndEigVal(:,1), wov, woo, wvv)
-        call calcPMatrix(t, rhs, win, getij, pc)
+        call calcPMatrix(T, rhs, win, getij, pc)
 
         call writeCoeffs(pc, grndEigVecs, filling, nocc, fdCoeffs, tCoeffs, tGrndState, occNatural,&
             & naturalOrbs)
@@ -1065,7 +1064,7 @@ contains
   !> Build right hand side of the equation for the Z-vector and those parts of the W-vectors which
   !> do not depend on Z.
   subroutine getZVectorEqRHS(xpy, xmy, win, iAtomStart, homo, nocc, nmatup, getij, iatrans, natom,&
-      & species0, grndEigVal, stimc, c, gammaMat, spinW, omega, sym, rhs, t, wov, woo, wvv)
+      & species0, grndEigVal, stimc, c, gammaMat, spinW, omega, sym, rhs, T, wov, woo, wvv)
 
     !> X+Y Furche term
     real(dp), intent(in) :: xpy(:)
@@ -1125,7 +1124,7 @@ contains
     real(dp), intent(out) :: rhs(:)
 
     !> T matrix
-    real(dp), intent(out) :: t(:,:)
+    real(dp), intent(out) :: T(:,:)
 
     !> W vector occupied-virtual part
     real(dp), intent(out) :: wov(:)
@@ -1152,18 +1151,18 @@ contains
     ALLOCATE(gamqt(natom))
     ALLOCATE(qgamxpyq(max(nxoo, nxvv)))
 
-    t(:,:) = 0.0_dp
+    T(:,:) = 0.0_dp
     rhs(:) = 0.0_dp
     wov(:) = 0.0_dp
     woo(:) = 0.0_dp
     wvv(:) = 0.0_dp
     xpyq(:) = 0.0_dp
 
-    ! Build t_ab = 0.5 * sum_i (X+Y)_ia (X+Y)_ib + (X-Y)_ia (X-Y)_ib
+    ! Build T_ab = 0.5 * sum_i (X+Y)_ia (X+Y)_ib + (X-Y)_ia (X-Y)_ib
     ! and w_ab = Q_ab with Q_ab as in (B16) but with corrected sign.
     ! factor 1 / (1 + delta_ab) follows later
     !$OMP PARALLEL DO DEFAULT(SHARED) SCHEDULE(RUNTIME)&
-    !$OMP& PRIVATE(i, a, b, ib, ab, tmp1, tmp2, j, ja, ij) REDUCTION(+:wvv,woo,t)
+    !$OMP& PRIVATE(i, a, b, ib, ab, tmp1, tmp2, j, ja, ij) REDUCTION(+:wvv,woo,T)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
 
@@ -1173,16 +1172,16 @@ contains
         call rindxvv(homo, a, b, ab)
         tmp1 = xpy(ia) * xpy(ib) + xmy(ia) * xmy(ib)
         tmp2 = omega * (xpy(ia) * xmy(ib)+ xmy(ia) * xpy(ib))
-        t(a,b) = t(a,b) + 0.5_dp * tmp1
+        T(a,b) = T(a,b) + 0.5_dp * tmp1
         ! to prevent double counting
         if (a /= b) then
-          t(b,a) = t(b,a) + 0.5_dp * tmp1
+          T(b,a) = T(b,a) + 0.5_dp * tmp1
         end if
         ! Note: diagonal elements will be multiplied by 0.5 later.
         wvv(ab) = wvv(ab) + grndEigVal(i) * tmp1 + tmp2
       end do
 
-      ! Build t_ij = 0.5 * sum_a (X+Y)_ia (X+Y)_ja + (X-Y)_ia (X-Y)_ja and 1 / (1 + delta_ij) Q_ij
+      ! Build T_ij = 0.5 * sum_a (X+Y)_ia (X+Y)_ja + (X-Y)_ia (X-Y)_ja and 1 / (1 + delta_ij) Q_ij
       ! with Q_ij as in eq. (B9) (1st part of w_ij)
       do j = i, homo
         ja = iatrans(j,a)
@@ -1191,10 +1190,10 @@ contains
         tmp2 = omega * (xpy(ia) * xmy(ja) + xmy(ia) * xpy(ja))
         ! Note, there is a typo in Heringer et al. J. Comp Chem 28, 2589.
         ! The sign must be negative see Furche, J. Chem. Phys, 117 7433 (2002).
-        t(i,j) = t(i,j) - 0.5_dp * tmp1
+        T(i, j) = T(i, j) - 0.5_dp * tmp1
         ! to prevent double counting
         if (i /= j) then
-          t(j,i) = t(j,i) - 0.5_dp * tmp1
+          T(j, i) = T(j, i) - 0.5_dp * tmp1
         end if
         woo(ij) = woo(ij) - grndEigVal(a) * tmp1 + tmp2
       end do
@@ -1202,12 +1201,16 @@ contains
     !$OMP  END PARALLEL DO
 
     ! Build xpyq = sum_ia (X+Y)_ia
+    ! Workaround:gfortran 5.4.0 fails for OMP paralelism of this section
+    !!$OMP PARALLEL DO PRIVATE(i, a, updwn, qij) DEFAULT(SHARED) SCHEDULE(STATIC)&
+    !!$OMP& REDUCTION(+:xpyq)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
       call transq(i, a, iAtomStart, updwn, stimc, c, qij)
       xpyq(:) = xpyq(:) + qij(:) * xpy(ia)
     end do
+    !!$OMP  END PARALLEL DO
 
     ! qgamxpyq(ab) = sum_jc K_ab,jc (X+Y)_jc
     if (sym == "S") then
@@ -1375,7 +1378,7 @@ contains
 
     integer :: nxov
     integer :: ia, i, a, k
-    real(dp) :: rhs2(size(rhs)),rkm1(size(rhs)),pkm1(size(rhs)),apk(size(rhs))
+    real(dp) :: rhs2(size(rhs)), rkm1(size(rhs)), pkm1(size(rhs)), apk(size(rhs))
     real(dp) :: qTmp(nAtom), rs, alphakm1, tmp1, tmp2, bkm1
     real(dp), allocatable :: qij(:)
     logical :: updwn
@@ -1514,12 +1517,16 @@ contains
 
     ! Missing sum_kb 4 K_ijkb Z_kb term in W_ij: zq(iAt1) = sum_kb q^kb(iAt1) Z_kb
     zq = 0.0_dp
+    ! Workaround:gfortran 5.4.0 fails for OMP paralelism of this section
+    !!$OMP PARALLEL DO PRIVATE(i, a, updwn, qij) DEFAULT(SHARED) SCHEDULE(STATIC)&
+    !!$OMP& REDUCTION(+:xpyq)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
       call transq(i, a, iAtomStart, updwn, stimc, c, qij)
       zq(:) = zq(:) + qij(:) * zz(ia)
     end do
+    !!$OMP  END PARALLEL DO
 
     call hemv(gamxpyq, gammaMat, zq)
 
@@ -1810,8 +1817,12 @@ contains
     integer :: ia, i, j, a, b, ab, ij, m, n, mu, nu, xyz, iAt1, iAt2
     integer :: indalpha, indalpha1, indbeta, indbeta1
     integer :: iSp1, iSp2
-    real(dp) :: tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, rab
-    real(dp) :: diffvec(3), dgab(3), tmp3a, tmp3b
+    real(dp) :: tmp1, tmp2, rab, diffvec(3), dgab(3), tmp3a, tmp3b
+
+    real(dp) :: sqrDMTmp(orb%mOrb,orb%mOrb), sqrPcTmp(orb%mOrb,orb%mOrb)
+    real(dp) :: sqrEDMTmp(orb%mOrb,orb%mOrb), sqrXPYTmp(orb%mOrb,orb%mOrb)
+    real(dp) :: sqrTmp(orb%mOrb,orb%mOrb)
+    integer :: nOrb1, nOrb2
 
     logical :: updwn
 
@@ -1839,12 +1850,17 @@ contains
     ! xypq(alpha) = sum_ia (X+Y)_ia q^ia(alpha)
     ! complexity norb * norb * norb
     xpyq(:) = 0.0_dp
+
+    ! Workaround:gfortran 5.4.0 fails for OMP paralelism of this section
+    !!$OMP PARALLEL DO PRIVATE(i, a, updwn, qij) DEFAULT(SHARED) SCHEDULE(STATIC)&
+    !!$OMP& REDUCTION(+:xpyq)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
       call transq(i, a, iAtomStart, updwn, stimc, grndEigVecs, qij)
       xpyq(:) = xpyq(:) + xpy(ia) * qij(:)
     end do
+    !!$OMP  END PARALLEL DO
 
     ! complexity norb * norb
     shxpyq(:) = 0.0_dp
@@ -1862,57 +1878,77 @@ contains
 
     ! xpycc(mu,nu) = sum_ia (X+Y)_ia grndEigVecs(mu,i) grndEigVecs(nu,a)
     ! xpycc(mu, nu) += sum_ia (X+Y)_ia grndEigVecs(mu,a) grndEigVecs(nu,i)
+    !$OMP PARALLEL DO PRIVATE(i, a) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP& REDUCTION(+:xpycc)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
-      do nu = 1, norb
-        do mu = 1, norb
-          xpycc(mu,nu) = xpycc(mu,nu) + xpy(ia) * ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
-              & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
-        end do
-      end do
+      call ger(xpycc, xpy(ia), grndEigVecs(:,i,1), grndEigVecs(:,a,1))
+      ! use rank 1 update from blas instead of
+      !do nu = 1, norb
+      !  do mu = 1, norb
+      !    xpycc(mu,nu) = xpycc(mu,nu) + xpy(ia) * ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
+      !        & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
+      !  end do
+      !end do
     end do
+    !$OMP  END PARALLEL DO
+    xpycc = xpycc + transpose(xpycc)
 
     ! calculate wcc = c_mu,i * W_ij * c_j,nu. We have only W_ab b > a and W_ij j > i:
     ! wcc(m,n) = sum_{pq, p <= q} w_pq (grndEigVecs(mu,p)grndEigVecs(nu,q)
     ! + grndEigVecs(nu,p)grndEigVecs(mu,q))
     ! complexity norb * norb * norb
 
-    ! calculate the occ-occ part
     wcc(:,:) = 0.0_dp
 
+    ! calculate the occ-occ part
+    !$OMP PARALLEL DO PRIVATE(i, j) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP& REDUCTION(+:wcc)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
-      do mu = 1, norb
-        do nu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + woo(ij) * ( grndEigVecs(mu,i,1)*grndEigVecs(nu,j,1)&
-              & + grndEigVecs(mu,j,1)*grndEigVecs(nu,i,1) )
-        end do
-      end do
-
+      call ger(wcc, woo(ij), grndEigVecs(:,i,1), grndEigVecs(:,j,1))
+      ! use rank 1 update from blas instead of
+      !do mu = 1, norb
+      !  do nu = 1, norb
+      !    wcc(mu,nu) = wcc(mu,nu) + woo(ij) * ( grndEigVecs(mu,i,1)*grndEigVecs(nu,j,1)&
+      !        & + grndEigVecs(mu,j,1)*grndEigVecs(nu,i,1) )
+      !  end do
+      !end do
     end do
+    !$OMP  END PARALLEL DO
 
     ! calculate the occ-virt part : the same way as for xpycc
+    !$OMP PARALLEL DO PRIVATE(i, a) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP& REDUCTION(+:wcc)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
-      do nu = 1, norb
-        do mu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + wov(ia) * ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
-              & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
-        end do
-      end do
+      call ger(wcc, wov(ia), grndEigVecs(:,i,1), grndEigVecs(:,a,1))
+      !do nu = 1, norb
+      !  do mu = 1, norb
+      !    wcc(mu,nu) = wcc(mu,nu) + wov(ia) * ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
+      !        & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
+      !  end do
+      !end do
     end do
+    !$OMP  END PARALLEL DO
 
     ! calculate the virt - virt part
-    do ab =1, nxvv
+    !$OMP PARALLEL DO PRIVATE(a, b) DEFAULT(SHARED) SCHEDULE(RUNTIME)&
+    !$OMP& REDUCTION(+:wcc)
+    do ab = 1, nxvv
       call indxvv(homo, ab, a, b)
-      do mu = 1, norb
-        do nu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + wvv(ab) * ( grndEigVecs(mu,a,1)*grndEigVecs(nu,b,1)&
-              &+ grndEigVecs(mu,b,1)*grndEigVecs(nu,a,1) )
-        end do
-      end do
+      call ger(wcc, wvv(ab), grndEigVecs(:,a,1), grndEigVecs(:,b,1))
+      ! use rank 1 update from blas instead of
+      !do mu = 1, norb
+      !  do nu = 1, norb
+      !    wcc(mu,nu) = wcc(mu,nu) + wvv(ab) * ( grndEigVecs(mu,a,1)*grndEigVecs(nu,b,1)&
+      !        &+ grndEigVecs(mu,b,1)*grndEigVecs(nu,a,1) )
+      !  end do
+      !end do
     end do
+    !$OMP  END PARALLEL DO
 
+    wcc = wcc + transpose(wcc)
 
     ! now calculating the force complexity : norb * norb * 3
 
@@ -1920,14 +1956,13 @@ contains
     ! calculate for all atoms
 
     ! BA: only for non-periodic systems!
+
+    !$OMP PARALLEL DO PRIVATE(iSp1, iAt2, iSp2, diffvec, rab, dgab, tmp3a, tmp3b) DEFAULT(SHARED)&
+    !$OMP& SCHEDULE(RUNTIME) REDUCTION(+:excgrad)
     do iAt1 = 1, nAtom
-      indalpha = iAtomStart(iAt1)
-      indalpha1 = iAtomStart(iAt1 + 1) -1
       iSp1 = species0(iAt1)
 
       do iAt2 = 1, iAt1 - 1
-        indbeta = iAtomStart(iAt2)
-        indbeta1 = iAtomStart(iAt2 + 1) -1
         iSp2 = species0(iAt2)
 
         diffvec = coord0(:,iAt1) - coord0(:,iAt2)
@@ -1950,39 +1985,54 @@ contains
         excgrad(:,iAt1) = excgrad(:,iAt1) + dgab(:) * ( tmp3a + tmp3b )
         excgrad(:,iAt2) = excgrad(:,iAt2) - dgab(:) * ( tmp3a + tmp3b )
 
-        tmp5 = shift_excited(iAt1) + shift_excited(iAt2)
-        tmp7 = 2.0_dp * ( shxpyq(iAt1) + shxpyq(iAt2) )
-
-        call derivator%getFirstDeriv(dH0, skHamCont, coord0, species0,&
-            & iAt1, iAt2, orb)
-        call derivator%getFirstDeriv(dS, skOverCont, coord0, species0,&
-            & iAt1, iAt2, orb)
-
-        do xyz = 1, 3
-
-          tmp1 = 0.0_dp
-          tmp2 = 0.0_dp
-          tmp3 = 0.0_dp
-          tmp4 = 0.0_dp
-          tmp6 = 0.0_dp
-
-          do mu = indalpha, indalpha1
-            do nu = indbeta, indbeta1
-              m = mu - indalpha + 1
-              n = nu - indbeta + 1
-
-              tmp1 = tmp1 + 2.0_dp * dH0(n,m,xyz) * pc(mu,nu)
-              tmp2 = tmp2 + dS(n,m,xyz) * pc(mu,nu) * (shift(iAt1)+shift(iAt2))
-              tmp3 = tmp3 - dS(n,m,xyz) * wcc(mu,nu)
-              tmp4 = tmp4 + tmp5 * dS(n,m,xyz) * rhoSqr(mu,nu)
-              tmp6 = tmp6 + tmp7 * dS(n,m,xyz) * xpycc(mu,nu)
-            end do
-          end do
-          excgrad(xyz,iAt1) = excgrad(xyz,iAt1) + tmp1 + tmp2 + tmp4 + tmp6 + tmp3
-          excgrad(xyz,iAt2) = excgrad(xyz,iAt2) - tmp1 - tmp2 - tmp4 - tmp6 - tmp3
-        end do
       end do
     end do
+    !$OMP  END PARALLEL DO
+
+    ! BA: only for non-periodic systems!
+
+    !$OMP PARALLEL DO SCHEDULE(RUNTIME) REDUCTION(+:excgrad) DEFAULT(SHARED)&
+    !$OMP& PRIVATE(indalpha, indalpha1, indbeta, indbeta1, norb1, norb2, dH0, dS)&
+    !$OMP& PRIVATE(sqrDMTmp, sqrPcTmp, sqrEDMTmp, sqrXPYTmp, sqrTmp, xyz, tmp1, tmp2)
+    do iAt1 = 1, nAtom
+      indalpha = iAtomStart(iAt1)
+      indalpha1 = iAtomStart(iAt1 + 1) -1
+      nOrb1 = indalpha1 - indalpha + 1
+
+      do iAt2 = 1, iAt1 - 1
+        indbeta = iAtomStart(iAt2)
+        indbeta1 = iAtomStart(iAt2 + 1) -1
+        nOrb2 = indbeta1 - indbeta + 1
+
+        call derivator%getFirstDeriv(dH0, skHamCont, coord0, species0, iAt1, iAt2, orb)
+        call derivator%getFirstDeriv(dS, skOverCont, coord0, species0, iAt1, iAt2, orb)
+
+        sqrDMTmp(:,:) = 0.0_dp
+        sqrDMTmp(:nOrb2,:nOrb1) = rhoSqr(indbeta:indbeta1, indalpha:indalpha1)
+
+        sqrPcTmp(:,:) = 0.0_dp
+        sqrPcTmp(:nOrb2,:nOrb1) = pc(indbeta:indbeta1, indalpha:indalpha1)
+
+        sqrEDMTmp(:,:) = 0.0_dp
+        sqrEDMTmp(:nOrb2,:nOrb1) = wcc(indbeta:indbeta1, indalpha:indalpha1)
+
+        sqrXPYTmp(:,:) = 0.0_dp
+        sqrXPYTmp(:nOrb2,:nOrb1) = xpycc(indbeta:indbeta1, indalpha:indalpha1)
+
+        sqrTmp = (shift(iAt1)+shift(iAt2))*sqrPcTmp -sqrEDMTmp&
+            & +(shift_excited(iAt1) + shift_excited(iAt2))*sqrDMTmp&
+            & +2.0_dp*(shxpyq(iAt1) + shxpyq(iAt2))*sqrXPYTmp
+
+        do xyz = 1, 3
+          tmp1 = 2.0_dp * sum( dH0(:nOrb2, :nOrb1, xyz) * sqrPcTmp(:nOrb2, :nOrb1) )
+          tmp2 = sum( dS(:nOrb2, :nOrb1, xyz) * sqrTmp(:nOrb2, :nOrb1) )
+          excgrad(xyz,iAt1) = excgrad(xyz,iAt1) + tmp1 + tmp2
+          excgrad(xyz,iAt2) = excgrad(xyz,iAt2) - tmp1 - tmp2
+        end do
+
+      end do
+    end do
+    !$OMP  END PARALLEL DO
 
   end subroutine addGradients
 
@@ -2310,10 +2360,10 @@ contains
 
   !> Create transition density matrix in MO basis P = T + 1/2 Z symmetric (paper has T + Z
   !> asymmetric) (Zab = Zij = 0, Tia = 0)
-  subroutine calcPMatrix(t, rhs, win, getij, pc)
+  subroutine calcPMatrix(T, rhs, win, getij, pc)
 
     !> T matrix
-    real(dp), intent(in) :: t(:,:)
+    real(dp), intent(in) :: T(:,:)
 
     !> Z matrix
     real(dp), intent(in) :: rhs(:)
@@ -2337,7 +2387,7 @@ contains
     end do
     !$OMP  END PARALLEL DO
     pc = 0.5_dp * ( pc + transpose(pc) )
-    pc = pc + t
+    pc = pc + T
 
   end subroutine calcPMatrix
 
