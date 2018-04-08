@@ -360,8 +360,7 @@ contains
 
     ss = 1
     if (.not. updwn) ss = 2
-    qTmp(:) =  grndEigVecs(:,ii,ss) * stimc(:,jj,ss) &
-        & + grndEigVecs(:,jj,ss) * stimc(:,ii,ss)
+    qTmp(:) =  grndEigVecs(:,ii,ss) * stimc(:,jj,ss) + grndEigVecs(:,jj,ss) * stimc(:,ii,ss)
     do kk = 1, size(qij)
       aa = iAtomStart(kk)
       bb = iAtomStart(kk + 1) -1
@@ -659,8 +658,7 @@ contains
     @:ASSERT(size(rkm1) == nmat)
 
     tmp(:) = 0.0_dp
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij)&
-    !$OMP& SCHEDULE(RUNTIME) REDUCTION(+:tmp)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(RUNTIME) REDUCTION(+:tmp)
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
@@ -672,8 +670,7 @@ contains
     call hemv(gtmp, gamma, tmp)
 
     rkm1 = 0.0_dp
-    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij)&
-    !$OMP& SCHEDULE(RUNTIME)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ii,jj,updwn,qij) SCHEDULE(RUNTIME)
     do ia = 1, nmat
       call indxov(win, ia, getij, ii, jj)
       updwn = (win(ia) <= nmatup)
