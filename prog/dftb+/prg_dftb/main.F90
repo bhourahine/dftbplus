@@ -263,13 +263,9 @@ contains
             & img2CentCell, potential, ham, iHam)
 
         if (tWriteRealHS .or. tWriteHS) then
-          if (withMpi) then
-            call error("Writing of HS not working with MPI yet")
-          else
-            call writeHSAndStop(tWriteHS, tWriteRealHS, tRealHS, over, neighborList, nNeighbor,&
-                & denseDesc%iAtomStart, iSparseStart, img2CentCell, kPoint, iCellVec, cellVec,&
-                & ham, iHam)
-          end if
+          call writeHSAndStop(env, tWriteHS, tWriteRealHS, tRealHS, over, neighborList,&
+              & nNeighbor, denseDesc%iAtomStart, iSparseStart, img2CentCell, kPoint, iCellVec,&
+              & cellVec, ham, iHam)
         end if
 
         call getDensity(env, denseDesc, ham, over, neighborList, nNeighbor, iSparseStart,&
@@ -367,7 +363,7 @@ contains
       if (tDipole) then
         call getDipoleMoment(qOutput, q0, coord, dipoleMoment)
       #:call DEBUG_CODE
-        call checkDipoleViaHellmannFeynman(size(h0), rhoPrim, q0, coord0, over, orb, neighborList,&
+        call checkDipoleViaHellmannFeynman(rhoPrim, q0, coord0, over, orb, neighborList,&
             & nNeighbor, species, iSparseStart, img2CentCell)
       #:endcall DEBUG_CODE
       end if
@@ -467,11 +463,11 @@ contains
 
         if (tSocket .and. env%tGlobalMaster) then
           ! stress was computed above in the force evaluation block or is 0 if aperiodic
-#:if WITH_SOCKETS
+        #:if WITH_SOCKETS
           call socket%send(energy%ETotal - sum(TS), -derivs, totalStress * cellVol)
-#:else
+        #:else
           call error("Should not be here - compiled without socket support")
-#:endif
+        #:endif
         end if
 
         ! If geometry minimizer finished and the last calculated geometry is the minimal one (not
@@ -635,8 +631,8 @@ contains
           & energy%EMermin, extPressure, energy%EGibbs, coord0, tLocalise, localisation, esp)
     end if
     if (tWriteResultsTag) then
-      call writeResultsTag(fdResultsTag, resultsTag, derivs, chrgForces, tStress, totalStress,&
-          & pDynMatrix, tPeriodic, cellVol)
+      call writeResultsTag(fdResultsTag, resultsTag, energy, derivs, chrgForces, tStress,&
+          & totalStress, pDynMatrix, tPeriodic, cellVol, tMulliken, qOutput, q0)
     end if
     if (tWriteDetailedXML) then
       call writeDetailedXml(runId, speciesName, species0, pCoord0Out, tPeriodic, latVec, tRealHS,&
@@ -3292,12 +3288,19 @@ contains
 
 
   !> Prints dipole moment calcululated by the derivative of H with respect of the external field.
-  subroutine checkDipoleViaHellmannFeynman(sparseSize, rhoPrim, q0, coord0, over, orb,&
-      & neighborList, nNeighbor, species, iSparseStart, img2CentCell)
-    integer, intent(in) :: sparseSize
+  subroutine checkDipoleViaHellmannFeynman(rhoPrim, q0, coord0, over, orb, neighborList, nNeighbor,&
+      & species, iSparseStart, img2CentCell)
+
+    !> Density matrix in sparse storage
     real(dp), intent(in) :: rhoPrim(:,:)
+
+    !> Reference orbital charges
     real(dp), intent(in) :: q0(:,:,:)
+
+    !> Central cell atomic coordinates
     real(dp), intent(in) :: coord0(:,:)
+
+    !> Overlap matrix in sparse storage
     real(dp), intent(in) :: over(:)
 
     !> Atomic orbital information
@@ -3319,9 +3322,9 @@ contains
     integer, intent(in) :: img2CentCell(:)
 
     real(dp), allocatable :: hprime(:,:), dipole(:,:), potentialDerivative(:,:)
-    integer :: nAtom
-    integer :: iAt, ii
+    integer :: nAtom, sparseSize, iAt, ii
 
+    sparseSize = size(over)
     nAtom = size(q0, dim=2)
     allocate(hprime(sparseSize, 1))
     allocate(dipole(size(q0, dim=1), nAtom))
@@ -3415,6 +3418,7 @@ contains
     !> K-points and spins to process
     type(TParallelKS), intent(in) :: parallelKS
 
+    !> Energy weighted sparse matrix
     real(dp), intent(out) :: ERhoPrim(:)
 
     !> Storage for dense hamiltonian matrix
@@ -3620,7 +3624,11 @@ contains
 
     !> Occupations of single particle states in the ground state
     real(dp), intent(in) :: filling(:,:,:)
+
+    !> eigen-values of the system
     real(dp), intent(in) :: eigen(:,:,:)
+
+    !> k-points of the system
     real(dp), intent(in) :: kPoint(:,:)
 
     !> Weights for k-points
@@ -3656,8 +3664,13 @@ contains
     !> K-points and spins to process
     type(TParallelKS), intent(in) :: parallelKS
 
+    !> Eigenvectors of the system
     complex(dp), intent(inout) :: eigvecsCplx(:,:,:)
+
+    !> work array (sized like overlap matrix)
     complex(dp), intent(inout) :: work(:,:)
+
+    !> Energy weighted sparse density matrix (charge only part)
     real(dp), intent(out) :: ERhoPrim(:)
 
     complex(dp), allocatable :: work2(:,:)
@@ -3682,8 +3695,8 @@ contains
       case(0)
         ! Original (non-consistent) scheme
       #:if WITH_SCALAPACK
-        call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,iK,iS),&
-            & eigvecsCplx(:,:,iKS), work, eigen(:,iK,iS))
+        call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr,&
+            & filling(:,iK,iS), eigvecsCplx(:,:,iKS), work, eigen(:,iK,iS))
       #:else
         if (tDensON2) then
           call makeDensityMatrix(work, eigvecsCplx(:,:,iKS), filling(:,iK,iS),&

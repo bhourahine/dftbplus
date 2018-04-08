@@ -2015,14 +2015,17 @@ contains
 
 
   !> Writes out machine readable data
-  subroutine writeResultsTag(fd, fileName, derivs, chrgForces, tStress, totalStress,&
-      & pDynMatrix, tPeriodic, cellVol)
+  subroutine writeResultsTag(fd, fileName, energy, derivs, chrgForces, tStress, totalStress,&
+      & pDynMatrix, tPeriodic, cellVol, tMulliken, qOutput, q0)
 
     !> File ID to write to
     integer, intent(in) :: fd
 
     !> Name of output file
     character(*), intent(in) :: fileName
+
+    !> Energy contributions and total
+    type(TEnergies), intent(in) :: energy
 
     !> Atomic derivatives (allocation status used as a flag)
     real(dp), allocatable, intent(in) :: derivs(:,:)
@@ -2045,9 +2048,24 @@ contains
     !> Unit cell volume if periodic (unreferenced otherwise)
     real(dp), intent(in) :: cellVol
 
+    !> Are Mulliken charges to be output
+    logical, intent(in) :: tMulliken
+
+    !> Output Mulliken charges
+    real(dp), intent(in) :: qOutput(:,:,:)
+
+    !> Reference atomic charges
+    real(dp), intent(in) :: q0(:,:,:)
+
+    real(dp), allocatable :: qOutputUpDown(:,:,:)
+
     @:ASSERT(tPeriodic .eqv. tStress)
 
     open(fd, file=fileName, action="write", status="replace")
+
+    call writeTagged(fd, tag_freeEgy, energy%EMermin)
+    call writeTagged(fd, tag_egyTotal, energy%ETotal)
+
     if (allocated(derivs)) then
       call writeTagged(fd, tag_forceTot, -derivs)
     end if
@@ -2063,6 +2081,14 @@ contains
     if (tPeriodic) then
       call writeTagged(fd, tag_volume, cellVol)
     end if
+
+    if (tMulliken) then
+      qOutputUpDown = qOutput
+      call qm2ud(qOutputUpDown)
+      call writeTagged(fd, tag_qOutput, qOutputUpDown(:,:,1))
+      call writeTagged(fd, tag_qOutAtGross, sum(q0(:,:,1) - qOutputUpDown(:,:,1), dim=1))
+    end if
+
     close(fd)
 
   end subroutine writeResultsTag
@@ -3252,8 +3278,11 @@ contains
 
 
   !> Writes Hamiltonian and overlap matrices and stops program execution.
-  subroutine writeHSAndStop(tWriteHS, tWriteRealHS, tRealHS, over, neighborList, nNeighbor,&
+  subroutine writeHSAndStop(env, tWriteHS, tWriteRealHS, tRealHS, over, neighborList, nNeighbor,&
       & iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, ham, iHam)
+
+    !> Environment settings
+    type(TEnvironment), intent(inout) :: env
 
     !> Write dense hamiltonian and overlap matrices
     logical, intent(in) :: tWriteHS
@@ -3311,17 +3340,22 @@ contains
     call qm2ud(hamUpDown)
 
     ! Write out matrices if necessary and quit.
-    call writeHS(tWriteHS, tWriteRealHS, tRealHS, hamUpDown, over, neighborList%iNeighbor,&
+    call writeHS(env, tWriteHS, tWriteRealHS, tRealHS, hamUpDown, over, neighborList%iNeighbor,&
         & nNeighbor, iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam)
     write(stdOut, "(A)") "Hamilton/Overlap written, exiting program."
+    call env%destruct()
+    call destructGlobalEnv()
     stop
 
   end subroutine writeHSAndStop
 
 
   !> Invokes the writing routines for the Hamiltonian and overlap matrices.
-  subroutine writeHS(tWriteHS, tWriteRealHS, tRealHS, ham, over, iNeighbor, nNeighbor, iAtomStart,&
-      & iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam)
+  subroutine writeHS(env, tWriteHS, tWriteRealHS, tRealHS, ham, over, iNeighbor, nNeighbor,&
+      & iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam)
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Should the hamiltonian and overlap be written out as dense matrices
     logical, intent(in) :: tWriteHS
@@ -3385,18 +3419,18 @@ contains
     if (tWriteHS) then
       if (tRealHS) then
         do iS = 1, nSpin
-          call writeSparseAsSquare("hamsqr" // i2c(iS) // ".dat", ham(:,iS), &
+          call writeSparseAsSquare(env, "hamsqr" // i2c(iS) // ".dat", ham(:,iS), &
               &iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell)
         end do
-        call writeSparseAsSquare("oversqr.dat", over, iNeighbor, nNeighbor, &
+        call writeSparseAsSquare(env, "oversqr.dat", over, iNeighbor, nNeighbor, &
             &iAtomStart, iPair, img2CentCell)
       else
         do iS = 1, nSpin
-          call writeSparseAsSquare("hamsqr" // i2c(iS) // ".dat", ham(:,iS), &
+          call writeSparseAsSquare(env, "hamsqr" // i2c(iS) // ".dat", ham(:,iS), &
               &kPoint, iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell, &
               &iCellVec, cellVec)
         end do
-        call writeSparseAsSquare("oversqr.dat", over, kPoint, iNeighbor, &
+        call writeSparseAsSquare(env, "oversqr.dat", over, kPoint, iNeighbor, &
             &nNeighbor, iAtomStart, iPair, img2CentCell, iCellVec, cellVec)
       end if
     end if
