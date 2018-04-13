@@ -1209,7 +1209,7 @@ contains
     !$OMP  END PARALLEL DO
 
     ! Build xpyq = sum_ia (X+Y)_ia
-    ! Workaround:gfortran 5.4.0 fails for OMP paralelism of this section
+    ! Workaround:gfortran 5.4/7.2 fails for OMP paralelism of this section
     !!$OMP PARALLEL DO PRIVATE(i, a, updwn, qij) DEFAULT(SHARED) SCHEDULE(STATIC)&
     !!$OMP& REDUCTION(+:xpyq)
     do ia = 1, nxov
@@ -1525,9 +1525,9 @@ contains
 
     ! Missing sum_kb 4 K_ijkb Z_kb term in W_ij: zq(iAt1) = sum_kb q^kb(iAt1) Z_kb
     zq = 0.0_dp
-    ! Workaround:gfortran 5.4.0 fails for OMP paralelism of this section
+    ! Workaround:gfortran 5.4/7.2 fails for OMP paralelism of this section
     !!$OMP PARALLEL DO PRIVATE(i, a, updwn, qij) DEFAULT(SHARED) SCHEDULE(STATIC)&
-    !!$OMP& REDUCTION(+:xpyq)
+    !!$OMP& REDUCTION(+:zq)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
       updwn = (win(ia) <= nmatup)
@@ -1859,7 +1859,7 @@ contains
     ! complexity norb * norb * norb
     xpyq(:) = 0.0_dp
 
-    ! Workaround:gfortran 5.4.0 fails for OMP paralelism of this section
+    ! Workaround:gfortran 5.4/7.2 fails for OMP paralelism of this section
     !!$OMP PARALLEL DO PRIVATE(i, a, updwn, qij) DEFAULT(SHARED) SCHEDULE(STATIC)&
     !!$OMP& REDUCTION(+:xpyq)
     do ia = 1, nxov
