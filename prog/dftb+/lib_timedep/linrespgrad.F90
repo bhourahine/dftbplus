@@ -74,10 +74,10 @@ contains
   !> based on Time Dependent DFRT
   subroutine LinRespGrad_old(tSpin, natom, iAtomStart, grndEigVecs, grndEigVal, sccCalc, dq,&
       & coord0, nexc, nstat0, symc, SSqr, filling, species0, HubbardU, spinW, rnel, iNeighbor, &
-      & img2CentCell, orb, tWriteTagged, fdTagged, fdMulliken, fdCoeffs, tGrndState, fdXplusY, &
-      & fdTrans, fdSPTrans, fdTradip, tArnoldi, fdArnoldi, fdArnoldiDiagnosis, fdExc, &
-      & tEnergyWindow, energyWindow,tOscillatorWindow, oscillatorWindow, omega, shift, skHamCont, &
-      & skOverCont, excgrad, derivator, rhoSqr, occNatural, naturalOrbs)
+      & img2CentCell, orb, tWriteTagged, fdTagged, tMulliken, tCoeffs, tGrndState, tXplusY, &
+      & tTrans, tSPTrans, fdTradip, tArnoldi, fdArnoldi, fdArnoldiDiagnosis, tEnergyWindow,&
+      & energyWindow,tOscillatorWindow, oscillatorWindow, omega, shift, skHamCont, skOverCont,&
+      & excgrad, derivator, rhoSqr, occNatural, naturalOrbs)
 
     !> spin polarized calculation
     logical, intent(in) :: tSpin
@@ -145,24 +145,24 @@ contains
     !> file descriptor for the tagged data output
     integer, intent(in) :: fdTagged
 
-    !> file unit for excited Mulliken populations?
-    integer, intent(in) :: fdMulliken
+    !> Should excited Mulliken populations be written?
+    logical, intent(in) :: tMulliken
 
-    !> file unit if the coefficients for the excited states should be written to disc
-    integer, intent(in) :: fdCoeffs
+    !> Should the coefficients for the excited states be written to disc?
+    logical, intent(in) :: tCoeffs
 
     !> Add the ground state to the excited state transition density matrix when determining the
     !> natural orbitals
     logical, intent(in) :: tGrndState
 
-    !> file for X+Y data
-    integer, intent(in) :: fdXplusY
+    !> Should X+Y data be written to disc?
+    logical, intent(in) :: tXplusY
 
-    !> File unit for single particle (KS) transitions if required
-    integer, intent(in) :: fdTrans
+    !> Should transitions be written to disc?
+    logical, intent(in) :: tTrans
 
-    !> File unit for single particle transition dipole strengths
-    integer, intent(in) :: fdSPTrans
+    !> Should single particle (KS) transitions be written to disc?
+    logical, intent(in) :: tSPTrans
 
     !> File unit for transition dipole data
     integer, intent(in) :: fdTradip
@@ -175,9 +175,6 @@ contains
 
     !> file unit for Arnoldi solver tests, if this is < 1 no tests are performed
     integer, intent(in) :: fdArnoldiDiagnosis
-
-    !> file handle for excitation energies
-    integer, intent(in) :: fdExc
 
     !> is an energy window specified
     logical, intent(in) :: tEnergyWindow
@@ -242,19 +239,22 @@ contains
 
     real(dp) :: energyThreshold
 
-    integer :: nStat
-
+    integer :: nStat, fdMulliken
 
     !> control variables
-    logical :: tZVector, tCoeffs, tTradip
-
-
-    !> printing data
-    logical :: tMulliken
-
+    logical :: tZVector, tTradip
 
     !> should gradients be calculated
     logical :: tForces
+
+    !> File ID for writing transitions to disc
+    integer :: fdTrans
+
+    !> File ID for writing X+Y information to disc
+    integer :: fdXplusY
+
+    !> file handle for excitation energies
+    integer :: fdExc
 
     ! ARPACK library variables
     ndigit = -3
@@ -274,17 +274,13 @@ contains
     endif
     ! End of ARPACK communication variables
 
-    @:ASSERT(fdExc > 0)
-
     ! work out which data files are required, based on whether they have valid file IDs (>0)
-    tMulliken = (fdMulliken > 0)
-    tCoeffs = (fdCoeffs > 0)
     tTradip = (fdTradip > 0)
 
     if (tMulliken) then
-      open(fdMulliken, file=excitedQOut,position="rewind", status="replace")
+      open(newunit=fdMulliken, file=excitedQOut,position="rewind", status="replace")
       close(fdMulliken)
-      open(fdMulliken, file=excitedDipoleOut, position="rewind", status="replace")
+      open(newunit=fdMulliken, file=excitedDipoleOut, position="rewind", status="replace")
       close(fdMulliken)
     end if
 
@@ -463,13 +459,10 @@ contains
     ! requirement combined with the need to get at least nexc states
     nxov_rd = max(nxov_rd,min(nexc+1,nxov))
 
-    if (fdXplusY >  0) then
-      open(fdXplusY, file=XplusYOut, position="rewind", status="replace")
-    end if
-
-    if(fdTrans>0) then
-      open(fdTrans, file=transitionsOut, position="rewind", status="replace")
+    if(tTrans) then
+      open(newunit=fdTrans, file=transitionsOut, position="rewind", status="replace")
       write(fdTrans,*)
+      close(fdTrans)
     endif
 
     ! single particle transition dipole file
@@ -483,7 +476,7 @@ contains
     endif
 
     ! excitation energies
-    open(fdExc, file=excitationsOut, position="rewind", status="replace")
+    open(newunit=fdExc, file=excitationsOut, position="rewind", status="replace")
     write(fdExc,*)
     if (tSpin) then
       write(fdExc,'(5x,a,7x,a,9x,a,9x,a,6x,a,4x,a)') 'w [eV]', 'Osc.Str.', 'Transition','Weight', &
@@ -499,7 +492,7 @@ contains
 
     ! single particle excitations (output file and tagged file if needed).  Was used for nxov_rd =
     ! size(wij), but now for just states that are actually included in the excitation calculation.
-    call writeSPExcitations(wij, win, nxov_ud(1), getij, fdSPTrans, sposz, nxov_rd, tSpin)
+    call writeSPExcitations(wij, win, nxov_ud(1), getij, tSPTrans, sposz, nxov_rd, tSpin)
     ALLOCATE(evec(nxov_rd, nexc))
 
     do isym = 1, size(symmetries)
@@ -517,10 +510,10 @@ contains
         call getExcSpin(Ssq, nxov_ud(1), getij, win, eval, evec, wij(:nxov_rd), filling, stimc, &
             & grndEigVecs)
         call writeExcitations(sym, osz, nexc, nxov_ud(1), getij, win, eval, evec, wij(:nxov_rd), &
-            & fdXplusY, fdTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc, Ssq)
+            & tXplusY, tTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc, Ssq)
       else
         call writeExcitations(sym, osz, nexc, nxov_ud(1), getij, win, eval, evec, wij(:nxov_rd), &
-            & fdXplusY, fdTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc)
+            & tXplusY, tTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc)
       end if
 
     end do
@@ -529,9 +522,8 @@ contains
       close(fdArnoldi)
     end if
 
-    if (fdTrans > 0) close(fdTrans)
-    if (fdXplusY > 0) close(fdXplusY)
-    if (fdExc > 0) close(fdExc)
+    close(fdExc)
+
     if (fdTradip > 0) close(fdTradip)
 
     ! Remove some un-used memory
@@ -620,15 +612,15 @@ contains
             & stimc, grndEigVecs, gammaMat, grndEigVal(:,1), wov, woo, wvv)
         call calcPMatrix(t, rhs, win, getij, pc)
 
-        call writeCoeffs(pc, grndEigVecs, filling, nocc, fdCoeffs, &
-            & tCoeffs, tGrndState, occNatural, naturalOrbs)
+        call writeCoeffs(pc, grndEigVecs, filling, nocc, tCoeffs, tGrndState, occNatural,&
+            & naturalOrbs)
 
         ! Make MO to AO transformation of the excited density matrix
         call makeSimiliarityTrans(pc, grndEigVecs(:,:,1))
 
         call getExcMulliken(iAtomStart, pc, SSqr, dqex)
         if (tMulliken) then
-          call writeExcMulliken(sym, iLev, dq, dqex, coord0, fdMulliken)
+          call writeExcMulliken(sym, iLev, dq, dqex, coord0)
         end if
 
         if (tForces) then
@@ -1561,7 +1553,7 @@ contains
 
 
   !> Excited state Mulliken charges and dipole moments written to disc
-  subroutine writeExcMulliken(sym, nstat, dq, dqex, coord0, fdMulliken)
+  subroutine writeExcMulliken(sym, nstat, dq, dqex, coord0)
 
     !> symmetry label
     character, intent(in) :: sym
@@ -1578,10 +1570,7 @@ contains
     !> central cell coordinates
     real(dp), intent(in) :: coord0(:,:)
 
-    !> file unit for Mulliken data
-    integer, intent(in) :: fdMulliken
-
-    integer :: natom, m
+    integer :: natom, m, fdMulliken
     real(dp) :: dipol(3), dipabs
 
     natom = size(dq)
@@ -1590,9 +1579,8 @@ contains
     @:ASSERT(all(shape(coord0) == [3,nAtom]))
 
     ! Output of excited state Mulliken charges
-    open(fdMulliken, file=excitedQOut,position="append")
-    write(fdMulliken, "(a,a,i2)") "# MULLIKEN CHARGES of excited state ",&
-        & sym, nstat
+    open(newunit=fdMulliken, file=excitedQOut,position="append")
+    write(fdMulliken, "(a,a,i2)") "# MULLIKEN CHARGES of excited state ", sym, nstat
     write(fdMulliken, "(a,2x,A,i4)") "#", 'Natoms =',natom
     write(fdMulliken, "('#',1X,A4,T15,A)")'Atom','netCharge'
     write(fdMulliken,'("#",41("="))')
@@ -1605,9 +1593,8 @@ contains
     dipol(:) = -1.0_dp * matmul(coord0, dq + dqex)
     dipabs = sqrt(sum(dipol**2))
 
-    open(fdMulliken, file=excitedDipoleOut, position="append")
-    write(fdMulliken, "(a,a,i2)") "Mulliken analysis of excited state ",&
-        & sym, nstat
+    open(newunit=fdMulliken, file=excitedDipoleOut, position="append")
+    write(fdMulliken, "(a,a,i2)") "Mulliken analysis of excited state ", sym, nstat
     write(fdMulliken, '(42("="))')
     write(fdMulliken, "(a)") " "
     write(fdMulliken, "(a)") "Mulliken exc. state dipole moment [Debye]"
@@ -1968,8 +1955,8 @@ contains
 
 
   !> Write out excitations projected onto ground state
-  subroutine writeCoeffs(tt, grndEigVecs, occ, nocc, fdCoeffs, tCoeffs, tIncGroundState, &
-      & occNatural, naturalOrbs)
+  subroutine writeCoeffs(tt, grndEigVecs, occ, nocc, tCoeffs, tIncGroundState, occNatural,&
+      & naturalOrbs)
 
     !> T part of the matrix
     real(dp), intent(in) :: tt(:,:)
@@ -1982,9 +1969,6 @@ contains
 
     !> number of filled states
     integer, intent(in) :: nocc
-
-    !> file descriptor to write data into
-    integer, intent(in) :: fdCoeffs
 
     !> save the coefficients of the natural orbitals
     logical, intent(in) :: tCoeffs
@@ -1999,7 +1983,7 @@ contains
     real(dp), intent(out), optional :: naturalOrbs(:,:,:)
 
     real(dp), allocatable :: t2(:,:), occtmp(:)
-    integer :: norb, ii, jj, mm
+    integer :: norb, ii, jj, mm, fdCoeffs
 
     norb = size(tt, dim=1)
 
@@ -2029,7 +2013,7 @@ contains
       ! Better to get this by post-processing DFTB+ output, but here for
       ! compatibility at the moment
       if (tCoeffs) then
-        open(fdCoeffs, file=excitedCoefsOut, position="append")
+        open(newunit=fdCoeffs, file=excitedCoefsOut, position="append")
         write(fdCoeffs,*) 'T F'
         do ii = 1, norb
           jj = norb - ii + 1
@@ -2070,8 +2054,8 @@ contains
 
   !> Write out transitions from ground to excited state along with single particle transitions and
   !> dipole strengths
-  subroutine writeExcitations(sym, osz, nexc, nmatup, getij, win, eval, evec, wij, fdXplusY, &
-      & fdTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc, Ssq)
+  subroutine writeExcitations(sym, osz, nexc, nmatup, getij, win, eval, evec, wij, tXplusY,&
+      & tTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc, Ssq)
 
     !> Symmetry label for the type of transition
     character, intent(in) :: sym
@@ -2109,11 +2093,11 @@ contains
     !> file unit for transition dipoles
     integer, intent(in) :: fdTradip
 
-    !> file unit for X+Y data
-    integer, intent(in) :: fdXplusY
+    !> Should X+Y data be written
+    logical, intent(in) :: tXplusY
 
-    !> file unit for transitions
-    integer, intent(in) :: fdTrans
+    !> Should transitions be written?
+    logical, intent(in) :: tTrans
 
     !> file unit for tagged output (> -1 for write out)
     integer, intent(in) :: fdTagged
@@ -2136,7 +2120,11 @@ contains
     logical :: updwn, tSpin
     character :: sign
 
-    @:ASSERT(fdExc > 0)
+    !> File ID for writing transitions to disc
+    integer :: fdTrans
+
+    !> File ID for writing transitions to disc
+    integer :: fdXplusY
 
     tSpin = present(Ssq)
     nmat = size(wij)
@@ -2151,7 +2139,8 @@ contains
     eDeg = 0.0_dp
     oDeg = 0.0_dp
 
-    if(fdXplusY > 0) then
+    if(tXplusY) then
+      open(newunit=fdXplusY, file=XplusYOut, position="rewind", status="replace")
       write(fdXplusY,*) nmat, nexc
     end if
 
@@ -2190,7 +2179,7 @@ contains
               & Hartree__eV * wij(iweight), sign
         end if
 
-        if(fdXplusY > 0) then
+        if(tXplusY) then
           if (tSpin) then
             updwn = (win(iweight) <= nmatup)
             sign = "D"
@@ -2200,7 +2189,8 @@ contains
           write(fdXplusY,'(6(1x,ES17.10))') xply(:)
         endif
 
-        if (fdTrans > 0) then
+        if (tTrans) then
+          open(newunit=fdTrans, file=transitionsOut, status="old", position="append")
           write(fdTrans, '(2x,a,T12,i5,T21,ES17.10,1x,a,2x,a)') &
               & 'Energy ', i,  Hartree__eV * sqrt(eval(i)), 'eV', sign
           write(fdTrans,*)
@@ -2223,6 +2213,7 @@ contains
                 & m, '->', n, sign, wvec(j), Hartree__eV * wij(wvin(j))
           end do
           write(fdTrans,*)
+          close(fdTrans)
         end if
 
         if(fdTradip > 0) then
@@ -2255,19 +2246,22 @@ contains
               & Hartree__eV * wij(iweight), sign
         end if
 
-        if(fdXplusY > 0) then
+        if(tXplusY) then
           if (tSpin) then
             updwn = (win(iweight) <= nmatup)
             sign = "D"
             if (updwn) sign = "U"
           end if
           write(fdXplusY,'(1x,i5,3x,a,3x,A)') i,sign, '-'
+          close(fdXplusY)
         endif
 
-        if (fdTrans > 0) then
+        if (tTrans) then
+          open(newunit=fdTrans, file=transitionsOut, status="old", position="append")
           write(fdTrans, '(2x,a,1x,i5,5x,a,1x,a,3x,a)') &
               & 'Energy ', i,  '-', 'eV', sign
           write(fdTrans,*)
+          close(fdTrans)
         end if
 
         if(fdTradip > 0) then
@@ -2334,7 +2328,7 @@ contains
 
   !> Write single particle excitations to a file as well as potentially to tagged output file (in
   !> that case, summing over degeneracies)
-  subroutine writeSPExcitations(wij, win, nmatup, getij, fdSPTrans, sposz, nxov, tSpin)
+  subroutine writeSPExcitations(wij, win, nmatup, getij, tSPTrans, sposz, nxov, tSpin)
 
     !> single particle excitation energies
     real(dp), intent(in) :: wij(:)
@@ -2348,8 +2342,8 @@ contains
     !> index from composite index to occupied and virtual single particle states
     integer, intent(in) :: getij(:,:)
 
-    !> file descriptor for the single particle excitation data
-    integer, intent(in) :: fdSPTrans
+    !> Should single particle transitions be written out?
+    logical, intent(in) :: tSPTrans
 
     !> single particle oscilation strengths
     real(dp), intent(in) :: sposz(:)
@@ -2364,15 +2358,15 @@ contains
     integer :: indm, m, n
     logical :: updwn
     character :: sign
+    integer :: fdSPTrans
 
     @:ASSERT(size(sposz)>=nxov)
 
-    if (fdSPTrans > 0) then
+    if (tSPTrans) then
       ! single particle excitations
-      open(fdSPTrans, file=singlePartOut, position="rewind", status="replace")
+      open(newunit=fdSPTrans, file=singlePartOut, position="rewind", status="replace")
       write(fdSPTrans,*)
-      write(fdSPTrans,'(7x,a,7x,a,8x,a)') '#      w [eV]', &
-          & 'Osc.Str.', 'Transition'
+      write(fdSPTrans,'(7x,a,7x,a,8x,a)') '#      w [eV]', 'Osc.Str.', 'Transition'
       write(fdSPTrans,*)
       write(fdSPTrans,'(1x,58("="))')
       write(fdSPTrans,*)

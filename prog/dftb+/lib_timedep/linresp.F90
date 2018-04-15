@@ -112,13 +112,12 @@ module linresp_module
     character :: symmetry
     real(dp), allocatable :: spinW(:)
     real(dp), allocatable :: HubbardU(:)
-    integer :: fdXplusY = -1
-    integer :: fdCoeffs = -1
+    logical :: tXplusY
+    logical :: tCoeffs
     logical :: tGrndState = .true.
-    integer :: fdMulliken = -1
-    integer :: fdTrans = -1
-    integer :: fdSPTrans = -1
-    integer :: fdExc = -1
+    logical :: tMulliken
+    logical :: tTrans
+    logical :: tSPTrans
     integer :: fdTradip = -1
     logical :: tArnoldi
 
@@ -186,37 +185,21 @@ contains
       call error("Excited energy window should be non-zero if used")
     end if
 
-    if (ini%tMulliken) then
-      this%fdMulliken = getFileId()
-    else
-      this%fdMulliken = -1
-    end if
-    if (ini%tCoeffs) then
-      this%fdCoeffs = getFileId()
-    else
-      this%fdCoeffs = -1
-    end if
+    this%tMulliken = ini%tMulliken
+
+    this%tCoeffs = ini%tCoeffs
     this%tGrndState = ini%tGrndState
+
     if (ini%tDiagnoseArnoldi) then
       this%fdArnoldiDiagnosis = getFileId()
     else
       this%fdArnoldiDiagnosis = -1
     end if
-    if (ini%tTrans) then
-      this%fdTrans = getFileId()
-    else
-      this%fdTrans = -1
-    end if
-    if (ini%tSPTrans) then
-      this%fdSPTrans = getFileId()
-    else
-      this%fdSPTrans = -1
-    end if
-    if (ini%tXplusY) then
-      this%fdXplusY = getFileId()
-    else
-      this%fdXplusY = -1
-    end if
+
+    this%tTrans = ini%tTrans
+    this%tSPTrans = ini%tSPTrans
+    this%tXplusY = ini%tXplusY
+
     if (ini%tTradip) then
       this%fdTradip = getFileId()
     else
@@ -229,7 +212,6 @@ contains
     this%nEl = nEl
     this%nOcc = ceiling(nEl / 2.0_dp)
     this%nVir = orb%nOrb - this%nOcc
-    this%fdExc = getFileId() ! file for excitations
 
     ! Write to disc
     this%tPrintEigVecs = ini%tPrintEigVecs
@@ -307,10 +289,10 @@ contains
     call LinRespGrad_old(tSpin, this%nAtom, denseDesc%iAtomStart, eigVec, eigVal, sccCalc, dqAt,&
         & coords0, this%nExc, this%nStat, this%symmetry, SSqrReal, filling, species0,&
         & this%HubbardU, this%spinW, this%nEl, iNeighbor, img2CentCell, orb, tWriteTagged,&
-        & fdTagged, this%fdMulliken, this%fdCoeffs, this%tGrndState, this%fdXplusY, this%fdTrans,&
-        & this%fdSPTrans, this%fdTradip, this%tArnoldi, this%fdArnoldi,  this%fdArnoldiDiagnosis,&
-        & this%fdExc, this%tEnergyWindow, this%energyWindow, this%tOscillatorWindow,&
-        & this%oscillatorWindow, excEnergy)
+        & fdTagged, this%tMulliken, this%tCoeffs, this%tGrndState, this%tXplusY, this%tTrans,&
+        & this%tSPTrans, this%fdTradip, this%tArnoldi, this%fdArnoldi, this%fdArnoldiDiagnosis,&
+        & this%tEnergyWindow, this%energyWindow, this%tOscillatorWindow, this%oscillatorWindow,&
+        & excEnergy)
 
 #:else
     call error('Internal error: Illegal routine call to &
@@ -417,18 +399,18 @@ contains
       call LinRespGrad_old(tSpin, this%nAtom, iAtomStart, eigVec, eigVal, sccCalc, dqAt, coords0, &
           & this%nExc, this%nStat, this%symmetry, SSqrReal, filling, species0, this%HubbardU, &
           & this%spinW, this%nEl, iNeighbor, img2CentCell, orb, tWriteTagged, fdTagged, &
-          & this%fdMulliken, this%fdCoeffs, this%tGrndState, this%fdXplusY, this%fdTrans, &
-          & this%fdSPTrans, this%fdTradip, this%tArnoldi, this%fdArnoldi, this%fdArnoldiDiagnosis, &
-          & this%fdExc, this%tEnergyWindow, this%energyWindow, this%tOscillatorWindow, &
-          & this%oscillatorWindow, excEnergy, shiftPerAtom, skHamCont, skOverCont, excgradient, &
-          & derivator, rhoSqr, occNatural, naturalOrbs)
+          & this%tMulliken, this%tCoeffs, this%tGrndState, this%tXplusY, this%tTrans, &
+          & this%tSPTrans, this%fdTradip, this%tArnoldi, this%fdArnoldi, this%fdArnoldiDiagnosis, &
+          & this%tEnergyWindow, this%energyWindow, this%tOscillatorWindow, this%oscillatorWindow,&
+          & excEnergy, shiftPerAtom, skHamCont, skOverCont, excgradient, derivator, rhoSqr,&
+          & occNatural, naturalOrbs)
     else
       call LinRespGrad_old(tSpin, this%nAtom, iAtomStart, eigVec, eigVal, sccCalc, dqAt, coords0, &
           & this%nExc, this%nStat, this%symmetry, SSqrReal, filling, species0, this%HubbardU, &
           & this%spinW, this%nEl, iNeighbor, img2CentCell, orb, tWriteTagged, fdTagged, &
-          & this%fdMulliken, this%fdCoeffs, this%tGrndState, this%fdXplusY, this%fdTrans, &
-          & this%fdSPTrans, this%fdTradip, this%tArnoldi, this%fdArnoldi, this%fdArnoldiDiagnosis, &
-          & this%fdExc, this%tEnergyWindow, this%energyWindow, this%tOscillatorWindow, &
+          & this%tMulliken, this%tCoeffs, this%tGrndState, this%tXplusY, this%tTrans, &
+          & this%tSPTrans, this%fdTradip, this%tArnoldi, this%fdArnoldi, this%fdArnoldiDiagnosis, &
+          & this%tEnergyWindow, this%energyWindow, this%tOscillatorWindow, &
           & this%oscillatorWindow, excEnergy, shiftPerAtom, skHamCont, skOverCont, excgradient, &
           & derivator, rhoSqr)
     end if
