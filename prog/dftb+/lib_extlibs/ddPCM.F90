@@ -14,7 +14,7 @@ module ddpcm
   use omp_lib
   use ddcosmo, only : ddinit, memfree, ccav, ncav, nylm, eps, eta, iprint, nproc, lmax,&
       & ngrid, iconv, igrad
-  
+
   use constants, only : pi, Bohr__AA
   use scc
   use dispuffdata
@@ -22,14 +22,14 @@ module ddpcm
   use environment
 #:endif
   implicit none
-  
+
   private
 
   public :: TddPCM
 #:if WITH_DDPCM
   public :: ddPCM_init, buildPCMfields
 #:endif
-  
+
   type :: TddPCM
 
 #:if WITH_DDPCM
@@ -38,9 +38,9 @@ module ddpcm
     real(dp) :: dielectric
 
     real(dp) :: scaleFactor
-    
+
     real(dp) :: regularisation
-    
+
     !> van der Waals radii for the species present
     real(dp), allocatable :: vdwRadii(:)
 
@@ -53,27 +53,27 @@ module ddpcm
     real(dp), allocatable :: psi(:,:)
 
     real(dp), allocatable :: sigma(:,:)
-    
+
   contains
 
     procedure :: buildPCMfields
 
 #:endif
-    
+
   end type TddPCM
 
 #:if WITH_DDPCM
 
   !> Whether code was built with ddPCM support
   logical, parameter, public :: withddPCM = .true.
-  
+
 #:else
 
   !> Whether code was built with ddPCM support
   logical, parameter, public :: withddPCM = .false.
 
 #:endif
-  
+
 contains
 
 #:if WITH_DDPCM
@@ -82,7 +82,7 @@ contains
     type(TddPCM), intent(inout) :: this
 
     integer, intent(in) :: species0(:)
-    
+
     !> Names of the atom types
     character(*), intent(in) :: speciesNames(:)
 
@@ -94,26 +94,26 @@ contains
 
     if (.not.allocated(this%vdwRadii)) then
       allocate(this%vdwRadii(nAtom))
-      
+
       do iAt = 1, nAtom
         iSp = species0(iAt)
         call getUffValues(speciesNames(iSp), this%vdwRadii(iAt), tmp, found=tFound)
-        
+
         if (.not. tFound) then
           call error("Missing van der Waals radius for this species : " // trim(speciesNames(iSp)) )
         end if
-        
+
       end do
       this%vdwRadii = this%scaleFactor*this%vdwRadii
       write(*,*)'Radii :',this%vdwRadii * Bohr__AA
     end if
-    
+
   end subroutine ddPCM_init
-  
+
   subroutine buildPCMfields(this, sccCalc, env, coord0, deltaQAtom, atomPotential, eSolvation)
-    
+
     class(TddPCM), intent(inout) :: this
-    
+
     !> Module variables for SCC
     type(TScc), intent(inout) :: sccCalc
 
@@ -121,13 +121,13 @@ contains
     type(TEnvironment), intent(in) :: env
 
     real(dp), intent(in) :: coord0(:,:)
-       
+
     real(dp), intent(in) :: deltaQAtom(:)
 
     real(dp), intent(inout) :: atomPotential(:)
 
     real(dp), intent(out), optional :: eSolvation
-    
+
     real(dp) :: fac, esolv, xx(1)
     real(dp), parameter :: tokcal=627.509469_dp
     integer :: nAtom
@@ -140,7 +140,7 @@ contains
     end if
 
     nAtom = size(coord0,dim=2)
-    
+
     eps = this%dielectric
     write(*,*)'EPSILON ', this%dielectric ,eps
     write(*,*)'Radii :',this%vdwRadii * Bohr__AA
@@ -173,7 +173,7 @@ contains
     this%psi(1,:) = fac * deltaQAtom(:)
     write(*,*)deltaQAtom
     esolv = 0.0_dp
-    
+
     this%sigma = 0.0_dp
     call cosmo(.false., .true., this%phi, xx, this%psi, this%sigma, esolv)
     write (6,'(1x,a,f20.12)') 'ddcosmo electrostatic solvation energy (kcal/mol):', esolv*tokcal
@@ -182,9 +182,9 @@ contains
     if (present(eSolvation)) then
       eSolvation = esolv
     end if
-    
+
   end subroutine buildPCMfields
-  
+
 #:endif
 
 end module ddpcm

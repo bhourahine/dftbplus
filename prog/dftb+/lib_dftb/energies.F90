@@ -74,7 +74,7 @@ module energies
 
     !> solvation energy
     real(dp) :: ESolvation = 0.0_dp
-    
+
     !> atom resolved repulsive
     real(dp), allocatable :: atomRep(:)
 
