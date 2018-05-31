@@ -259,6 +259,10 @@ module inputdata_module
 
     integer :: maxRun        = -2
 
+    logical :: tPCM
+    real(dp) :: dielectricPCM
+    real(dp) :: scaleFactorPCM
+    real(dp) :: regPCM
 
     !> second derivative finite difference step
     real(dp) :: deriv2ndDelta    = 0.0_dp

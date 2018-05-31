@@ -28,6 +28,9 @@ Additionally there are optional requirements for some DFTB+ features:
 
 * The DftD3 dispersion library (if you need this dispersion model).
 
+* The ddPCM library for implicit solvents (if required, but remember to cite the
+  required papers).
+
 In order to execute the code tests and validate them against precalculated
 results, you will additionally need:
 

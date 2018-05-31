@@ -72,6 +72,10 @@ module initprogram
   use mainio, only : receiveGeometryFromSocket
   use ipisocket
 #:endif
+#:if WITH_DDPCM
+  use ddcosmo, only : memfree
+#:endif
+  use ddpcm
   use elstatpot
   use pmlocalisation
   use energies
@@ -125,7 +129,6 @@ module initprogram
 
   !> nr of different types (nAtom)
   integer :: nType
-
 
   !> data type for atomic orbital information
   type(TOrbitals), target :: orb
@@ -207,7 +210,6 @@ module initprogram
   !> index in cellVec for each atom
   integer, allocatable :: iCellVec(:)
 
-
   !> ADT for neighbour parameters
   type(TNeighbourList), allocatable, save :: neighbourList
 
@@ -261,6 +263,9 @@ module initprogram
 
   !> Charge per atomic shell (shell, atom, spin channel)
   real(dp), allocatable :: chargePerShell(:,:,:)
+
+  !> Charge per atom (atom, spin channel)
+  real(dp), allocatable :: chargePerAtom(:,:)
 
   !> sparse overlap
   real(dp), allocatable :: over(:)
@@ -485,10 +490,8 @@ module initprogram
   !> Geometry optimizer for lattice consts
   type(OGeoOpt), allocatable :: pGeoLatOpt
 
-
   !> Charge mixer
   type(OMixer), allocatable :: pChrgMixer
-
 
   !> MD Framework
   type(OMDCommon), allocatable :: pMDFrame
@@ -578,7 +581,6 @@ module initprogram
   !> phase of field at step 0
   integer :: EfieldPhase = 0
 
-
   !> Partial density of states (PDOS) projection regions
   type(listIntR1), save :: iOrbRegion
 
@@ -593,7 +595,6 @@ module initprogram
 
   !> data structure for 3rd order
   type(ThirdOrder), allocatable :: thirdOrd
-
 
   !> Calculate Casida linear response excitations
   logical :: tLinResp
@@ -772,6 +773,9 @@ module initprogram
   !> Contains (iK, iS) tuples to be processed in parallel by various processor groups
   type(TParallelKS) :: parallelKS
 
+  !> electrostatic model if needed
+  type(TddPCM), allocatable :: ddPCM
+
   private :: createRandomGenerators
 
 contains
@@ -897,7 +901,6 @@ contains
     !> First guess for nr. of neighbours.
     integer, parameter :: nInitNeighbour = 40
 
-
     @:ASSERT(input%tInitialized)
 
     write(stdOut, "(/, A)") "Starting initialization..."
@@ -935,6 +938,22 @@ contains
     orb = input%slako%orb
     nOrb = orb%nOrb
     tPeriodic = input%geom%tPeriodic
+
+  #:if WITH_DDPCM
+    if (input%ctrl%tPCM) then
+      if (tPeriodic) then
+        call error("PCM model incompatible with periodic boundary conditions at the moment")
+      end if
+      if (.not.tSccCalc) then
+        call error("PCM model requires SCC to be enabled")
+      end if
+      allocate(ddPCM)
+      ddPCM%dielectric = input%ctrl%dielectricPCM
+      write(*,*)'EPSILON ',ddPCM%dielectric
+      ddPCM%scaleFactor = input%ctrl%scaleFactorPCM
+      ddPCM%regularisation = input%ctrl%regPCM
+    end if
+  #:endif
 
     ! Brillouin zone sampling
     if (tPeriodic) then
@@ -1209,6 +1228,13 @@ contains
     @:ASSERT(all(shape(species0) == shape(input%geom%species)))
     species0(:) = input%geom%species(:)
 
+  #:if WITH_DDPCM
+    if (allocated(ddPCM)) then
+      write(*,*)'EPSILON ',ddPCM%dielectric
+      call ddPCM_init(ddPCM, species0, speciesName)
+    end if
+  #:endif
+
     allocate(mass(nAtom))
     mass = speciesMass(species0)
     if (allocated(input%ctrl%masses)) then
@@ -1233,8 +1259,10 @@ contains
     tImHam = tDualSpinOrbit .or. (tSpinOrbit .and. tDFTBU) ! .or. tBField
     if (tSccCalc) then
       allocate(chargePerShell(orb%mShell,nAtom,nSpin))
+      allocate(chargePerAtom(nAtom,nSpin))
     else
-       allocate(chargePerShell(0,0,0))
+      allocate(chargePerShell(0,0,0))
+      allocate(chargePerAtom(0,0))
     end if
     allocate(ham(0, nSpin))
     if (tImHam) then
@@ -2672,6 +2700,10 @@ contains
       call destruct(iOrbRegion)
       call destruct(RegionLabels)
     end if
+
+  #:if WITH_DDPCM
+    !call memfree
+  #:endif
 
   end subroutine destructProgramVariables
 

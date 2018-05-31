@@ -1457,6 +1457,15 @@ contains
 
       ctrl%tMulliken = .true.
 
+    #:if WITH_DDPCM
+      call getChildValue(node, "PCM", ctrl%tPCM, .false.)
+      if (ctrl%tPCM) then
+        call getChildValue(node, "relativeDielectricConstant", ctrl%dielectricPCM, 1.0_dp)
+        call getChildValue(node, "RadiusScale", ctrl%scaleFactorPCM, 0.55_dp)
+        call getChildValue(node, "Regularisation", ctrl%regPCM, 0.1_dp)
+      end if
+    #:endif
+
     end if ifSCC
 
     ! External electric field

@@ -2639,6 +2639,10 @@ contains
         write(fd, format2U) 'Energy DFTB+U', energy%Edftbu, 'H',&
             & energy%Edftbu * Hartree__eV, 'eV'
       end if
+    #:if WITH_DDPCM
+      write(fd, format2U) 'Energy solvation', energy%ESolvation, 'H',&
+          & energy%ESolvation * Hartree__eV, 'eV'
+    #:endif
     end if
 
     if (tSpinOrbit) then

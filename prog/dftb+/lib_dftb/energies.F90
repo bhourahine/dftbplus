@@ -72,6 +72,9 @@ module energies
     !> Gibbs free energy including kinetic energy
     real(dp) :: EGibbsKin = 0.0_dp
 
+    !> solvation energy
+    real(dp) :: ESolvation = 0.0_dp
+    
     !> atom resolved repulsive
     real(dp), allocatable :: atomRep(:)
 
@@ -167,6 +170,7 @@ contains
     self%EKin = 0.0_dp
     self%EMerminKin = 0.0_dp
     self%EGibbsKin = 0.0_dp
+    self%ESolvation = 0.0_dp
 
   end subroutine Energies_init
 

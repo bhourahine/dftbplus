@@ -18,7 +18,7 @@ module populations
   implicit none
   private
 
-  public :: mulliken, skewMulliken, getChargePerShell
+  public :: mulliken, skewMulliken, getChargePerShell, getChargePerAtom
 
 
   !> Provides an interface to calculate Mulliken populations, either dual basis atomic block,
@@ -313,6 +313,27 @@ contains
     end do
 
   end subroutine getChargePerShell
+
+  !> Calculate the number of charges per atom given the orbital charges.
+  subroutine getChargePerAtom(qq, chargePerAtom)
+
+    !> charges in each orbital, for each atom and spin channel
+    real(dp), intent(in) :: qq(:,:,:)
+
+    !> Resulting charges on atoms
+    real(dp), intent(out) :: chargePerAtom(:,:)
+
+    integer :: iAt
+    integer :: nAtom, nSpin
+
+    nAtom = size(chargePerAtom, dim=1)
+    nSpin = size(chargePerAtom, dim=2)
+    chargePerAtom(:,:) = 0.0_dp
+    do iAt = 1, nAtom
+      chargePerAtom(iAt, 1:nSpin) = sum(qq(:, iAt, 1:nSpin), dim=1)
+    end do
+
+  end subroutine getChargePerAtom
 
 
 

@@ -70,6 +70,7 @@ module main
   use mdintegrator
   use tempprofile
   use elstatpot, only : TElStatPotentials
+  use ddpcm
   implicit none
   private
 
@@ -238,6 +239,13 @@ contains
           & EFieldVector, EFieldOmega, EFieldPhase, neighbourList, nNeighbourSK, iCellVec,&
           & img2CentCell, cellVec, deltaT, iGeoStep, coord0Fold, coord, EField,&
           & potential%extAtom(:,1), absEField)
+    #:if WITH_DDPCM
+      if (allocated(ddPCM)) then
+        if (tPeriodic) then
+          call error("PCM model not currently supported for periodic geometries")
+        end if
+      end if
+    #:endif
 
       call mergeExternalPotentials(orb, species, potential)
 
@@ -250,8 +258,13 @@ contains
         call resetInternalPotentials(tDualSpinOrbit, xi, orb, species, potential)
         if (tSccCalc) then
           call getChargePerShell(qInput, orb, species, chargePerShell)
-          call addChargePotentials(env, sccCalc, qInput, q0, chargePerShell, orb, species,&
-              & neighbourList, img2CentCell, spinW, thirdOrd, potential)
+        #:if WITH_DDPCM
+          if (allocated(ddPCM)) then
+            call getChargePerAtom(qInput-q0, chargePerAtom)
+          end if
+        #:endif
+          call addChargePotentials(env, sccCalc, qInput, q0, chargePerShell, chargePerAtom, orb,&
+              & species, neighbourList, img2CentCell, spinW, thirdOrd, potential, ddPCM, coord0)
           call addBlockChargePotentials(qBlockIn, qiBlockIn, tDftbU, tImHam, species, orb,&
               & nDftbUFunc, UJ, nUJ, iUJ, niUJ, potential)
         end if
@@ -292,8 +305,14 @@ contains
         if (tSccCalc .and. .not. tXlbomd) then
           call resetInternalPotentials(tDualSpinOrbit, xi, orb, species, potential)
           call getChargePerShell(qOutput, orb, species, chargePerShell)
-          call addChargePotentials(env, sccCalc, qOutput, q0, chargePerShell, orb, species,&
-              & neighbourList, img2CentCell, spinW, thirdOrd, potential)
+        #:if WITH_DDPCM
+          if (allocated(ddPCM)) then
+            call getChargePerAtom(qOutput-q0, chargePerAtom)
+          end if
+        #:endif
+          call addChargePotentials(env, sccCalc, qOutput, q0, chargePerShell, chargePerAtom, orb,&
+              & species, neighbourList, img2CentCell, spinW, thirdOrd, potential, ddPCM, coord0, &
+              & energy%ESolvation)
           call addBlockChargePotentials(qBlockOut, qiBlockOut, tDftbU, tImHam, species, orb,&
               & nDftbUFunc, UJ, nUJ, iUJ, niUJ, potential)
           potential%intBlock = potential%intBlock + potential%extBlock
@@ -1280,8 +1299,8 @@ contains
 
 
   !> Add potentials comming from point charges.
-  subroutine addChargePotentials(env, sccCalc, qInput, q0, chargePerShell, orb, species,&
-      & neighbourList, img2CentCell, spinW, thirdOrd, potential)
+  subroutine addChargePotentials(env, sccCalc, qInput, q0, chargePerShell, chargePerAtom, orb,&
+      & species, neighbourList, img2CentCell, spinW, thirdOrd, potential, ddPCM, coord0, eSolvation)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -1297,6 +1316,9 @@ contains
 
     !> charges per atomic shell
     real(dp), intent(in) :: chargePerShell(:,:,:)
+
+    !> charges per atomic shell
+    real(dp), intent(inout) :: chargePerAtom(:,:)
 
     !> atomic orbital information
     type(TOrbitals), intent(in) :: orb
@@ -1319,6 +1341,14 @@ contains
     !> Potentials acting
     type(TPotentials), intent(inout) :: potential
 
+    !> polarisable continuum model, if needed
+    type(TddPCM), allocatable, intent(inout) :: ddPCM
+
+    !> Central cell coordinates
+    real(dp), intent(in) :: coord0(:,:)
+
+    real(dp), intent(out), optional :: eSolvation
+    
     real(dp), allocatable :: atomPot(:,:)
     real(dp), allocatable :: shellPot(:,:,:)
     integer, pointer :: pSpecies0(:)
@@ -1344,6 +1374,14 @@ contains
       potential%intAtom(:,1) = potential%intAtom(:,1) + atomPot(:,1)
       potential%intShell(:,:,1) = potential%intShell(:,:,1) + shellPot(:,:,1)
     end if
+
+  #:if WITH_DDPCM
+    if (allocated(ddPCM)) then
+      atomPot(:,1) = 0.0_dp
+      call ddPCM%buildPCMfields(sccCalc, env, coord0, chargePerAtom(:,1), atomPot(:,1), eSolvation)
+      potential%intAtom(:,1) = potential%intAtom(:,1) + atomPot(:,1)
+    end if
+  #:endif
 
     if (nSpin /= 1 .and. allocated(spinW)) then
       call getSpinShift(shellPot, chargePerShell, species, orb, spinW)
@@ -2502,7 +2540,7 @@ contains
     !> reference charges
     real(dp), intent(in) :: q0(:,:,:)
 
-    !> electrons in each atomi shell
+    !> electrons in each atomic shell
     real(dp), intent(in) :: chargePerShell(:,:,:)
 
     !> chemical species
@@ -2641,7 +2679,7 @@ contains
     energy%atomElec(:) = energy%atomNonSCC + energy%atomSCC + energy%atomSpin + energy%atomDftbu&
         & + energy%atomLS + energy%atomExt + energy%atom3rd
     energy%atomTotal(:) = energy%atomElec + energy%atomRep + energy%atomDisp
-    energy%Etotal = energy%Eelec + energy%Erep + energy%eDisp
+    energy%Etotal = energy%Eelec + energy%Erep + energy%eDisp + energy%ESolvation
     energy%EMermin = energy%Etotal - sum(TS)
     energy%EGibbs = energy%EMermin + cellVol * extPressure
 

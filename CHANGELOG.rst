@@ -15,6 +15,7 @@ Added
 
 - H5 correction for hydrogen bonds.
 
+- ddPCM solvent interface added
   
 Changed
 -------
