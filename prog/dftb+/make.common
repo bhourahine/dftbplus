@@ -131,6 +131,17 @@ ifeq ($(strip $(WITH_DFTD3)),1)
   L_INCS += $(DFTD3_INCS)
 endif
 
+# DDPCM library
+ifeq ($(strip $(WITH_DDPCM)),1)
+    FYPPOPT += -DWITH_DDPCM
+ifeq ($(strip $(COMPILE_DDPCM)),1)
+    COMPILED_EXTERNALS += _extlib_ddPCM
+    LIB_DDPCM := -L$(BUILDROOT)/external/ddPCM -lddPCM
+    DDPCM_INCS := -I$(BUILDROOT)/external/ddPCM
+endif
+    L_INCS += $(DDPCM_INCS)
+    L_LIBS += $(LIB_DDPCM)
+endif
 
 ifeq ($(strip $(WITH_MPI)),1)
   #

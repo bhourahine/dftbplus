@@ -50,6 +50,7 @@ CC = gcc
 
 # Compiler options
 FXXOPT = -O2 -funroll-all-loops -fopenmp
+F77OPT = -O2 -funroll-all-loops
 CCOPT = -O2 -funroll-all-loops -fall-intrinsics
 
 # Linker
@@ -89,11 +90,13 @@ LIBOPT =
 ifeq ($(strip $(DEBUG)),1)
     OTHERLIBS = 
     FXXOPT = -fopenmp -g -Wall -std=f2008 -pedantic
+    F77OPT = -g -Wall -std=legacy
     CCOPT = -g -Wall -pedantic -fall-intrinsics
 endif
 
 ifeq ($(strip $(DEBUG)),2)
     OTHERLIBS = 
     FXXOPT = -fopenmp -g -Wall -std=f2008 -pedantic -fbounds-check
+    F77OPT = -g -Wall -std=legacy
     CCOPT = -g -Wall -pedantic -fall-intrinsics -fbounds-check
 endif
