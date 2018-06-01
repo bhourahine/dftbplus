@@ -949,7 +949,6 @@ contains
       end if
       allocate(ddPCM)
       ddPCM%dielectric = input%ctrl%dielectricPCM
-      write(*,*)'EPSILON ',ddPCM%dielectric
       ddPCM%scaleFactor = input%ctrl%scaleFactorPCM
       ddPCM%regularisation = input%ctrl%regPCM
     end if
@@ -1230,7 +1229,6 @@ contains
 
   #:if WITH_DDPCM
     if (allocated(ddPCM)) then
-      write(*,*)'EPSILON ',ddPCM%dielectric
       call ddPCM_init(ddPCM, species0, speciesName)
     end if
   #:endif
@@ -2700,10 +2698,6 @@ contains
       call destruct(iOrbRegion)
       call destruct(RegionLabels)
     end if
-
-  #:if WITH_DDPCM
-    !call memfree
-  #:endif
 
   end subroutine destructProgramVariables
 

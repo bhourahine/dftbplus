@@ -244,6 +244,7 @@ contains
         if (tPeriodic) then
           call error("PCM model not currently supported for periodic geometries")
         end if
+        call ddPCM%resetPCM(coord0)
       end if
     #:endif
 

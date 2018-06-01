@@ -27,7 +27,7 @@ module ddpcm
 
   public :: TddPCM
 #:if WITH_DDPCM
-  public :: ddPCM_init, buildPCMfields
+  public :: ddPCM_init, buildPCMfields, resetPCM
 #:endif
 
   type :: TddPCM
@@ -57,6 +57,7 @@ module ddpcm
   contains
 
     procedure :: buildPCMfields
+    procedure :: resetPCM
 
 #:endif
 
@@ -105,10 +106,50 @@ contains
 
       end do
       this%vdwRadii = this%scaleFactor*this%vdwRadii
-      write(*,*)'Radii :',this%vdwRadii * Bohr__AA
+      !write(*,*)'Radii :',this%vdwRadii * Bohr__AA
     end if
 
   end subroutine ddPCM_init
+
+  subroutine resetPCM(this, coord0)
+    class(TddPCM), intent(inout) :: this
+
+    real(dp), intent(in) :: coord0(:,:)
+        integer :: nAtom
+
+    if (allocated(this%phi)) then
+      call memfree()
+      deallocate(this%phi)
+      deallocate(this%psi)
+      deallocate(this%sigma)
+    end if
+
+    nAtom = size(coord0,dim=2)
+
+    eps = this%dielectric
+    eta = this%regularisation
+  #:if DEBUG == 0
+    iprint = 0
+  #:else
+    iprint = 2
+  #:endif
+    nproc = omp_get_max_threads()
+    lmax = 6
+    ngrid = 110
+    iconv = 7
+    igrad = 0
+    call ddinit(nAtom, coord0(1,:), coord0(2,:), coord0(3,:), this%vdwRadii(:))
+
+    this%nCav = ncav
+    this%nylm = nylm
+    allocate(this%phi(ncav))
+    allocate(this%psi(nylm,nAtom))
+    allocate(this%sigma(nylm,nAtom))
+    this%phi = 0.0_dp
+    this%psi = 0.0_dp
+    this%sigma = 0.0_dp
+
+  end subroutine resetPCM
 
   subroutine buildPCMfields(this, sccCalc, env, coord0, deltaQAtom, atomPotential, eSolvation)
 
@@ -130,39 +171,6 @@ contains
 
     real(dp) :: fac, esolv, xx(1)
     real(dp), parameter :: tokcal=627.509469_dp
-    integer :: nAtom
-
-    if (allocated(this%phi)) then
-      call memfree()
-      deallocate(this%phi)
-      deallocate(this%psi)
-      deallocate(this%sigma)
-    end if
-
-    nAtom = size(coord0,dim=2)
-
-    eps = this%dielectric
-    write(*,*)'EPSILON ', this%dielectric ,eps
-    write(*,*)'Radii :',this%vdwRadii * Bohr__AA
-    eta = this%regularisation
-    write(*,*)'eta :', eta
-    iprint = 2
-    nproc = omp_get_max_threads()
-    lmax = 6
-    ngrid = 110
-    iconv = 7
-    igrad = 0
-    call ddinit(nAtom, coord0(1,:), coord0(2,:), coord0(3,:), this%vdwRadii(:))
-
-    this%nCav = ncav
-    this%nylm = nylm
-    allocate(this%phi(ncav))
-    allocate(this%psi(nylm,nAtom))
-    allocate(this%sigma(nylm,nAtom))
-    write(*,*)'nylm',nylm
-    this%phi = 0.0_dp
-    this%psi = 0.0_dp
-    this%sigma = 0.0_dp
 
     call sccCalc%getInternalElStatPotential(this%phi, env, ccav)
 
@@ -171,14 +179,10 @@ contains
 
     this%psi = 0.0_dp
     this%psi(1,:) = fac * deltaQAtom(:)
-    write(*,*)deltaQAtom
     esolv = 0.0_dp
 
-    this%sigma = 0.0_dp
     call cosmo(.false., .true., this%phi, xx, this%psi, this%sigma, esolv)
-    write (6,'(1x,a,f20.12)') 'ddcosmo electrostatic solvation energy (kcal/mol):', esolv*tokcal
     atomPotential(:) = atomPotential(:) + this%sigma(1,:)
-    write(*,*)'Potential contributions',atomPotential(:)
     if (present(eSolvation)) then
       eSolvation = esolv
     end if
