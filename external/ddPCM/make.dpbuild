@@ -1,0 +1,45 @@
+############################################################################
+# Makefile to compile the package within DFTB+
+#
+# Receives:
+#     ROOT: Root of the source directory
+#     BUILDROOT: Root of the build directory
+#
+############################################################################
+
+.SUFFIXES:
+.SUFFIXES: .f90 .f .o
+
+include $(ROOT)/make.config
+
+OBJDIR := $(BUILDROOT)/external/ddPCM
+SRCDIR := $(ROOT)/external/ddPCM/ddPCM
+STAMPFILE := $(OBJDIR)/BUILD_TIMESTAMP
+
+.PHONY: all
+all: libddPCM.a
+	touch -r $< $(STAMPFILE)
+
+vpath % $(SRCDIR)
+
+libddPCM.a: llgnew.o ddcosmo.o forces_dd.o efld.o matvec.o cosmo.o \
+jacobi_diis.o
+	  ar rcs $@ $^
+
+PHONY: clean
+clean:
+	rm -f *.o _mod_* *.mod
+
+%.o: %.f90
+	$(FXX) $(F77OPT) -o $@ -c $<
+
+%.o: %.f
+	$(FXX) $(F77OPT) -o $@ -c $<
+
+_mod_%:
+	@[ -f $< ] && touch $@
+
+
+### Local Variables:
+### mode:makefile
+### End:
