@@ -12,7 +12,7 @@
 module sparse2sparse
   use assert
   use accuracy
-  use constants, only : pi
+  use constants, only : pi, imag
   use commontypes
   use environment
   use commontypes
@@ -27,7 +27,7 @@ module sparse2sparse
   implicit none
 
   private
-  public :: TSparse2Sparse
+  public :: TSparse2Sparse, indexFor2Component
 #:if WITH_ELSI
   public :: initSparse2Sparse
   public :: calcDensityRealElsi, getEDensityRealElsi
@@ -94,6 +94,188 @@ module sparse2sparse
 #:endif
 
 contains
+
+  !> Generate indexing arrays for 2 component blocks, containing 2x2 elements
+  subroutine indexFor2Component(iBlockStart, iSparseBlockStart, iAtomStart, iSparseStart,&
+      & nNeighbourSK)
+
+    !> Atom offset for the squared matrix
+    integer, intent(out) :: iBlockStart(:)
+
+    !> indexing array for the sparse Hamiltonian
+    integer, intent(out) :: iSparseBlockStart(0:,:)
+
+    !> Atom offset for the squared matrix
+    integer, intent(in) :: iAtomStart(:)
+
+    !> indexing array for the sparse Hamiltonian
+    integer, intent(in) :: iSparseStart(0:,:)
+
+    !> Nr. of neighbours for the atoms.
+    integer, intent(in) :: nNeighbourSK(:)
+
+    integer :: iAt, nAt, iOrb, iNeigh, iOld
+
+    nAt = size(nNeighbourSK)
+
+    iBlockStart = 0
+    iSparseBlockStart = 0
+
+    iBlockStart(1) = iAtomStart(1)
+    do iAt = 1, nAt
+      iOrb = iAtomStart(iAt + 1) - iAtomStart(iAt) - 1
+      iOrb = 2 * iOrb
+      iBlockStart(iAt + 1) = iBlockStart(iAt) + iOrb
+    end do
+
+    iOld = 0
+    do iAt = 1, nAt
+      iSparseBlockStart(0,iAt) = iOld
+      do iNeigh = 1, nNeighbourSK(iAt)
+        iSparseBlockStart(iNeigh,iAt) = iSparseBlockStart(iNeigh-1,iAt)&
+            & + 4 * (iSparseStart(iNeigh,iAt) - iSparseStart(iNeigh-1,iAt))
+      end do
+      iOld = iSparseBlockStart(nNeighbourSK(nAt),iAt)
+    end do
+
+  end subroutine indexFor2Component
+
+
+  !> Convert 2 component spin channels to a single complex block structure
+  subroutine pack2ComponentBlock(ham2Component, over2Component, ham, over, iSparseStart,&
+      & nNeighbourSK, iHam)
+
+    !> 2 component hamiltonian in sparse storage
+    complex(dp), intent(out) :: ham2Component(:)
+
+    !> 2 component overlap matrix in sparse storage
+    complex(dp), intent(out) :: over2Component(:)
+
+    !> hamiltonian in sparse storage
+    real(dp), intent(in) :: ham(:,:)
+
+    !> overlap matrix in sparse storage
+    real(dp), intent(in) :: over(:)
+
+    !> indexing array for the sparse Hamiltonian
+    integer, intent(in) :: iSparseStart(0:,:)
+
+    !> Nr. of neighbours for the atoms.
+    integer, intent(in) :: nNeighbourSK(:)
+
+    !> Imaginary part of the hamiltonian matrix in sparse storage
+    real(dp), intent(in), optional :: iHam(:,:)
+
+    integer :: iOld, iNew, iOrb, iAt, nAt, iNeigh
+
+    @:ASSERT(size(over2Component) == 4 * size(over))
+    @:ASSERT(size(ham2Component) == size(ham))
+
+    iOld = 1
+    iNew = 1
+    do iAt = 1, nAt
+      do iNeigh = 1, nNeighbourSK(iAt)
+        iOrb = iSparseStart(iNeigh,iAt) - iSparseStart(iNeigh-1,iAt)
+        over2Component(iNew:iNew+iOrb-1) = over(iOld:iOld+iOrb-1)
+        over2Component(iNew+3*iOrb:iNew+4*iOrb-1) = over(iOld:iOld+iOrb-1)
+        ham2Component(iNew:iNew+iOrb-1) = ham(iOld:iOld+iOrb-1,1)+ham(iOld:iOld+iOrb-1,4)
+        ham2Component(iNew+3*iOrb:iNew+4*iOrb-1) = ham(iOld:iOld+iOrb-1,1)-ham(iOld:iOld+iOrb-1,4)
+        ham2Component(iNew+iOrb:iNew+2*iOrb-1) = ham(iOld:iOld+iOrb-1,2)&
+            & + imag * ham(iOld:iOld+iOrb-1,3)
+        ham2Component(iNew+2*iOrb:iNew+3*iOrb-1) = ham(iOld:iOld+iOrb-1,2)&
+            & - imag * ham(iOld:iOld+iOrb-1,3)
+        iOld = iOld + iOrb
+        iNew = iNew + 4 * iOrb
+      end do
+    end do
+
+    if (present(iHam)) then
+      iOld = 1
+      iNew = 1
+      do iAt = 1, nAt
+        do iNeigh = 1, nNeighbourSK(iAt)
+          iOrb = iSparseStart(iNeigh,iAt) - iSparseStart(iNeigh-1,iAt)
+          ham2Component(iNew:iNew+iOrb-1) = imag * (ham(iOld:iOld+iOrb-1,1)+ham(iOld:iOld+iOrb-1,4))
+          ham2Component(iNew+3*iOrb:iNew+4*iOrb-1) = imag *&
+              & (ham(iOld:iOld+iOrb-1,1)-ham(iOld:iOld+iOrb-1,4))
+          ham2Component(iNew+iOrb:iNew+2*iOrb-1) = imag * ham(iOld:iOld+iOrb-1,2)&
+              & - ham(iOld:iOld+iOrb-1,3)
+          ham2Component(iNew+2*iOrb:iNew+3*iOrb-1) = imag * ham(iOld:iOld+iOrb-1,2)&
+              & + ham(iOld:iOld+iOrb-1,3)
+          iOld = iOld + iOrb
+          iNew = iNew + 4 * iOrb
+        end do
+      end do
+    end if
+
+  end subroutine pack2ComponentBlock
+
+
+  !> Convert single complex block structure to 2 component spin channels
+  subroutine unpack2ComponentBlock(ham2Component, ham, iSparseStart, nNeighbourSK, iHam)
+
+    !> 2 component hamiltonian in sparse storage
+    complex(dp), intent(in) :: ham2Component(:)
+
+    !> hamiltonian in sparse storage
+    real(dp), intent(out) :: ham(:,:)
+
+    !> indexing array for the sparse Hamiltonian
+    integer, intent(in) :: iSparseStart(0:,:)
+
+    !> Nr. of neighbours for the atoms.
+    integer, intent(in) :: nNeighbourSK(:)
+
+    !> overlap matrix in sparse storage
+    real(dp), intent(out), optional :: iHam(:,:)
+
+    integer :: iOld, iNew, iOrb, iAt, nAt, iNeigh
+
+    @:ASSERT(size(over2Component) = 4 * size(over))
+    @:ASSERT(size(ham2Component) = size(ham))
+
+    ham = 0.0_dp
+    iOld = 1
+    iNew = 1
+    do iAt = 1, nAt
+      do iNeigh = 1, nNeighbourSK(iAt)
+        iOrb = iSparseStart(iNeigh,iAt) - iSparseStart(iNeigh-1,iAt)
+        ham(iOld:iOld+iOrb-1,1) = 0.5_dp * real(ham2Component(iNew:iNew+iOrb-1)&
+            & + ham2Component(iNew+3*iOrb:iNew+4*iOrb-1))
+        ham(iOld:iOld+iOrb-1,2) = 0.5_dp * real(ham2Component(iNew+1*iOrb:iNew+2*iOrb-1)&
+            & + conjg(ham2Component(iNew+2*iOrb:iNew+3*iOrb-1)))
+        ham(iOld:iOld+iOrb-1,3) = 0.5_dp * aimag(ham2Component(iNew+1*iOrb:iNew+2*iOrb-1)&
+            & + conjg(ham2Component(iNew+2*iOrb:iNew+3*iOrb-1)))
+        ham(iOld:iOld+iOrb-1,4) = 0.5_dp * real(ham2Component(iNew:iNew+iOrb-1)&
+            & - ham2Component(iNew+3*iOrb:iNew+4*iOrb-1))
+        iOld = iOld + iOrb
+        iNew = iNew + 4 * iOrb
+      end do
+    end do
+
+    if (present(iHam)) then
+      iHam = 0.0_dp
+      iOld = 1
+      iNew = 1
+      do iAt = 1, nAt
+        do iNeigh = 1, nNeighbourSK(iAt)
+          iOrb = iSparseStart(iNeigh,iAt) - iSparseStart(iNeigh-1,iAt)
+          iHam(iOld:iOld+iOrb-1,1) = 0.5_dp * aimag(ham2Component(iNew:iNew+iOrb-1)&
+              & + ham2Component(iNew+3*iOrb:iNew+4*iOrb-1))
+          iHam(iOld:iOld+iOrb-1,2) = 0.5_dp * aimag(ham2Component(iNew+1*iOrb:iNew+2*iOrb-1)&
+              & - conjg(ham2Component(iNew+2*iOrb:iNew+3*iOrb-1)))
+          iHam(iOld:iOld+iOrb-1,3) = 0.5_dp * real(ham2Component(iNew+1*iOrb:iNew+2*iOrb-1)&
+              & - conjg(ham2Component(iNew+2*iOrb:iNew+3*iOrb-1)))
+          iHam(iOld:iOld+iOrb-1,4) = 0.5_dp * aimag(ham2Component(iNew:iNew+iOrb-1)&
+              & - ham2Component(iNew+3*iOrb:iNew+4*iOrb-1))
+          iOld = iOld + iOrb
+          iNew = iNew + 4 * iOrb
+        end do
+      end do
+    end if
+
+  end subroutine unpack2ComponentBlock
+
 
 #:if WITH_ELSI
 
