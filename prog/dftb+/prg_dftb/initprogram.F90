@@ -56,13 +56,12 @@ module initprogram
   use sccinit
   use slakocont
   use repcont
-  use spin, only: Spin_getOrbitalEquiv, ud2qm, qm2ud
+  use spin, only: ud2qm, qm2ud
   use dftbplusu
   use dispersions
   use thirdorder_module
   use linresp_module
   use stress
-  use orbitalequiv
   use commontypes
   use sorting, only : heap_sort
   use linkedlist
@@ -529,30 +528,17 @@ module initprogram
   !> Imaginary part of output Mulliken block charges
   real(dp), allocatable :: qiBlockOut(:, :, :, :)
 
-  !> input charges packed into unique equivalence elements
+  !> input charges packed into 1D array
   real(dp), allocatable :: qInpRed(:)
 
-  !> output charges packed into unique equivalence elements
+  !> output charges packed into 1D array
   real(dp), allocatable :: qOutRed(:)
 
-  !> charge differences packed into unique equivalence elements
+  !> charge differences packed into 1D array
   real(dp), allocatable :: qDiffRed(:)
 
-  !> Orbital equivalence relations
-  integer, allocatable :: iEqOrbitals(:,:,:)
-
-  !> nr. of inequivalent orbitals
-  integer :: nIneqOrb
-
-  !> nr. of elements to go through the mixer - may contain reduced orbitals and also orbital blocks
-  !> (if tDFTBU)
+  !> nr. of elements to go through the mixer - may contain orbital blocks (if tDFTBU)
   integer :: nMixElements
-
-  !> Orbital equivalency for orbital blocks
-  integer, allocatable :: iEqBlockDFTBU(:,:,:,:)
-
-  !> Orbital equivalency for orbital blocks with spin-orbit
-  integer, allocatable :: iEqBlockDFTBULS(:,:,:,:)
 
   ! External charges
 
@@ -873,11 +859,6 @@ contains
 
     !> Flag if some files do exist or not
     logical :: tExist
-
-    ! Orbital equivalency for SCC and Spin
-    integer, allocatable :: iEqOrbSCC(:,:,:), iEqOrbSpin(:,:,:)
-    ! Orbital equivalency for orbital potentials
-    integer, allocatable :: iEqOrbDFTBU(:,:,:)
 
     ! Damped interactions
     logical, allocatable, target :: tDampedShort(:)
@@ -1290,46 +1271,20 @@ contains
 
     ! Create equivalency relations
     if (tSccCalc) then
-      allocate(iEqOrbitals(orb%mOrb, nAtom, nSpin))
-      allocate(iEqOrbSCC(orb%mOrb, nAtom, nSpin))
-      call sccCalc%getOrbitalEquiv(orb, species0, iEqOrbSCC)
-      if (nSpin == 1) then
-        iEqOrbitals(:,:,:) = iEqOrbSCC(:,:,:)
-      else
-        allocate(iEqOrbSpin(orb%mOrb, nAtom, nSpin))
-        call Spin_getOrbitalEquiv(orb, species0, iEqOrbSpin)
-        call OrbitalEquiv_merge(iEqOrbSCC, iEqOrbSpin, orb, iEqOrbitals)
-        deallocate(iEqOrbSpin)
-      end if
-      deallocate(iEqOrbSCC)
-      nIneqOrb = maxval(iEqOrbitals)
-      nMixElements = nIneqOrb
+      nMixElements = sum(orb%nOrbAtom(:))
       if (tDFTBU) then
-        allocate(iEqOrbSpin(orb%mOrb, nAtom, nSpin))
-        allocate(iEqOrbDFTBU(orb%mOrb, nAtom, nSpin))
-        call DFTBplsU_getOrbitalEquiv(iEqOrbDFTBU,orb, species0, nUJ, niUJ, iUJ)
-        call OrbitalEquiv_merge(iEqOrbitals, iEqOrbDFTBU, orb, iEqOrbSpin)
-        iEqOrbitals(:,:,:) = iEqOrbSpin(:,:,:)
-        nIneqOrb = maxval(iEqOrbitals)
-        deallocate(iEqOrbSpin)
-        deallocate(iEqOrbDFTBU)
-        allocate(iEqBlockDFTBU(orb%mOrb, orb%mOrb, nAtom, nSpin))
-        call DFTBU_blockIndx(iEqBlockDFTBU, nIneqOrb, orb, species0, nUJ, niUJ, iUJ)
-        nMixElements = max(nMixElements,maxval(iEqBlockDFTBU)) ! as
-        !  iEqBlockDFTBU does not include diagonal elements, so in the case of
-        !  a purely s-block DFTB+U calculation, maxval(iEqBlockDFTBU) would
-        !  return 0
+        ! only diagonal plus one triangle of blocks
+        nMixElements = (nMixElements**2 - nMixElements)/2 + nMixElements
         if (tImHam) then
-          allocate(iEqBlockDFTBULS(orb%mOrb, orb%mOrb, nAtom, nSpin))
-          call DFTBU_blockIndx(iEqBlockDFTBULS, nMixElements, orb, species0, nUJ, niUJ, iUJ)
-          nMixElements = max(nMixElements,maxval(iEqBlockDFTBULS))
+          ! twice as many for complex cases, but diagonal is real
+          nMixElements = 2 * nMixElements - sum(orb%nOrbAtom(:))
         end if
       end if
     else
-      nIneqOrb = nOrb
       nMixElements = 0
     end if
-
+    nMixElements = nSpin * nMixElements
+    
     ! Initialize mixer
     ! (at the moment, the mixer does not need to know about the size of the
     ! vector to mix.)
@@ -1802,7 +1757,7 @@ contains
         call error("Filling function incompatible with XLBOMD")
       end if
       allocate(xlbomdIntegrator)
-      call Xlbomd_init(xlbomdIntegrator, input%ctrl%xlbomd, nIneqOrb)
+      call Xlbomd_init(xlbomdIntegrator, input%ctrl%xlbomd, nMixElements)
     end if
 
     if (tDerivs) then
@@ -2023,14 +1978,6 @@ contains
         call qm2ud(qInput)
         if (tDFTBU) then
           call qm2ud(qBlockIn)
-        end if
-      end if
-
-      call OrbitalEquiv_reduce(qInput, iEqOrbitals, orb, qInpRed(1:nIneqOrb))
-      if (tDFTBU) then
-        call AppendBlock_reduce(qBlockIn, iEqBlockDFTBU, orb, qInpRed )
-        if (tImHam) then
-          call AppendBlock_reduce(qiBlockIn, iEqBlockDFTBULS, orb, qInpRed, skew=.true. )
         end if
       end if
 

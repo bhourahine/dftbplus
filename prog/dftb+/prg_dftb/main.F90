@@ -42,7 +42,6 @@ module main
   use mdcommon
   use energies
   use potentials
-  use orbitalequiv
   use parser
   use sparse2dense
   use blasroutines, only : symm, hemm
@@ -310,10 +309,10 @@ contains
         tStopScc = hasStopFile(fStopScc)
 
         if (tSccCalc) then
-          call getNextInputCharges(env, pChrgMixer, qOutput, qOutRed, orb, nIneqOrb, iEqOrbitals,&
-              & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tDftbU, tReadChrg,&
-              & qInput, qInpRed, sccErrorQ, tConverged, qBlockOut, iEqBlockDftbU, qBlockIn,&
-              & qiBlockOut, iEqBlockDftbULS, species0, nUJ, iUJ, niUJ, qiBlockIn)
+          call getNextInputCharges(env, pChrgMixer, qOutput, qOutRed, orb, iGeoStep, iSccIter,&
+              & minSccIter, maxSccIter, sccTol, tStopScc, tDftbU, tReadChrg, qInput, qInpRed,&
+              & sccErrorQ, tConverged, qBlockOut, qBlockIn, qiBlockOut, species0, nUJ, iUJ, niUJ,&
+              & qiBlockIn)
           call getSccInfo(iSccIter, energy%Eelec, Eold, diffElec)
           call printSccInfo(tDftbU, iSccIter, energy%Eelec, diffElec, sccErrorQ)
           tWriteSccRestart = env%tGlobalMaster .and.&
@@ -356,9 +355,8 @@ contains
       end if
 
       if (tXlbomd) then
-        call getXlbomdCharges(xlbomdIntegrator, qOutRed, pChrgMixer, orb, nIneqOrb, iEqOrbitals,&
-            & qInput, qInpRed, iEqBlockDftbU, qBlockIn, species0, nUJ, iUJ, niUJ, iEqBlockDftbuLs,&
-            & qiBlockIn)
+        call getXlbomdCharges(xlbomdIntegrator, qOutRed, pChrgMixer, orb, qInput, qInpRed,&
+            & qBlockIn, qiBlockIn)
       end if
 
       if (tDipole) then
@@ -2675,10 +2673,9 @@ contains
 
 
   !> Returns input charges for next SCC iteration.
-  subroutine getNextInputCharges(env, pChrgMixer, qOutput, qOutRed, orb, nIneqOrb, iEqOrbitals,&
-      & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tDftbU, tReadChrg, qInput,&
-      & qInpRed, sccErrorQ, tConverged, qBlockOut, iEqBlockDftbU, qBlockIn, qiBlockOut,&
-      & iEqBlockDftbuLS, species0, nUJ, iUJ, niUJ, qiBlockIn)
+  subroutine getNextInputCharges(env, pChrgMixer, qOutput, qOutRed, orb, iGeoStep, iSccIter,&
+      & minSccIter, maxSccIter, sccTol, tStopScc, tDftbU, tReadChrg, qInput, qInpRed, sccErrorQ,&
+      & tConverged, qBlockOut, qBlockIn, qiBlockOut, species0, nUJ, iUJ, niUJ, qiBlockIn)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -2694,12 +2691,6 @@ contains
 
     !> Atomic orbital data
     type(TOrbitals), intent(in) :: orb
-
-    !> Total number of inequivalent atomic orbitals
-    integer, intent(in) :: nIneqOrb
-
-    !> Equivalence relations between orbitals
-    integer, intent(in) :: iEqOrbitals(:,:,:)
 
     !> Number of current geometry step
     integer, intent(in) :: iGeoStep
@@ -2740,17 +2731,11 @@ contains
     !> Dual output charges
     real(dp), intent(inout), allocatable :: qBlockOut(:,:,:,:)
 
-    !> equivalence mapping for dual charge blocks
-    integer, intent(in), allocatable :: iEqBlockDftbu(:,:,:,:)
-
     !> block charge input (if needed for orbital potentials)
     real(dp), intent(inout), allocatable ::qBlockIn(:,:,:,:)
 
     !> Imaginary part of block charges
     real(dp), intent(in), allocatable :: qiBlockOut(:,:,:,:)
-
-    !> Equivalence mappings in the case of spin orbit and DFTB+U
-    integer, intent(in), allocatable :: iEqBlockDftbuLS(:,:,:,:)
 
     !> atomic species for atoms
     integer, intent(in), allocatable :: species0(:)
@@ -2771,8 +2756,7 @@ contains
     integer :: nSpin
 
     nSpin = size(qOutput, dim=3)
-    call reduceCharges(orb, nIneqOrb, iEqOrbitals, qOutput, qOutRed, qBlockOut, iEqBlockDftbu,&
-        & qiBlockOut, iEqBlockDftbuLS)
+    call reduceCharges(orb, qOutput, qOutRed, qBlockOut, qiBlockOut)
     qDiffRed = qOutRed - qInpRed
     sccErrorQ = maxval(abs(qDiffRed))
     tConverged = (sccErrorQ < sccTol)&
@@ -2797,8 +2781,7 @@ contains
         call mpifx_allreduceip(env%mpi%globalComm, qInpRed, MPI_SUM)
         qInpRed(:) = qInpRed / env%mpi%globalComm%size
       #:endif
-        call expandCharges(qInpRed, orb, nIneqOrb, iEqOrbitals, qInput, qBlockIn, iEqBlockDftbu,&
-            & species0, nUJ, iUJ, niUJ, qiBlockIn, iEqBlockDftbuLS)
+        call expandCharges(qInpRed, orb, qInput, qBlockIn, qiBlockIn)
       end if
     end if
 
@@ -2806,17 +2789,10 @@ contains
 
 
   !> Reduce charges according to orbital equivalency rules.
-  subroutine reduceCharges(orb, nIneqOrb, iEqOrbitals, qOrb, qRed, qBlock, iEqBlockDftbu, qiBlock,&
-      & iEqBlockDftbuLS)
+  subroutine reduceCharges(orb, qOrb, qRed, qBlock, qiBlock)
 
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
-
-    !> Number of unique types of atomic orbitals
-    integer, intent(in) :: nIneqOrb
-
-    !> equivalence index
-    integer, intent(in) :: iEqOrbitals(:,:,:)
 
     !> Electrons in atomic orbitals
     real(dp), intent(in) :: qOrb(:,:,:)
@@ -2827,36 +2803,64 @@ contains
     !> Block (dual) populations, if also being reduced
     real(dp), intent(in), allocatable :: qBlock(:,:,:,:)
 
-    !> equivalences for block charges
-    integer, intent(in), allocatable :: iEqBlockDftbu(:,:,:,:)
-
     !> Imaginary part of block charges if present
     real(dp), intent(in), allocatable :: qiBlock(:,:,:,:)
 
-    !> Equivalences for spin orbit if needed
-    integer, intent(in), allocatable :: iEqBlockDftbuLS(:,:,:,:)
-
-    real(dp), allocatable :: qOrbUpDown(:,:,:), qBlockUpDown(:,:,:,:)
-
+    real(dp), allocatable :: qOrbUpDown(:,:,:), qBlockUpDown(:,:,:,:), qiBlockUpDown(:,:,:,:)
+    integer :: iOrb, iAt, iSp, iCount
+    
     qRed(:) = 0.0_dp
+
     qOrbUpDown = qOrb
     call qm2ud(qOrbUpDown)
-    call orbitalEquiv_reduce(qOrbUpDown, iEqOrbitals, orb, qRed(1:nIneqOrb))
     if (allocated(qBlock)) then
       qBlockUpDown = qBlock
       call qm2ud(qBlockUpDown)
-      call appendBlock_reduce(qBlockUpDown, iEqBlockDFTBU, orb, qRed)
-      if (allocated(qiBlock)) then
-        call appendBlock_reduce(qiBlock, iEqBlockDFTBULS, orb, qRed, skew=.true.)
-      end if
+    end if
+    if (allocated(qiBlock)) then
+      qiBlockUpDown = qiBlock
+      call qm2ud(qiBlockUpDown)
     end if
 
+    iCount = 0
+    do iSp = 1, size(qOrb, dim=3)
+      do iAt = 1, size(qOrb, dim=2)
+        qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt)) = qOrbUpDown(:orb%nOrbAtom(iAt), iAt, iSp)
+        iCount = iCount + orb%nOrbAtom(iAt)
+      end do
+    end do
+      
+    if (allocated(qBlock)) then
+      do iSp = 1, size(qOrb, dim=3)
+        do iAt = 1, size(qOrb, dim=2)
+          do iOrb = 1, orb%nOrbAtom(iAt)
+            qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt)) = 0.5_dp * (&
+                & qBlock(iOrb:orb%nOrbAtom(iAt),iOrb,iAt,iSp)&
+                & + qBlock(iOrb,iOrb:orb%nOrbAtom(iAt),iAt,iSp) )
+            iCount = iCount + orb%nOrbAtom(iAt) - iOrb + 1
+          end do
+        end do
+      end do
+      if (allocated(qiBlock)) then
+        do iSp = 1, size(qOrb, dim=3)
+          do iAt = 1, size(qOrb, dim=2)
+            do iOrb = 1, orb%nOrbAtom(iAt) - 1
+              ! avoid diagonal, as 0
+              qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt) -1) = 0.5_dp * (&
+                  & qiBlock(iOrb+1:orb%nOrbAtom(iAt),iOrb,iAt,iSp)&
+                  & - qiBlock(iOrb,iOrb+1:orb%nOrbAtom(iAt),iAt,iSp) )
+              iCount = iCount + orb%nOrbAtom(iAt) - iOrb
+            end do
+          end do
+        end do
+      end if
+    end if
+    
   end subroutine reduceCharges
 
 
   !> Expand reduced charges according orbital equivalency rules.
-  subroutine expandCharges(qRed, orb, nIneqOrb, iEqOrbitals, qOrb, qBlock, iEqBlockDftbu, species0,&
-      & nUJ, iUJ, niUJ, qiBlock, iEqBlockDftbuLS)
+  subroutine expandCharges(qRed, orb, qOrb, qBlock, qiBlock)
 
     !> Reduction of atomic populations
     real(dp), intent(in) :: qRed(:)
@@ -2864,67 +2868,64 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
-    !> Number of unique types of atomic orbitals
-    integer, intent(in) :: nIneqOrb
-
-    !> equivalence index
-    integer, intent(in) :: iEqOrbitals(:,:,:)
-
     !> Electrons in atomic orbitals
     real(dp), intent(out) :: qOrb(:,:,:)
 
     !> Block (dual) populations, if also stored in reduced form
     real(dp), intent(inout), allocatable :: qBlock(:,:,:,:)
 
-    !> equivalences for block charges
-    integer, intent(in), allocatable :: iEqBlockDftbU(:,:,:,:)
-
-    !> species of central cell atoms
-    integer, intent(in), allocatable :: species0(:)
-
-    !> Number DFTB+U blocks of shells for each atom type
-    integer, intent(in), allocatable :: nUJ(:)
-
-    !> which shells are in each DFTB+U block
-    integer, intent(in), allocatable :: iUJ(:,:,:)
-
-    !> Number of shells in each DFTB+U block
-    integer, intent(in), allocatable :: niUJ(:,:)
-
     !> Imaginary part of block atomic populations
     real(dp), intent(inout), allocatable :: qiBlock(:,:,:,:)
 
-    !> Equivalences for spin orbit if needed
-    integer, intent(in), allocatable :: iEqBlockDftbULS(:,:,:,:)
+    integer :: iOrb, iAt, iSp, iCount
 
-    integer :: nSpin
-
-    @:ASSERT(allocated(qBlock) .eqv. allocated(iEqBlockDftbU))
-    @:ASSERT(.not. allocated(qBlock) .or. allocated(species0))
-    @:ASSERT(.not. allocated(qBlock) .or. allocated(nUJ))
-    @:ASSERT(.not. allocated(qBlock) .or. allocated(iUJ))
-    @:ASSERT(.not. allocated(qBlock) .or. allocated(niUJ))
-    @:ASSERT(.not. allocated(qiBlock) .or. allocated(qBlock))
-    @:ASSERT(allocated(qiBlock) .eqv. allocated(iEqBlockDftbuLS))
-
-    nSpin = size(qOrb, dim=3)
-    call OrbitalEquiv_expand(qRed(1:nIneqOrb), iEqOrbitals, orb, qOrb)
+    qOrb = 0.0_dp
+    iCount = 0
+    do iSp = 1, size(qOrb, dim=3)
+      do iAt = 1, size(qOrb, dim=2)
+        qOrb(:orb%nOrbAtom(iAt), iAt, iSp) = qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt))
+        iCount = iCount + orb%nOrbAtom(iAt)
+      end do
+    end do
+      
     if (allocated(qBlock)) then
-      qBlock(:,:,:,:) = 0.0_dp
-      call Block_expand(qRed, iEqBlockDftbu, orb, qBlock, species0, nUJ, niUJ, iUJ,&
-          & orbEquiv=iEqOrbitals)
+      qBlock = 0.0_dp
+      do iSp = 1, size(qOrb, dim=3)
+        do iAt = 1, size(qOrb, dim=2)
+          do iOrb = 1, orb%nOrbAtom(iAt)
+            qBlock(iOrb:orb%nOrbAtom(iAt),iOrb,iAt,iSp) =&
+                & qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt))
+            qBlock(iOrb,iOrb:orb%nOrbAtom(iAt),iAt,iSp) =&
+                & qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt))
+            iCount = iCount + orb%nOrbAtom(iAt) - iOrb + 1
+          end do
+        end do
+      end do
       if (allocated(qiBlock)) then
-        call Block_expand(qRed, iEqBlockDftbuLS, orb, qiBlock, species0, nUJ, niUJ, iUJ,&
-            & skew=.true.)
-      end if
-    end if
-    if (nSpin == 2) then
-      call ud2qm(qOrb)
-      if (allocated(qBlock)) then
-        call ud2qm(qBlock)
+        qiBlock = 0.0_dp
+        do iSp = 1, size(qOrb, dim=3)
+          do iAt = 1, size(qOrb, dim=2)
+            do iOrb = 1, orb%nOrbAtom(iAt) - 1
+              ! avoid diagonal, as 0
+              qiBlock(iOrb+1:orb%nOrbAtom(iAt),iOrb,iAt,iSp) =&
+                  & qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt) -1)
+              qiBlock(iOrb,iOrb+1:orb%nOrbAtom(iAt),iAt,iSp) =&
+                  & - qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt) -1)
+              iCount = iCount + orb%nOrbAtom(iAt) - iOrb
+            end do
+          end do
+        end do
       end if
     end if
 
+    call ud2qm(qOrb)
+    if (allocated(qBlock)) then
+      call ud2qm(qBlock)
+    end if
+    if (allocated(qiBlock)) then
+      call ud2qm(qiBlock)
+    end if
+    
   end subroutine expandCharges
 
 
@@ -3207,9 +3208,8 @@ contains
 
 
   !> Get the XLBOMD charges for the current geometry.
-  subroutine getXlbomdCharges(xlbomdIntegrator, qOutRed, pChrgMixer, orb, nIneqOrb, iEqOrbitals,&
-      & qInput, qInpRed, iEqBlockDftbu, qBlockIn, species0, nUJ, iUJ, niUJ, iEqBlockDftbuLS,&
-      & qiBlockIn)
+  subroutine getXlbomdCharges(xlbomdIntegrator, qOutRed, pChrgMixer, orb, qInput, qInpRed,&
+      & qBlockIn, qiBlockIn)
 
     !> integrator for the extended Lagrangian
     type(Xlbomd), intent(inout) :: xlbomdIntegrator
@@ -3223,44 +3223,23 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
-    !> number of inequivalent orbitals
-    integer, intent(in) :: nIneqOrb
-
-    !> equivalence map
-    integer, intent(in) :: iEqOrbitals(:,:,:)
-
     !> input charges
     real(dp), intent(out) :: qInput(:,:,:)
 
     !> input charges reduced by equivalences
     real(dp), intent(out) :: qInpRed(:)
 
-    !> +U equivalences
-    integer, intent(in), allocatable :: iEqBlockDftbU(:,:,:,:)
-
-    !> central cell species
-    integer, intent(in), allocatable :: species0(:)
-
     !> block input charges
     real(dp), intent(inout), allocatable :: qBlockIn(:,:,:,:)
-
-    !> Number DFTB+U blocks of shells for each atom type
-    integer, intent(in), allocatable :: nUJ(:)
-
-    !> which shells are in each DFTB+U block
-    integer, intent(in), allocatable :: iUJ(:,:,:)
-
-    !> Number of shells in each DFTB+U block
-    integer, intent(in), allocatable :: niUJ(:,:)
-
-    !> equivalences for spin orbit
-    integer, intent(in), allocatable :: iEqBlockDftbuLS(:,:,:,:)
 
     !> imaginary part of dual charges
     real(dp), intent(inout), allocatable :: qiBlockIn(:,:,:,:)
 
     real(dp), allocatable :: invJacobian(:,:)
+    integer :: nIneqOrb
 
+    nIneqOrb = size(qOutRed)
+    
     if (xlbomdIntegrator%needsInverseJacobian()) then
       write(stdOut, "(A)") ">> Updating XLBOMD Inverse Jacobian"
       allocate(invJacobian(nIneqOrb, nIneqOrb))
@@ -3269,8 +3248,7 @@ contains
       deallocate(invJacobian)
     end if
     call xlbomdIntegrator%getNextCharges(qOutRed(1:nIneqOrb), qInpRed(1:nIneqOrb))
-    call expandCharges(qInpRed, orb, nIneqOrb, iEqOrbitals, qInput, qBlockIn, iEqBlockDftbu,&
-        & species0, nUJ, iUJ, niUJ, qiBlockIn, iEqBlockDftbuLS)
+    call expandCharges(qInpRed, orb, qInput, qBlockIn, qiBlockIn)
 
   end subroutine getXlbomdCharges
 
