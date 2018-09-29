@@ -2808,7 +2808,7 @@ contains
 
     real(dp), allocatable :: qOrbUpDown(:,:,:), qBlockUpDown(:,:,:,:), qiBlockUpDown(:,:,:,:)
     integer :: iOrb, iAt, iSp, iCount
-    
+
     qRed(:) = 0.0_dp
 
     qOrbUpDown = qOrb
@@ -2829,15 +2829,15 @@ contains
         iCount = iCount + orb%nOrbAtom(iAt)
       end do
     end do
-      
+
     if (allocated(qBlock)) then
       do iSp = 1, size(qOrb, dim=3)
         do iAt = 1, size(qOrb, dim=2)
-          do iOrb = 1, orb%nOrbAtom(iAt)
-            qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt)) = 0.5_dp * (&
-                & qBlock(iOrb:orb%nOrbAtom(iAt),iOrb,iAt,iSp)&
-                & + qBlock(iOrb,iOrb:orb%nOrbAtom(iAt),iAt,iSp) )
-            iCount = iCount + orb%nOrbAtom(iAt) - iOrb + 1
+          do iOrb = 1, orb%nOrbAtom(iAt) - 1
+            qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt) - iOrb) = 0.5_dp * (&
+                & qBlock(iOrb+1:orb%nOrbAtom(iAt),iOrb,iAt,iSp)&
+                & + qBlock(iOrb,iOrb+1:orb%nOrbAtom(iAt),iAt,iSp) )
+            iCount = iCount + orb%nOrbAtom(iAt) - iOrb
           end do
         end do
       end do
@@ -2845,8 +2845,7 @@ contains
         do iSp = 1, size(qOrb, dim=3)
           do iAt = 1, size(qOrb, dim=2)
             do iOrb = 1, orb%nOrbAtom(iAt) - 1
-              ! avoid diagonal, as 0
-              qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt) -1) = 0.5_dp * (&
+              qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt) - iOrb) = 0.5_dp * (&
                   & qiBlock(iOrb+1:orb%nOrbAtom(iAt),iOrb,iAt,iSp)&
                   & - qiBlock(iOrb,iOrb+1:orb%nOrbAtom(iAt),iAt,iSp) )
               iCount = iCount + orb%nOrbAtom(iAt) - iOrb
@@ -2855,7 +2854,7 @@ contains
         end do
       end if
     end if
-    
+
   end subroutine reduceCharges
 
 
@@ -2887,17 +2886,17 @@ contains
         iCount = iCount + orb%nOrbAtom(iAt)
       end do
     end do
-      
+
     if (allocated(qBlock)) then
       qBlock = 0.0_dp
       do iSp = 1, size(qOrb, dim=3)
         do iAt = 1, size(qOrb, dim=2)
-          do iOrb = 1, orb%nOrbAtom(iAt)
-            qBlock(iOrb:orb%nOrbAtom(iAt),iOrb,iAt,iSp) =&
-                & qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt))
-            qBlock(iOrb,iOrb:orb%nOrbAtom(iAt),iAt,iSp) =&
-                & qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt))
-            iCount = iCount + orb%nOrbAtom(iAt) - iOrb + 1
+          do iOrb = 1, orb%nOrbAtom(iAt) - 1
+            qBlock(iOrb+1:orb%nOrbAtom(iAt),iOrb,iAt,iSp) =&
+                & qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt) - iOrb)
+            qBlock(iOrb,iOrb+1:orb%nOrbAtom(iAt),iAt,iSp) =&
+                & qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt) - iOrb)
+            iCount = iCount + orb%nOrbAtom(iAt) - iOrb
           end do
         end do
       end do
@@ -2906,16 +2905,24 @@ contains
         do iSp = 1, size(qOrb, dim=3)
           do iAt = 1, size(qOrb, dim=2)
             do iOrb = 1, orb%nOrbAtom(iAt) - 1
-              ! avoid diagonal, as 0
               qiBlock(iOrb+1:orb%nOrbAtom(iAt),iOrb,iAt,iSp) =&
-                  & qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt) -1)
+                  & qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt) - iOrb)
               qiBlock(iOrb,iOrb+1:orb%nOrbAtom(iAt),iAt,iSp) =&
-                  & - qRed(iCount + iOrb : iCount + orb%nOrbAtom(iAt) -1)
+                  & - qRed(iCount + 1 : iCount + orb%nOrbAtom(iAt) - iOrb)
               iCount = iCount + orb%nOrbAtom(iAt) - iOrb
             end do
           end do
         end do
       end if
+    end if
+
+    if (allocated(qBlock)) then
+      do iSp = 1, size(qOrb, dim=3)
+        do iAt = 1, size(qOrb, dim=2)
+        end do
+      end do
+
+      call ud2qm(qBlock)
     end if
 
     call ud2qm(qOrb)
@@ -2925,7 +2932,7 @@ contains
     if (allocated(qiBlock)) then
       call ud2qm(qiBlock)
     end if
-    
+
   end subroutine expandCharges
 
 
@@ -3239,7 +3246,7 @@ contains
     integer :: nIneqOrb
 
     nIneqOrb = size(qOutRed)
-    
+
     if (xlbomdIntegrator%needsInverseJacobian()) then
       write(stdOut, "(A)") ">> Updating XLBOMD Inverse Jacobian"
       allocate(invJacobian(nIneqOrb, nIneqOrb))
