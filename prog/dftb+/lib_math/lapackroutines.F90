@@ -36,35 +36,35 @@ module lapackroutines
   !> The decomposition has the form: A = P*L*U, where P is a permutation matrix, L is a lower
   !> triangular matrix with unit diagonal elements and U is an upper triangular matrix.
   interface getrf
-    module procedure getrf_real
-    module procedure getrf_dble
-    module procedure getrf_complex
-    module procedure getrf_dcomplex
+#:for NAME in [('real'), ('dble'), ('complex'), ('dcomplex')]
+    module procedure getrf_${NAME}$
+#:endfor
   end interface getrf
 
-
+#:for NAME, VPREC in [('sytrf', 'real'), ('sytrf', 'dreal'), ('hetrf', 'complex'),&
+  & ('hetrf', 'dcomplex')]
+#:if NAME == 'sytrf'
   !> Bunch-Kaufman factorization of a symmetric matrix.
-  interface sytrf
-    module procedure sytrf_real, sytrf_dreal
-  end interface sytrf
+#:else
+  !> Bunch-Kaufman factorization of a hermitian matrix.
+#:endif
+  interface ${NAME}$
+    module procedure ${NAME}$_${VPREC}$
+  end interface ${NAME}$
+#:endfor
 
 
-  !> Bunch-Kaufman factorization of a Hermitian matrix.
-  interface hetrf
-    module procedure hetrf_complex, hetrf_dcomplex
-  end interface hetrf
-
-
+#:for NAME, VPREC in [('sytri', 'real'), ('sytri', 'dreal'), ('hetri', 'complex'),&
+  & ('hetri', 'dcomplex')]
+#:if NAME == 'sytri'
   !> Inverts a symmetric matrix.
-  interface sytri
-    module procedure sytri_real, sytri_dreal
-  end interface sytri
-
-
+#:else
   !> Inverts a Hermitian matrix.
-  interface hetri
-    module procedure hetri_complex, hetri_dcomplex
-  end interface hetri
+#:endif
+  interface ${NAME}$
+    module procedure ${NAME}$_${VPREC}$
+  end interface ${NAME}$
+#:endfor
 
 
   !> Computes the inverse of a matrix using LU factorization computed by getrf.
@@ -84,35 +84,35 @@ module lapackroutines
 
   !> returns a vector of random numers, either from a uniform or normal distribution
   interface larnv
-    module procedure larnv_real
-    module procedure larnv_dble
-    module procedure larnv_cplx
-    module procedure larnv_dblecplx
+#:for NAME in [('real'), ('dble'), ('cplx'), ('dblecplx')]
+    module procedure larnv_${NAME}$
+#:endfor
   end interface larnv
 
   !> svd decomposition of matrix A into left and right vectors and singular values U S V^dag
   interface gesvd
-    module procedure sgesvd_real
-    module procedure dgesvd_dble
-    module procedure cgesvd_cplx
-    module procedure zgesvd_dblecplx
+#:for NAME, VPREC in [('sgesvd', 'real'), ('dgesvd', 'dble'), ('cgesvd', 'cplx'),&
+    & ('zgesvd', 'dblecplx')]
+    module procedure ${NAME}$_${VPREC}$
+#:endfor
   end interface gesvd
 
 
   public :: gesv, getri, getrf, sytri, sytrf, matinv, symmatinv, sytrs, larnv
   public :: hermatinv, hetri, hetrf, gesvd
 
+
 contains
 
-
-  !> Single precision version of gesv
-  subroutine gesv_real(aa, bb, nEquation, nSolution, iError)
+#:for NAME, VPREC, VTYPE in [('real', 'rsp', 's'), ('dble', 'rdp', 'd')]
+  !> Computes the solution to a real system of linear equations A * X = B
+  subroutine gesv_${NAME}$(aa, bb, nEquation, nSolution, iError)
 
     !> Contains the coefficients on entry, the LU factorisation on exit.
-    real(rsp), intent(inout) :: aa(:,:)
+    real(${VPREC}$), intent(inout) :: aa(:,:)
 
     !> Right hand side(s) of the linear equation on entry, solution(s) on exit.
-    real(rsp), intent(inout) :: bb(:,:)
+    real(${VPREC}$), intent(inout) :: bb(:,:)
 
     !> The size of the problem (nr. of variables and equations). Must be only specified if different
     !> from size(aa, dim=1).
@@ -148,97 +148,33 @@ contains
 
     info = 0
     allocate(ipiv(nn))
-    call sgesv(nn, nrhs, aa, lda, ipiv, bb, ldb, info)
+    call ${VTYPE}$gesv(nn, nrhs, aa, lda, ipiv, bb, ldb, info)
 
     if (info < 0) then
-99000 format ('Failure in linear equation solver sgesv,', &
-          & ' illegal argument at position ',i10)
-      write (error_string, 99000) info
+      write (error_string, "('Failure in linear equation solver ${VTYPE}$gesv, illegal argument at&
+          & position ',I2)") info
       call error(error_string)
     else
       if (present(iError)) then
         iError = info
       elseif (info > 0) then
-99010   format ('Linear dependent system in linear equation solver sgetrf,', &
-            & ' info flag: ',i10)
-        write (error_string, 99010) info
+        write (error_string, "('Linear dependent system in linear equation solver ${VTYPE}$getrf,&
+            & info flag: ',I0)") info
         call error(error_string)
       end if
     end if
 
-  end subroutine gesv_real
+  end subroutine gesv_${NAME}$
+#:endfor
 
 
-  !> Double precision version of gesv
-  subroutine gesv_dble(aa, bb, nEquation, nSolution, iError)
-
-    !> Contains the coefficients on entry, the LU factorisation on exit.
-    real(rdp), intent(inout) :: aa(:,:)
-
-    !> Right hand side(s) of the linear equation on entry, solution(s) on exit.
-    real(rdp), intent(inout) :: bb(:,:)
-
-    !> The size of the problem (nr. of variables and equations). Must be only specified if different
-    !> from size(aa, dim=1).
-    integer, intent(in), optional :: nEquation
-
-    !> Nr. of right hand sides (nr. of solutions). Must be only specified if different from size(b,
-    !> dim=2).
-    integer, intent(in), optional :: nSolution
-
-    !> Error flag. If present, Lapack error flags are reported and noncritical errors (iError > 0)
-    !> will not abort the program.
-    integer, intent(out), optional :: iError
-
-    integer :: info
-    integer :: nn, nrhs, lda, ldb
-    integer, allocatable :: ipiv(:)
-
-    lda = size(aa, dim=1)
-    if (present(nEquation)) then
-      @:ASSERT(nEquation >= 1 .and. nEquation <= lda)
-      nn = nEquation
-    else
-      nn = lda
-    end if
-    @:ASSERT(size(aa, dim=2) >= nn)
-
-    ldb = size(bb, dim=1)
-    @:ASSERT(ldb >= nn)
-    nrhs = size(bb, dim=2)
-    if (present(nSolution)) then
-      @:ASSERT(nSolution <= nrhs)
-      nrhs = nSolution
-    end if
-
-    info = 0
-    allocate(ipiv(nn))
-    call dgesv(nn, nrhs, aa, lda, ipiv, bb, ldb, info)
-
-    if (info < 0) then
-99020 format ('Failure in linear equation solver dgesv,', &
-          & ' illegal argument at position ',i10)
-      write (error_string, 99020) info
-      call error(error_string)
-    else
-      if (present(iError)) then
-        iError = info
-      elseif (info > 0) then
-99030   format ('Linear dependent system in linear equation solver dgesv,', &
-            & ' info flag: ',i10)
-        write (error_string, 99030) info
-        call error(error_string)
-      end if
-    end if
-
-  end subroutine gesv_dble
-
-
-  !> Single precision version of getrf.
-  subroutine getrf_real(aa, ipiv, nRow, nColumn, iError)
+#:for NAME, VPREC, VTYPE, CASE in [('real', 'rsp', 'real', 's'), ('dble', 'rdp', 'real', 'd'),&
+  & ('complex', 'rsp', 'complex', 'c'), ('dcomplex', 'rdp', 'complex', 'z')]
+  !> Computes the LU decomposition of a general rectangular matrix
+  subroutine getrf_${NAME}$(aa, ipiv, nRow, nColumn, iError)
 
     !> Matrix to decompose on entry, L and U on exit. Unit diagonal elements of L are not stored.
-    real(rsp), intent(inout) :: aa(:,:)
+    ${VTYPE}$(${VPREC}$), intent(inout) :: aa(:,:)
 
     !> Pivot indices, row i of the matrix was interchanged with row ipiv(i).
     integer, intent(out) :: ipiv(:)
@@ -271,206 +207,32 @@ contains
     end if
     @:ASSERT(size(ipiv) == min(mm, nn))
 
-    call sgetrf(mm, nn, aa, lda, ipiv, info)
+    call ${CASE}$getrf(mm, nn, aa, lda, ipiv, info)
 
     if (info < 0) then
-99040 format ('Failure in LU factorisation sgetrf,', &
-          & ' illegal argument at position ',i10)
-      write (error_string, 99040) info
+      write (error_string, "('Failure in LU factorisation ${CASE}$getrf, illegal argument at&
+          & position ',I2)") info
       call error(error_string)
     else
       if (present(iError)) then
         iError = info
       elseif (info > 0) then
-99050   format ('Factor U is exactly zero in sgetrf,', &
-            & ' info flag is ',i10)
-        write (error_string, 99050) info
+        write (error_string, "('Factor U is exactly zero in ${CASE}$getrf, info flag is ',i10)")&
+            & info
         call error(error_string)
       end if
     end if
 
-  end subroutine getrf_real
+  end subroutine getrf_${NAME}$
+#:endfor
 
 
-  !> Double precision version of getrf.
-  subroutine getrf_dble(aa, ipiv, nRow, nColumn, iError)
-
-    !> Matrix to decompose on entry, L and U on exit. Unit diagonal elements of L are not stored.
-    real(rdp), intent(inout) :: aa(:,:)
-
-    !> Pivot indices, row i of the matrix was interchanged with row ipiv(i).
-    integer, intent(out) :: ipiv(:)
-
-    !> Number of rows of the matrix to decomposea. (Necessary if different from the number of rows
-    !> of the passed matrix)
-    integer, optional, intent(in) :: nRow
-
-    !> Number of rows of the matrix to decompose. (Necessary if different from the number of columns
-    !> of the passed matrix)
-    integer, optional, intent(in) :: nColumn
-
-    !> Error flag. Zero on successfull exit. If not present, any lapack error causes program
-    !> termination. If passed only fatal lapack errors with error flag < 0 cause abort.
-    integer, optional, intent(out) :: iError
-
-    integer :: mm, nn, lda, info
-
-    lda = size(aa, dim=1)
-    nn = size(aa, dim=2)
-    if (present(nRow)) then
-      @:ASSERT(nRow >= 1 .and. nRow <= lda)
-      mm = nRow
-    else
-      mm = lda
-    end if
-    if (present(nColumn)) then
-      @:ASSERT(nColumn >= 1 .and. nColumn <= nn)
-      nn = nColumn
-    end if
-    @:ASSERT(size(ipiv) == min(mm, nn))
-
-    call dgetrf(mm, nn, aa, lda, ipiv, info)
-
-    if (info < 0) then
-99060 format ('Failure in LU factorisation dgetrf,', &
-          & ' illegal argument at position ',i10)
-      write (error_string, 99060) info
-      call error(error_string)
-    else
-      if (present(iError)) then
-        iError = info
-      elseif (info > 0) then
-99070   format ('Factor U is exactly zero in dgetrf,', &
-            & ' info flag is ',i10)
-        write (error_string, 99070) info
-        call error(error_string)
-      end if
-    end if
-
-  end subroutine getrf_dble
-
-
-  !> Complex precision version of getrf.
-  subroutine getrf_complex(aa, ipiv, nRow, nColumn, iError)
+#:for NAME, VPREC, VTYPE in [('real', 'rsp', 's'), ('dble', 'rdp', 'd')]
+  !> Computes the inverse of a matrix using LU factorization
+  subroutine getri_${NAME}$(aa, ipiv, nRow, iError)
 
     !> Matrix to decompose on entry, L and U on exit. Unit diagonal elements of L are not stored.
-    complex(rsp), intent(inout) :: aa(:,:)
-
-    !> Pivot indices, row i of the matrix was interchanged with row ipiv(i).
-    integer, intent(out) :: ipiv(:)
-
-    !> Number of rows of the matrix to decomposea. (Necessary if different from the number of rows
-    !> of the passed matrix)
-    integer, optional, intent(in) :: nRow
-
-    !> Number of rows of the matrix to decompose. (Necessary if different from the number of columns
-    !> of the passed matrix)
-    integer, optional, intent(in) :: nColumn
-
-    !> Error flag. Zero on successfull exit. If not present, any lapack error causes program
-    !> termination. If passed only fatal lapack errors with error flag < 0 cause abort.
-    integer, optional, intent(out) :: iError
-
-    integer :: mm, nn, lda, info
-
-    lda = size(aa, dim=1)
-    nn = size(aa, dim=2)
-    if (present(nRow)) then
-      @:ASSERT(nRow >= 1 .and. nRow <= lda)
-      mm = nRow
-    else
-      mm = lda
-    end if
-    if (present(nColumn)) then
-      @:ASSERT(nColumn >= 1 .and. nColumn <= nn)
-      nn = nColumn
-    end if
-    @:ASSERT(size(ipiv) == min(mm, nn))
-
-    call cgetrf(mm, nn, aa, lda, ipiv, info)
-
-    if (info < 0) then
-99045 format ('Failure in LU factorisation sgetrf,', &
-          & ' illegal argument at position ',i10)
-      write (error_string, 99045) info
-      call error(error_string)
-    else
-      if (present(iError)) then
-        iError = info
-      elseif (info > 0) then
-99055   format ('Factor U is exactly zero in sgetrf,', &
-            & ' info flag is ',i10)
-        write (error_string, 99055) info
-        call error(error_string)
-      end if
-    end if
-
-  end subroutine getrf_complex
-
-
-  !> Double precision version of getrf.
-  subroutine getrf_dcomplex(aa, ipiv, nRow, nColumn, iError)
-
-    !> Matrix to decompose on entry, L and U on exit. Unit diagonal elements of L are not stored.
-    complex(rdp), intent(inout) :: aa(:,:)
-
-    !> Pivot indices, row i of the matrix was interchanged with row ipiv(i).
-    integer, intent(out) :: ipiv(:)
-
-    !> Number of rows of the matrix to decomposea. (Necessary if different from the number of rows
-    !> of the passed matrix)
-    integer, optional, intent(in) :: nRow
-
-    !> Number of rows of the matrix to decompose. (Necessary if different from the number of columns
-    !> of the passed matrix)
-    integer, optional, intent(in) :: nColumn
-
-    !> Error flag. Zero on successfull exit. If not present, any lapack error causes program
-    !> termination. If passed only fatal lapack errors with error flag < 0 cause abort.
-    integer, optional, intent(out) :: iError
-
-    integer :: mm, nn, lda, info
-
-    lda = size(aa, dim=1)
-    nn = size(aa, dim=2)
-    if (present(nRow)) then
-      @:ASSERT(nRow >= 1 .and. nRow <= lda)
-      mm = nRow
-    else
-      mm = lda
-    end if
-    if (present(nColumn)) then
-      @:ASSERT(nColumn >= 1 .and. nColumn <= nn)
-      nn = nColumn
-    end if
-    @:ASSERT(size(ipiv) == min(mm, nn))
-
-    call zgetrf(mm, nn, aa, lda, ipiv, info)
-
-    if (info < 0) then
-99065 format ('Failure in LU factorisation dgetrf,', &
-          & ' illegal argument at position ',i10)
-      write (error_string, 99065) info
-      call error(error_string)
-    else
-      if (present(iError)) then
-        iError = info
-      elseif (info > 0) then
-99075   format ('Factor U is exactly zero in dgetrf,', &
-            & ' info flag is ',i10)
-        write (error_string, 99075) info
-        call error(error_string)
-      end if
-    end if
-
-  end subroutine getrf_dcomplex
-
-
-  !> Single precision version of getri.
-  subroutine getri_real(aa, ipiv, nRow, iError)
-
-    !> Matrix to decompose on entry, L and U on exit. Unit diagonal elements of L are not stored.
-    real(rsp), intent(inout) :: aa(:,:)
+    real(${VPREC}$), intent(inout) :: aa(:,:)
 
     !> Pivot indices, as calculated by getri
     integer, intent(in) :: ipiv(:)
@@ -484,8 +246,8 @@ contains
     integer, intent(out), optional :: iError
 
     integer :: nn, lda, info, lwork
-    real(rsp), allocatable :: work(:)
-    real(rsp) :: work2(1)
+    real(${VPREC}$), allocatable :: work(:)
+    real(${VPREC}$) :: work2(1)
 
     lda = size(aa, dim=1)
     if (present(nRow)) then
@@ -497,370 +259,111 @@ contains
     @:ASSERT(size(aa, dim=2) >= nn)
     @:ASSERT(size(ipiv) == nn)
 
+    ! workspace query
     lwork = -1
-    call sgetri(nn, aa, lda, ipiv, work2, lwork, info)
-    lwork = int(work2(1))
-
-    allocate(work(lwork))
-    call sgetri(nn, aa, lda, ipiv, work, lwork, info)
-
+    call ${VTYPE}$getri(nn, aa, lda, ipiv, work2, lwork, info)
     if (info < 0) then
-99080 format ('Failure in LU factorisation (sgetri),', &
-          & ' illegal argument at position ',i10)
-      write (error_string, 99080) info
+      write (error_string, "('Failure in LU factorisation memory query (${VTYPE}$getri), illegal&
+          & argument at position ',I2)") info
       call error(error_string)
     else
       if (present(iError)) then
         iError = info
       elseif (info > 0) then
-99090   format ('Factor U is exactly zero in sgetri,', &
-            & ' info flag is ',i10)
-        write (error_string, 99090) info
+        write (error_string, "('Failure in LU factorisation memory query (${VTYPE}$getri)',I0)")info
         call error(error_string)
       end if
     end if
-
-  end subroutine getri_real
-
-
-  !> Double precision version of getri.
-  subroutine getri_dble(aa, ipiv, nRow, iError)
-
-    !> Matrix to decompose on entry, L and U on exit. Unit diagonal elements of L are not stored.
-    real(rdp), intent(inout) :: aa(:,:)
-
-    !> Pivot indices, as calculated by getri
-    integer, intent(in) :: ipiv(:)
-
-    !> Number of rows of the matrix to decompose. (Necessary if different from the number of rows of
-    !> the passed matrix)
-    integer, intent(in), optional :: nRow
-
-    !> iError Error flag. Zero on successfull exit. If not present, any lapack error causes program
-    !> termination. If present, only fatal lapack errors with error flag < 0 cause abort.
-    integer, intent(out), optional :: iError
-
-    integer :: nn, lda, info, lwork
-    real(rdp), allocatable :: work(:)
-    real(rdp) :: work2(1)
-
-    lda = size(aa, dim=1)
-    if (present(nRow)) then
-      @:ASSERT(nRow >= 1 .and. nRow <= lda)
-      nn = nRow
-    else
-      nn = lda
-    end if
-    @:ASSERT(size(aa, dim=2) >= nn)
-    @:ASSERT(size(ipiv) == nn)
-
-    lwork = -1
-    call dgetri(nn, aa, lda, ipiv, work2, lwork, info)
     lwork = int(work2(1))
 
     allocate(work(lwork))
-    call dgetri(nn, aa, lda, ipiv, work, lwork, info)
+    call ${VTYPE}$getri(nn, aa, lda, ipiv, work, lwork, info)
 
     if (info < 0) then
-99100 format ('Failure in LU factorisation (dgetri), illegal argument at&
-          & position ', i10)
-      write (error_string, 99100) info
+      write (error_string, "('Failure in LU factorisation (${VTYPE}$getri), illegal argument at&
+          & position ',I2)") info
       call error(error_string)
     else
       if (present(iError)) then
         iError = info
       elseif (info > 0) then
-99110   format ('Factor U is exactly zero in dgetri,', &
-            & ' info flag is ',i10)
-        write (error_string, 99110) info
+        write (error_string, "('Factor U is exactly zero in ${VTYPE}$getri, info flag is ',I0)")&
+            & info
         call error(error_string)
       end if
     end if
 
-  end subroutine getri_dble
+  end subroutine getri_${NAME}$
+#:endfor
 
+#:for NAME, VTYPE, PREFIX, VPREC, CASE in [('real', 'real', 'sy', 'rsp', 's'),&
+  & ('dreal', 'real', 'sy', 'rdp', 'd'), ('complex', 'complex', 'he', 'rsp', 'c'),&
+  & ('dcomplex', 'complex', 'he', 'rdp', 'z')]
+#:if PREFIX == 'sy'
+  !> Computes the Bunch-Kaufman factorization of a symmetric matrix (${NAME}$).
+#:else
+  !> Computes the Bunch-Kaufman factorization of a hermitian matrix (${NAME}$).
+#:endif
+  subroutine ${PREFIX}$trf_${NAME}$(aa, ipiv, uplo, iError)
 
-  !> Inverts a matrix.
-  subroutine matinv(aa, nRow, iError)
+    !> Matrix to decompose, over-written on output
+    ${VTYPE}$(${VPREC}$), intent(inout) :: aa(:,:)
 
-    !> Matrix to invert on entry, inverted matrix on exit
-    real(dp), intent(inout) :: aa(:,:)
+    !> Interchanges of blocks on exit.
+    integer, intent(out) :: ipiv(:)
 
-    !> Nr. of rows of the matrix (if different from size(aa, dim=1)
-    integer, intent(in), optional :: nRow
+    !> Signals whether upper (U) or lower (L) triangle should be used (default: lower).
+    character, intent(in), optional :: uplo
 
-    !> iError Error flag. Returns 0 on successfull operation. If this variable is not specified, any
-    !> occuring error (e.g. singular matrix) stops the program.
+    !> Info flag (0 = OK). If not set and an error occured, the subroutine stops.
     integer, intent(out), optional :: iError
 
-    integer :: nn, info
-    integer, allocatable :: ipiv(:)
+    integer :: nn, info, lwork
+    ${VTYPE}$(${VPREC}$), allocatable :: work(:)
+    ${VTYPE}$(${VPREC}$) :: tmpwork(1)
+    character :: uplo0
 
-    nn = size(aa, dim=1)
-    if (present(nRow)) then
-      @:ASSERT(nRow >= 1 .and. nRow <= nn)
-      nn = nRow
-    end if
-    @:ASSERT(size(aa, dim=2) >= nn)
-
-    allocate(ipiv(nn))
-    call getrf(aa, ipiv, nRow=nn, nColumn=nn, iError=info)
-    if (info == 0) then
-      call getri(aa, ipiv, nRow=nn, iError=info)
+    if (present(uplo)) then
+      uplo0 = uplo
+    else
+      uplo0 = "L"
     end if
 
-    if (present(iError)) then
-      iError = info
-    elseif (info /= 0) then
-99120 format ('Matrix inversion failed because of error in getrf or getri.', &
-          & ' Info flag: ',i10)
-      write (error_string, 99120) info
+    nn = size(aa, dim=2)
+    lwork = -1
+    call ${CASE}$${PREFIX}$trf(uplo0, nn, aa, nn, ipiv, tmpwork, lwork, info)
+    if (info < 0) then
+      write (error_string, "('Failure in factorisation memory query (${CASE}$${PREFIX}$trf),&
+          & illegal argument at position ',I2)") info
       call error(error_string)
+    else
+      if (present(iError)) then
+        iError = info
+      elseif (info > 0) then
+        write (error_string, "('Failure in factorisation memory query (${CASE}$${PREFIX}$trf)',&
+            & I0)")info
+        call error(error_string)
+      end if
     end if
-
-  end subroutine matinv
-
-
-  !> Inverts a symmetric matrix.
-  subroutine symmatinv(aa, uplo, info)
-
-    !> Symmetric matrix to invert on entry, inverted matrix on exit.
-    real(dp), intent(inout) :: aa(:,:)
-
-    !> Upper ('U') or lower ('L') matrix. Default: 'L'.
-    character, intent(in), optional :: uplo
-
-    !> Info flag. If not specified and an error occurs, the subroutine will stop.
-    integer, intent(out), optional :: info
-
-    integer :: nn, info0
-    integer, allocatable :: ipiv(:)
-
-    nn = size(aa, dim=1)
-    allocate(ipiv(nn))
-    call sytrf(aa, ipiv, uplo, info0)
-    if (info0 == 0) then
-      call sytri(aa, ipiv, uplo, info0)
-    end if
-
-    if (present(info)) then
-      info = info0
-    elseif (info0 /= 0) then
-      write(error_string, "(A,I10)") "Matrix inversion failed because of &
-          &error in sytrf or sytri. Info flag:", info
+    lwork = int(tmpwork(1))
+    allocate(work(lwork))
+    call ${CASE}$${PREFIX}$trf(uplo0, nn, aa, nn, ipiv, work, lwork, info)
+    if (info < 0) then
+      write (error_string, "('Failure in factorisation memory query (${CASE}$${PREFIX}$trf),&
+          & illegal argument at position ',I2)") info
       call error(error_string)
-    end if
-
-  end subroutine symmatinv
-
-
-  !> Inverts a Hermitian matrix.
-  subroutine hermatinv(aa, uplo, info)
-
-    !> Hermitian matrix to invert on entry, inverted matrix on exit.
-    complex(dp), intent(inout) :: aa(:,:)
-
-    !> Upper ('U') or lower ('L') matrix. Default: 'L'.
-    character, intent(in), optional :: uplo
-
-    !> Info flag. If not specified and an error occurs, the subroutine will stop.
-    integer, intent(out), optional :: info
-
-    integer :: nn, info0
-    integer, allocatable :: ipiv(:)
-
-    nn = size(aa, dim=1)
-    allocate(ipiv(nn))
-    call hetrf(aa, ipiv, uplo, info0)
-    if (info0 == 0) then
-      call hetri(aa, ipiv, uplo, info0)
-    end if
-
-    if (present(info)) then
-      info = info0
-    elseif (info0 /= 0) then
-      write(error_string, "(A,I10)") "Matrix inversion failed because of &
-          &error in sytrf or sytri. Info flag:", info
-      call error(error_string)
-    end if
-
-  end subroutine hermatinv
-
-
-  !> Computes the Bunch-Kaufman factorization of a symmetric matrix (dreal).
-  subroutine sytrf_real(aa, ipiv, uplo, info)
-
-    !> Symmetric matrix
-    real(rsp), intent(inout) :: aa(:,:)
-
-    !> Interchanges of blocks on exit.
-    integer, intent(out) :: ipiv(:)
-
-    !> Signals whether upper (U) or lower (L) triangle should be used (default: lower).
-    character, intent(in), optional :: uplo
-
-    !> Info flag (0 = OK). If not set and an error occured, the subroutine stops.
-    integer, intent(out), optional :: info
-
-    integer :: nn, info0, lwork
-    real(rsp), allocatable :: work(:)
-    real(rsp) :: tmpwork(1)
-    character :: uplo0
-
-    if (present(uplo)) then
-      uplo0 = uplo
     else
-      uplo0 = "L"
+      if (present(iError)) then
+        iError = info
+      elseif (info > 0) then
+        write (error_string, "('Failure in factorisation memory query (${CASE}$${PREFIX}$trf)',&
+            & I0)")info
+        call error(error_string)
+      end if
     end if
 
-    nn = size(aa, dim=2)
-    lwork = -1
-    call ssytrf(uplo0, nn, aa, nn, ipiv, tmpwork, lwork, info0)
-    if (info0 == 0) then
-      lwork = int(tmpwork(1))
-      allocate(work(lwork))
-      call ssytrf(uplo0, nn, aa, nn, ipiv, work, lwork, info0)
-    end if
-
-    if (present(info)) then
-      info = info0
-    elseif (info0 /= 0) then
-      write(error_string, "(A,I10)") "Failure dsytrf, info: ", info0
-    end if
-
-  end subroutine sytrf_real
-
-
-  !> Computes the Bunch-Kaufman factorization of a symmetric matrix (dreal).
-  subroutine sytrf_dreal(aa, ipiv, uplo, info)
-
-    !> Symmetric matrix
-    real(rdp), intent(inout) :: aa(:,:)
-
-    !> Interchanges of blocks on exit.
-    integer, intent(out) :: ipiv(:)
-
-    !> Signals whether upper (U) or lower (L) triangle should be used (default: lower).
-    character, intent(in), optional :: uplo
-
-    !> Info flag (0 = OK). If not set and an error occured, the subroutine stops.
-    integer, intent(out), optional :: info
-
-    integer :: nn, info0, lwork
-    real(rdp), allocatable :: work(:)
-    real(rdp) :: tmpwork(1)
-    character :: uplo0
-
-    if (present(uplo)) then
-      uplo0 = uplo
-    else
-      uplo0 = "L"
-    end if
-
-    nn = size(aa, dim=2)
-    lwork = -1
-    call dsytrf(uplo0, nn, aa, nn, ipiv, tmpwork, lwork, info0)
-    if (info0 == 0) then
-      lwork = int(tmpwork(1))
-      allocate(work(lwork))
-      call dsytrf(uplo0, nn, aa, nn, ipiv, work, lwork, info0)
-    end if
-
-    if (present(info)) then
-      info = info0
-    elseif (info0 /= 0) then
-      write(error_string, "(A,I10)") "Failure dsytrf, info: ", info0
-    end if
-
-  end subroutine sytrf_dreal
-
-
-  !> Computes the Bunch-Kaufman factorization of a Hermitian matrix (complex).
-  subroutine hetrf_complex(aa, ipiv, uplo, info)
-
-    !> Hermitian matrix
-    complex(rsp), intent(inout) :: aa(:,:)
-
-    !> Interchanges of blocks on exit.
-    integer, intent(out) :: ipiv(:)
-
-    !> Signals whether upper (U) or lower (L) triangle should be used (default: lower).
-    character, intent(in), optional :: uplo
-
-    !> Info flag (0 = OK). If not set and an error occured, the subroutine stops.
-    integer, intent(out), optional :: info
-
-    integer :: nn, info0, lwork
-    complex(rsp), allocatable :: work(:)
-    complex(rsp) :: tmpwork(1)
-    character :: uplo0
-
-    if (present(uplo)) then
-      uplo0 = uplo
-    else
-      uplo0 = "L"
-    end if
-
-    nn = size(aa, dim=2)
-    lwork = -1
-    call chetrf(uplo0, nn, aa, nn, ipiv, tmpwork, lwork, info0)
-    if (info0 == 0) then
-      lwork = int(tmpwork(1))
-      allocate(work(lwork))
-      call chetrf(uplo0, nn, aa, nn, ipiv, work, lwork, info0)
-    end if
-
-    if (present(info)) then
-      info = info0
-    elseif (info0 /= 0) then
-      write(error_string, "(A,I10)") "Failure dsytrf, info: ", info0
-    end if
-
-  end subroutine hetrf_complex
-
-
-  !> Computes the Bunch-Kaufman factorization of a Hermitian matrix (dcomplex).
-  subroutine hetrf_dcomplex(aa, ipiv, uplo, info)
-
-    !> Hermitian matrix
-    complex(rdp), intent(inout) :: aa(:,:)
-
-    !> Interchanges of blocks on exit.
-    integer, intent(out) :: ipiv(:)
-
-    !> Signals whether upper (U) or lower (L) triangle should be used (default: lower).
-    character, intent(in), optional :: uplo
-
-    !> Info flag (0 = OK). If not set and an error occured, the subroutine stops.
-    integer, intent(out), optional :: info
-
-    integer :: nn, info0, lwork
-    complex(rdp), allocatable :: work(:)
-    complex(rdp) :: tmpwork(1)
-    character :: uplo0
-
-    if (present(uplo)) then
-      uplo0 = uplo
-    else
-      uplo0 = "L"
-    end if
-
-    nn = size(aa, dim=2)
-    lwork = -1
-    call zhetrf(uplo0, nn, aa, nn, ipiv, tmpwork, lwork, info0)
-    if (info0 == 0) then
-      lwork = int(tmpwork(1))
-      allocate(work(lwork))
-      call zhetrf(uplo0, nn, aa, nn, ipiv, work, lwork, info0)
-    end if
-
-    if (present(info)) then
-      info = info0
-    elseif (info0 /= 0) then
-      write(error_string, "(A,I10)") "Failure dsytrf, info: ", info0
-    end if
-
-  end subroutine hetrf_dcomplex
+  end subroutine ${PREFIX}$trf_${NAME}$
+#:endfor
 
 
   !> Computes the inverse of a symmetric matrix (real).
@@ -1466,5 +969,95 @@ contains
     deallocate(work)
 
   end subroutine zgesvd_dblecplx
+
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! Derived routines requiring multiple LAPACK calls
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
+  !> Inverts a matrix.
+  subroutine matinv(aa, nRow, iError)
+
+    !> Matrix to invert on entry, inverted matrix on exit
+    real(dp), intent(inout) :: aa(:,:)
+
+    !> Nr. of rows of the matrix (if different from size(aa, dim=1)
+    integer, intent(in), optional :: nRow
+
+    !> iError Error flag. Returns 0 on successfull operation. If this variable is not specified, any
+    !> occuring error (e.g. singular matrix) stops the program.
+    integer, intent(out), optional :: iError
+
+    integer :: nn, info
+    integer, allocatable :: ipiv(:)
+
+    nn = size(aa, dim=1)
+    if (present(nRow)) then
+      @:ASSERT(nRow >= 1 .and. nRow <= nn)
+      nn = nRow
+    end if
+    @:ASSERT(size(aa, dim=2) >= nn)
+
+    allocate(ipiv(nn))
+    call getrf(aa, ipiv, nRow=nn, nColumn=nn, iError=iError)
+    if (present(iError)) then
+      if (iError /= 0) then
+        write (error_string, "('Matrix inversion failed because of error in getrf. Info flag: ',&
+            & I0)") info
+        call warning(error_string)
+      end if
+    end if
+    call getri(aa, ipiv, nRow=nn, iError=iError)
+    if (present(iError)) then
+      if (iError /= 0) then
+        write (error_string, "('Matrix inversion failed because of error in getri. Info flag: ',&
+            & I0)") info
+        call warning(error_string)
+      end if
+    end if
+
+  end subroutine matinv
+
+
+#:for NAME, VTYPE, CASE, PREFIX in [('symmatinv', 'real', 'symmetric', 'sy'),&
+  & ('hermatinv', 'complex', 'hermitian', 'he')]
+  !> Inverts a ${CASE}$ matrix.
+  subroutine ${NAME}$(aa, uplo, iError)
+
+    !> Symmetric matrix to invert on entry, inverted matrix on exit.
+    ${VTYPE}$(dp), intent(inout) :: aa(:,:)
+
+    !> Upper ('U') or lower ('L') matrix. Default: 'L'.
+    character, intent(in), optional :: uplo
+
+    !> Info flag. If not specified and an error occurs, the subroutine will stop.
+    integer, intent(out), optional :: iError
+
+    integer :: nn
+    integer, allocatable :: ipiv(:)
+
+    nn = size(aa, dim=1)
+    allocate(ipiv(nn))
+    call ${PREFIX}$trf(aa, ipiv, uplo, iError=iError)
+    if (present(iError)) then
+      if (iError /= 0) then
+        write (error_string, "('Matrix inversion failed because of error in ${PREFIX}$trf. Info&
+            & flag: ', I0)") iError
+        call warning(error_string)
+      end if
+    end if
+
+    call ${PREFIX}$tri(aa, ipiv, uplo, info=iError)
+    if (present(iError)) then
+      if (iError /= 0) then
+        write (error_string, "('Matrix inversion failed because of error in ${PREFIX}$tri. Info&
+            & flag: ', I0)") iError
+        call warning(error_string)
+      end if
+    end if
+
+  end subroutine ${NAME}$
+#:endfor
 
 end module lapackroutines
