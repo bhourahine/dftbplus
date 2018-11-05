@@ -1475,9 +1475,7 @@ contains
       end if
       call getChildValue(node, "SCCTolerance", ctrl%sccTol, 1.0e-5_dp)
 
-      ! temporararily removed until debugged
-      !call getChildValue(node, "WriteShifts", ctrl%tWriteShifts, .false.)
-      ctrl%tWriteShifts = .false.
+      call getChildValue(node, "WriteShifts", ctrl%tWriteShifts, .false.)
 
       call getChildValue(node, "Mixer", value, "Broyden", child=child)
       call getNodeName(value, buffer)
@@ -1584,13 +1582,11 @@ contains
     end if
 #:endif
 
-    ! temporararily removed until debugged
-    !if (.not. ctrl%tscc) then
-    !  !! In a non-SCC calculation it is possible to upload charge shifts
-    !  !! This is useful if the calculation can jump directly to the Analysis block
-    !  call getChildValue(node, "ReadShifts", ctrl%tReadShifts, .false.)
-    !end if
-    ctrl%tReadShifts = .false.
+    if (.not. ctrl%tscc) then
+      !! In a non-SCC calculation it is possible to upload charge shifts
+      !! This is useful if the calculation can jump directly to the Analysis block
+      call getChildValue(node, "ReadShifts", ctrl%tReadShifts, .false.)
+    end if
 
     ! External electric field
     call getChildValue(node, "ElectricField", value, "", child=child, &

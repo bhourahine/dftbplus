@@ -360,8 +360,10 @@ contains
 
         ! Note: if XLBOMD is active, potential created with input charges is needed later,
         ! therefore it should not be overwritten here.
-        if (tSccCalc .and. .not. tXlbomd) then
+        if ((tSccCalc.or.tReadShifts) .and. .not. tXlbomd) then
           call resetInternalPotentials(tDualSpinOrbit, xi, orb, species, potential)
+        end if
+        if (tSccCalc .and. .not. tXlbomd) then
           call getChargePerShell(qOutput, orb, species, chargePerShell)
 
           call addChargePotentials(env, sccCalc, qOutput, q0, chargePerShell, orb, species,&
@@ -370,7 +372,8 @@ contains
 
           call addBlockChargePotentials(qBlockOut, qiBlockOut, tDftbU, tImHam, species, orb,&
               & nDftbUFunc, UJ, nUJ, iUJ, niUJ, potential)
-
+        end if
+        if ((tSccCalc.or.tReadShifts) .and. .not. tXlbomd) then
           potential%intBlock = potential%intBlock + potential%extBlock
         end if
 

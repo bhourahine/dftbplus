@@ -2013,9 +2013,6 @@ contains
 
     tReadShifts = input%ctrl%tReadShifts
     tWriteShifts = input%ctrl%tWriteShifts
-    ! Both temporarily removed until debugged:
-    @:ASSERT(.not. tReadShifts)
-    @:ASSERT(.not. tWriteShifts)
 
     tWriteChrgAscii = input%ctrl%tWriteChrgAscii
 
