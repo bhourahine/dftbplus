@@ -1421,6 +1421,88 @@ module lapack
   end interface dgesv
 
 
+#:for DTYPE, PTYPE in [('single', 's'), ('double', 'd')]
+
+  !> Solve over-determined or under-determined ${DTYPE}$ precision linear systems
+  interface ${PTYPE}$gesvx
+    
+    !> Solve over-determined or under-determined ${DTYPE}$ precision linear systems
+    subroutine ${PTYPE}$gesvx(fact, trans, n, nrhs, a, lda, af, ldaf, ipiv, equed, r, c, b, ldb, x,&
+        & ldx, rcond, ferr, berr, work, iwork, info)
+      import r${PTYPE}$p
+
+      !> factorisation choice on a
+      character, intent(in) :: fact
+      
+      !> system of equations
+      character, intent(in) :: trans
+      
+      !> number of linear equations (order of A)
+      integer, intent(in) :: n
+      
+      !> number of right hand sides
+      integer, intent(in) :: nrhs
+      
+      !> matrix a
+      real(r${PTYPE}$p), intent(inout) :: a(lda, n)
+      
+      !> Leading dimension of a (>= max(1, n))
+      integer, intent(in) :: lda
+      
+      !> factors of A = P*L*U, either in or output depending on fact choice
+      real(r${PTYPE}$p), intent(inout) :: af(ldaf, n)
+      
+      !> Leading dimension of af (>= max(1,n))
+      integer, intent(in) :: ldaf
+      
+      !> pivot array
+      integer, intent(out) :: ipiv(n)
+      
+      !> equilibration
+      character, intent(inout) :: equed
+      
+      !> row scale factors r
+      real(r${PTYPE}$p), intent(inout) :: r(n)
+
+      !> column scale factors c
+      real(r${PTYPE}$p), intent(inout) :: c(n)      
+      
+      !> right hand side matrix b
+      real(r${PTYPE}$p), intent(inout) :: b(ldb, nrhs)
+      
+      !> Leading dimension of b
+      integer, intent(in) :: ldb
+      
+      !> solution matrix x
+      real(r${PTYPE}$p), intent(out) :: x(ldx, nrhs)
+      
+      !> Leading dimension of x
+      integer, intent(in) :: ldx
+      
+      !> estimated condition number of a
+      real(r${PTYPE}$p), intent(in) :: rcond
+      
+      !> estimated forward error of solution vector(s)
+      real(r${PTYPE}$p), intent(in) :: ferr(nrhs)
+      
+      !> backward error of solution vector(s)
+      real(r${PTYPE}$p), intent(in) :: berr(nrhs)
+      
+      !> workspace, size 4*n
+      real(r${PTYPE}$p), intent(inout) :: work(4*n)
+      
+      !> integer workspace size n
+      integer, intent(inout) :: iwork(n)
+      
+      !> state of routine on return
+      integer, intent(out) :: info
+      
+    end subroutine ${PTYPE}$gesvx
+  end interface ${PTYPE}$gesvx
+  
+#:endfor
+
+  
   !> Computes LU factorization of real matrix
   interface sgetrf
 
