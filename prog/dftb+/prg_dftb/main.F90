@@ -358,6 +358,10 @@ contains
           call getLDual(orbitalL, qiBlockOut, orb, species)
         end if
 
+        if (tReadShifts) then
+          exit lpSCC
+        end if
+
         ! Note: if XLBOMD is active, potential created with input charges is needed later,
         ! therefore it should not be overwritten here.
         if ((tSccCalc.or.tReadShifts) .and. .not. tXlbomd) then
@@ -373,7 +377,7 @@ contains
           call addBlockChargePotentials(qBlockOut, qiBlockOut, tDftbU, tImHam, species, orb,&
               & nDftbUFunc, UJ, nUJ, iUJ, niUJ, potential)
         end if
-        if ((tSccCalc.or.tReadShifts) .and. .not. tXlbomd) then
+        if (tSccCalc .and. .not. tXlbomd) then
           potential%intBlock = potential%intBlock + potential%extBlock
         end if
 
