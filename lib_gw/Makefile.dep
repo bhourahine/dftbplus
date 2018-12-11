@@ -1,0 +1,40 @@
+gammamat.o: _mod_short_gamma _mod_accuracy assert.h allocate.h _mod_coulomb
+gammamat.o = gammamat.o $(_mod_short_gamma) $(_mod_accuracy) $(assert.h) $(allocate.h) $(_mod_coulomb)
+_mod_gammamat: gammamat.o
+_mod_gammamat = $(gammamat.o)
+
+ghostint.o:
+ghostint.o = ghostint.o
+_mod_gwghostint: ghostint.o
+_mod_gwghostint = $(ghostint.o)
+
+gw_input.o: _mod_accuracy allocate.h _mod_slaterkosterdata
+gw_input.o = gw_input.o $(_mod_accuracy) $(allocate.h) $(_mod_slaterkosterdata)
+_mod_gwinput: gw_input.o
+_mod_gwinput = $(gw_input.o)
+
+gwapprox.o: _mod_gwxandxc allocate.h _mod_transdens assert.h _mod_blasroutines _mod_gammamat _mod_ppmodel _mod_accuracy _mod_randomphase
+gwapprox.o = gwapprox.o $(_mod_gwxandxc) $(allocate.h) $(_mod_transdens) $(assert.h) $(_mod_blasroutines) $(_mod_gammamat) $(_mod_ppmodel) $(_mod_accuracy) $(_mod_randomphase)
+_mod_gwapprox: gwapprox.o
+_mod_gwapprox = $(gwapprox.o)
+
+gwxandxc.o: allocate.h _mod_transdens assert.h _mod_blasroutines _mod_gammamat _mod_accuracy
+gwxandxc.o = gwxandxc.o $(allocate.h) $(_mod_transdens) $(assert.h) $(_mod_blasroutines) $(_mod_gammamat) $(_mod_accuracy)
+_mod_gwxandxc: gwxandxc.o
+_mod_gwxandxc = $(gwxandxc.o)
+
+ppmodel.o: _mod_transdens _mod_accuracy assert.h allocate.h _mod_eigensolver
+ppmodel.o = ppmodel.o $(_mod_transdens) $(_mod_accuracy) $(assert.h) $(allocate.h) $(_mod_eigensolver)
+_mod_ppmodel: ppmodel.o
+_mod_ppmodel = $(ppmodel.o)
+
+randomphase.o: allocate.h _mod_transdens _mod_lapackroutines _mod_blasroutines _mod_accuracy assert.h
+randomphase.o = randomphase.o $(allocate.h) $(_mod_transdens) $(_mod_lapackroutines) $(_mod_blasroutines) $(_mod_accuracy) $(assert.h)
+_mod_randomphase: randomphase.o
+_mod_randomphase = $(randomphase.o)
+
+transdens.o: _mod_accuracy assert.h allocate.h _mod_blasroutines
+transdens.o = transdens.o $(_mod_accuracy) $(assert.h) $(allocate.h) $(_mod_blasroutines)
+_mod_transdens: transdens.o
+_mod_transdens = $(transdens.o)
+
