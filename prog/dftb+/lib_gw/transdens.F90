@@ -38,7 +38,7 @@ contains
   subroutine transQ_init_real(SSqrReal, eigenVec)
 
     !>  Overlap matrix (square format)
-    real(dp), intent(in)  e:: SSqrReal(:,:)
+    real(dp), intent(in) :: SSqrReal(:,:)
 
     !>  Eigenvectors of Hamiltonian
     real(dp), intent(in) :: eigenVec(:,:)

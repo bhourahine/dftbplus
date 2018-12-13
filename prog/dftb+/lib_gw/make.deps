@@ -1,0 +1,35 @@
+gammamat.o: _mod_shortgamma _mod_environment common.fypp _mod_accuracy _mod_coulomb
+gammamat.o = gammamat.o $(_mod_shortgamma) $(_mod_environment) $(common.fypp) $(_mod_accuracy) $(_mod_coulomb)
+_mod_gammamat: gammamat.o
+_mod_gammamat = $(gammamat.o)
+
+gw_input.o: _mod_inputdata_module _mod_slakoeqgrid common.fypp _mod_accuracy _mod_slakocont
+gw_input.o = gw_input.o $(_mod_inputdata_module) $(_mod_slakoeqgrid) $(common.fypp) $(_mod_accuracy) $(_mod_slakocont)
+_mod_gwinput: gw_input.o
+_mod_gwinput = $(gw_input.o)
+
+gwapprox.o: _mod_gwxandxc common.fypp _mod_globalenv _mod_transdens _mod_blasroutines _mod_gammamat _mod_environment _mod_ppmodel _mod_accuracy _mod_randomphase
+gwapprox.o = gwapprox.o $(_mod_gwxandxc) $(common.fypp) $(_mod_globalenv) $(_mod_transdens) $(_mod_blasroutines) $(_mod_gammamat) $(_mod_environment) $(_mod_ppmodel) $(_mod_accuracy) $(_mod_randomphase)
+_mod_gwapprox: gwapprox.o
+_mod_gwapprox = $(gwapprox.o)
+
+gwxandxc.o: common.fypp _mod_transdens _mod_blasroutines _mod_gammamat _mod_environment _mod_accuracy
+gwxandxc.o = gwxandxc.o $(common.fypp) $(_mod_transdens) $(_mod_blasroutines) $(_mod_gammamat) $(_mod_environment) $(_mod_accuracy)
+_mod_gwxandxc: gwxandxc.o
+_mod_gwxandxc = $(gwxandxc.o)
+
+ppmodel.o: _mod_transdens _mod_eigensolver common.fypp _mod_accuracy
+ppmodel.o = ppmodel.o $(_mod_transdens) $(_mod_eigensolver) $(common.fypp) $(_mod_accuracy)
+_mod_ppmodel: ppmodel.o
+_mod_ppmodel = $(ppmodel.o)
+
+randomphase.o: _mod_transdens _mod_lapackroutines common.fypp _mod_accuracy _mod_blasroutines
+randomphase.o = randomphase.o $(_mod_transdens) $(_mod_lapackroutines) $(common.fypp) $(_mod_accuracy) $(_mod_blasroutines)
+_mod_randomphase: randomphase.o
+_mod_randomphase = $(randomphase.o)
+
+transdens.o: common.fypp _mod_accuracy _mod_blasroutines
+transdens.o = transdens.o $(common.fypp) $(_mod_accuracy) $(_mod_blasroutines)
+_mod_transdens: transdens.o
+_mod_transdens = $(transdens.o)
+

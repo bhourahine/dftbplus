@@ -14,6 +14,7 @@ module gwXandXC
   use blasroutines
   use TransDens
   use gammaMat
+  use environment
   implicit none
 
   private
@@ -83,7 +84,9 @@ contains
 
     ! Find highest occupied orbital
     do iOrb = 1, nOrb
-      if(abs(filling(iOrb) < epsilon(1.0_dp))) exit
+      if(abs(filling(iOrb)) < epsilon(1.0_dp)) then
+        exit
+      end if
     enddo
     iHOMO = iOrb-1
 
@@ -94,7 +97,7 @@ contains
       do jOrb = 1, iHOMO
         call transQ(nAtom, mAngAtom, iOrb, jOrb, eigenVec, qTrans)
         alpha =  -0.5_dp*filling(jOrb)
-        call symv(vTmp, eeGamma, qTrans, 'L', alpha, 0.0_dp)
+        call hemv(vTmp, eeGamma, qTrans, 'L', alpha, 0.0_dp)
         eHFX(iOrb) = eHFX(iOrb) + dot_product(qTrans, vTmp)
       enddo
     enddo
@@ -131,8 +134,11 @@ contains
   !> Calculates the exchange correlation matrix elements <psi_i|v_xc|psi_i> in the basis of DFTB
   !> Kohn-Sham Orbitals. They are calculated from xc-only SK tables. To account for the density
   !> dependence of v_xc, a SCC correction is applied.
-  subroutine dftbXC(nOrb, nAng, nAtom, mAngAtom, mAngSpecie, specie, coord, XCSqr, eigenVec, eTab,&
-      & hubbU, qOutput, referenceN0, eXC)
+  subroutine dftbXC(env, nOrb, nAng, nAtom, mAngAtom, mAngSpecie, specie, coord, XCSqr, eigenVec,&
+      & eTab, hubbU, qOutput, referenceN0, eXC)
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Size of DFTB basis
     integer, intent(in) :: nOrb
@@ -209,7 +215,7 @@ contains
     ! Non SCC part:  <psi_i|v_xc(rho_0)|psi_i>
     eXC(:) = 0.0_dp
     do iOrb = 1, nOrb
-      call symv(vTmp, XCSqr, eigenVec(:,iOrb), 'L', 1.0_dp, 0.0_dp)
+      call hemv(vTmp, XCSqr, eigenVec(:,iOrb), 'L', 1.0_dp, 0.0_dp)
       eXC(iOrb) = eXC(iOrb) + dot_product(eigenVec(:,iOrb), vTmp)
     enddo
 
@@ -226,11 +232,11 @@ contains
       rTmp = 2.0_dp*rTmp/(mmAng*(mmAng + 1))
       tmpU(:, iType) = rTmp
     enddo
-    call gammaM(nAtom, mAngAtom, specie, coord, tmpU, eeGammaU)
+    call gammaM(env, nAtom, mAngAtom, specie, coord, tmpU, eeGammaU)
     do iType = 1, nType
       tmpU(:,iType) = hubbU(1,iType)
     enddo
-    call gammaM(nAtom, mAngAtom, specie, coord, tmpU, xcGammaU)
+    call gammaM(env, nAtom, mAngAtom, specie, coord, tmpU, xcGammaU)
     xcGammaU(:,:) = xcGammaU(:,:) - eeGammaU(:,:)
 
     ! Charge per L
@@ -251,7 +257,7 @@ contains
     ! SCC part: q^i_m * [v_xc]_mn * dq_n; v_xc = Gamma[U_H] - Gamma[U_ee]
     do iOrb = 1, nOrb
       call transQ(nAtom, mAngAtom, iOrb, iOrb, eigenVec, qTrans)
-      call symv(vTmp(1:nAng), xcGammaU, delQ, 'L', 1.0_dp, 0.0_dp)
+      call hemv(vTmp(1:nAng), xcGammaU, delQ, 'L', 1.0_dp, 0.0_dp)
       eXC(iOrb) = eXC(iOrb) + dot_product(qTrans, vTmp(1:nAng))
     enddo
 

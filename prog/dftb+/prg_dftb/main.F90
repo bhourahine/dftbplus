@@ -79,6 +79,7 @@ module main
   use poisson_init
 #:endif
 
+  use GWApprox
 
   implicit none
   private

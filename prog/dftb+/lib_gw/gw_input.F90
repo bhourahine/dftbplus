@@ -10,7 +10,9 @@
 !> input process for GW variables, should replace with slakocont compatible structure
 module GWInput
   use accuracy
-  use SlaterKosterData
+  use slakocont
+  use slakoeqgrid
+  use inputdata_module
   implicit none
   private
 
@@ -18,10 +20,10 @@ module GWInput
 
   !> slater-koster-like tables of integrals
   type TGWInput
-    type(TSlaterKosterData) :: slako
-    real(dp), allocatable :: xtab(:,:,:) => null()
-    real(dp), allocatable :: etab(:,:,:) => null()
-    real(dp), allocatable :: ceri(:,:) => null()
+    type(slater) :: slako
+    real(dp), allocatable :: xtab(:,:,:)
+    real(dp), allocatable :: etab(:,:,:)
+    real(dp), allocatable :: ceri(:,:)
   end type TGWInput
 
   !> destroy storage for input data

@@ -17,6 +17,7 @@ module GWApprox
   use RandomPhase
   use PPModel
   use gwXandXC
+  use environment
   implicit none
   private
 
@@ -26,9 +27,12 @@ contains
 
   !> Implements the GW approximation for DFTB based on the article
   !> Niehaus et. al., PRA 71, 022508 (2005)
-  subroutine gwDriver(nAtom, nType, mAngAtom, mAngSpecie, iAtomStart, specie, coord, eigenVec,&
+  subroutine gwDriver(env, nAtom, nType, mAngAtom, mAngSpecie, iAtomStart, specie, coord, eigenVec,&
       & eigenVal, SSqrReal, XCSqr, filling , eeU, xTab, eTab, hubbU, qOutput, referenceN0, eHFX,&
       & eXC, eQP)
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Number of Atoms
     integer, intent(in) :: nAtom
@@ -156,7 +160,7 @@ contains
 
     ! Get matrix of the coulomb interaction [v] (equal to gamma)
     ! eeU Hubbard parameter contain no XC contribution
-    call gammaM(nAtom, mAngAtom, specie, coord, eeU, eeGamma)
+    call gammaM(env, nAtom, mAngAtom, specie, coord, eeU, eeGamma)
 
     ! Plasmon-Pole-Model with two test frequencies omegaPPi
     do iPPM = 1, 2
@@ -184,7 +188,7 @@ contains
         & specie, eeGamma, eigenVec, filling, xTab, eHFX)
 
     ! Implements Eq. 22b
-    call dftbXC(nOrb, nAng, nAtom, mAngAtom, mAngSpecie, specie, &
+    call dftbXC(env, nOrb, nAng, nAtom, mAngAtom, mAngSpecie, specie, &
         & coord, XCSqr, eigenVec, eTab, hubbU, qOutput, referenceN0, eXC)
 
     ! Consider energy dependence of self energy through renormalization

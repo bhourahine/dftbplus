@@ -11,7 +11,8 @@
 module GammaMat
   use accuracy
   use coulomb
-  use short_gamma
+  use shortgamma
+  use environment
   implicit none
 
   private
@@ -24,7 +25,10 @@ module GammaMat
 contains
 
   !> Calculates l-resolved DFTB Gamma matrix (lower triangular)
-  subroutine gammaM_real(nAtom, mAngAtom, specie, coord, hubbU, gamma)
+  subroutine gammaM_real(env, nAtom, mAngAtom, specie, coord, hubbU, gamma)
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Number of Atoms
     integer, intent(in) :: nAtom
@@ -51,13 +55,13 @@ contains
     real(dp) :: U1, U2
     real(dp) :: invRMat(nAtom,nAtom)
 
-    ASSERT(all(shape(coord) == (/ 3, nAtom /)))
-    ASSERT(size(hubbU, dim=1) == maxval(mAngAtom+1))
-    ASSERT(size(specie) == nAtom)
+    @:ASSERT(all(shape(coord) == (/ 3, nAtom /)))
+    @:ASSERT(size(hubbU, dim=1) == maxval(mAngAtom+1))
+    @:ASSERT(size(specie) == nAtom)
     nAng = sum(mAngAtom) + nAtom
-    ASSERT(all(shape(gamma) == (/ nAng, nAng /)))
+    @:ASSERT(all(shape(gamma) == (/ nAng, nAng /)))
 
-    call invR(invRMat, nAtom, coord)
+    call invRCluster(env, nAtom, coord, invRMat)
     gamma(:,:) = 0.0_dp
     indL(1) = 0
     do iAt1 = 1, nAtom

@@ -84,6 +84,7 @@ module initprogram
   use negf_int
   use poisson_init
 #:endif
+  use GWInput
   implicit none
 
   !> Tagged output files (machine readable)

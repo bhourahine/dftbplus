@@ -133,7 +133,9 @@ contains
 
     ! Find highest occupied orbital
     do iOrb = 1, nOrb
-      if(abs(filling(iOrb) < epsilon(1.0_dp))) exit
+      if(abs(filling(iOrb)) < epsilon(1.0_dp)) then
+        exit
+      end if
     enddo
     iHOMO = iOrb-1
 
