@@ -70,10 +70,8 @@ module accuracy
   real(dp), parameter :: tolSameDist2 = tolSameDist**2
 
 
-  !> Minimal distance between neighbours. (Neighbour distances smaller than that
-  !> are meaningless because the parametrisation usually do not cover this
-
-  !> region.)
+  !> Minimal distance between neighbours. (Neighbour distances smaller than that are meaningless
+  !> because the parametrisation usually does not cover this region.)
   real(dp), parameter :: minNeighDist = 1.0e-2_dp
 
 
@@ -124,5 +122,14 @@ module accuracy
 
   !> Tolerance for the dispersion damping function being considered 1
   real(dp), parameter :: tolDispDamp = 1.0e-10_dp
+
+
+  !> Broadening used in the calculation of the RPA polarizability
+  real(dp), parameter :: brdRPA = 1.0e-10_dp
+
+
+  !> Numerical differentiation distance used for self energy in GW calculations
+  real(dp), parameter :: deltaSelfEnergy = 5.0e-4_dp
+
 
 end module accuracy

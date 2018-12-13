@@ -1,7 +1,14 @@
-!!* Contains subroutines for the calculation of DFTB Gamma Matrices
+!--------------------------------------------------------------------------------------------------!
+!  DFTB+: general package for performing fast atomistic simulations                                !
+!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!                                                                                                  !
+!  See the LICENSE file for terms of usage and distribution.                                       !
+!--------------------------------------------------------------------------------------------------!
+
+#:include 'common.fypp'
+
+!> Contains subroutines for the calculation of DFTB Gamma Matrices
 module GammaMat
-# include "assert.h"
-# include "allocate.h"
   use accuracy
   use coulomb
   use short_gamma

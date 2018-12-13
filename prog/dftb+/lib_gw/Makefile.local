@@ -1,2 +1,0 @@
-NEED_BLAS += gw_drv.o
-NEED_LAPACK += gw_drv.o
