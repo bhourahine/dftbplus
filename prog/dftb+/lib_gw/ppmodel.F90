@@ -29,8 +29,7 @@ contains
     !> Size of GW basis
     integer,          intent(in)    :: nAng
 
-    !> mode 1 : [W-v] is diagonalized, zq determined;
-    !> mode 2 : wq is determined
+    !> mode=1 : [W-v] is diagonalized, zq determined; mode=2 : wq is determined
     integer,          intent(in)    :: mode
 
     !> [W-v](w) (overwritten on output)
@@ -73,6 +72,7 @@ contains
         endif
       enddo
     endif
+
   end subroutine plasmonPole
 
   !> Computes the correlation part of the self energy <psi_i|Sigma_c(E)|psi_i> based on a
