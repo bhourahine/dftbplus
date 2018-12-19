@@ -259,7 +259,7 @@ contains
         call handleCoordinateChange(env, coord0, latVec, invLatVec, species0, mCutoff, repCutoff,&
             & skCutoff, orb, tPeriodic, sccCalc, dispersion, thirdOrd, img2CentCell, iCellVec,&
             & neighbourList, nAllAtom, coord0Fold, coord, species, rCellVec, nAllOrb, nNeighbourSK,&
-            & nNeighbourRep, ham, over, H0, rhoPrim, iRhoPrim, iHam, ERhoPrim, iSparseStart,&
+            & nNeighbourRep, ham, over, H0, rhoPrim, iRhoPrim, iHam, iOver, ERhoPrim, iSparseStart,&
             & tPoisson)
       end if
 
@@ -404,19 +404,19 @@ contains
             & electronicSolverTypes%relativelyrobust])) then
           call writeHSAndStop(env, tWriteHS, tWriteRealHS, tRealHS, over, neighbourList,&
               & nNeighbourSK, denseDesc%iAtomStart, iSparseStart, img2CentCell, kPoint, iCellVec,&
-              & cellVec, ham, iHam)
+              & cellVec, ham, iHam, iOver)
         end if
 
-        ! Transform Hamiltonian from qm to ud
+        ! Transform Hamiltonian from qm to ud if 2 spin channels
         call transformHam(ham, iHam)
 
         call getDensity(env, iSccIter, denseDesc, ham, over, neighbourList, nNeighbourSK,&
             & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species,&
             & electronicSolver, tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep,&
             & tFixEf, tMulliken, iDistribFn, tempElec, nEl, parallelKS, Ef, mu, energy, eigen,&
-            & filling, rhoPrim, Eband, TS, E0, iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal,&
-            & iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx, rhoSqrReal, tLargeDenseMatrices,&
-            & sparseIndexing)
+            & filling, rhoPrim, Eband, TS, E0, iHam, iOver, xi, orbitalL, HSqrReal, SSqrReal,&
+            & eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx, rhoSqrReal,&
+            & tLargeDenseMatrices, sparseIndexing)
 
         if (tWriteBandDat) then
           call writeBandOut(bandOut, eigen, filling, kWeight)
@@ -1004,7 +1004,8 @@ contains
   subroutine handleCoordinateChange(env, coord0, latVec, invLatVec, species0, mCutOff, repCutOff,&
       & skCutOff, orb, tPeriodic, sccCalc, dispersion, thirdOrd, img2CentCell, iCellVec,&
       & neighbourList, nAllAtom, coord0Fold, coord, species, rCellVec, nAllOrb, nNeighbourSK,&
-      & nNeighbourRep, ham, over, H0, rhoPrim, iRhoPrim, iHam, ERhoPrim, iSparseStart, tPoisson)
+      & nNeighbourRep, ham, over, H0, rhoPrim, iRhoPrim, iHam, iOver, ERhoPrim, iSparseStart,&
+      & tPoisson)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -1096,6 +1097,9 @@ contains
     !> Imaginary part of sparse hamiltonian storage
     real(dp), allocatable, intent(inout) :: iHam(:,:)
 
+    !> Imaginary part of sparse overlap storage
+    real(dp), allocatable, intent(inout) :: iOver(:)
+
     !> energy weighted density matrix storage
     real(dp), allocatable, intent(inout) :: ERhoPrim(:)
 
@@ -1122,7 +1126,7 @@ contains
 
     call getSparseDescriptor(neighbourList%iNeighbour, nNeighbourSK, img2CentCell, orb,&
         & iSparseStart, sparseSize)
-    call reallocateSparseArrays(sparseSize, ham, over, H0, rhoPrim, iHam, iRhoPrim, ERhoPrim)
+    call reallocateSparseArrays(sparseSize, ham, over, H0, rhoPrim, iHam, iOver, iRhoPrim, ERhoPrim)
 
     ! count neighbours for repulsive interactions between atoms
     call getNrOfNeighboursForAll(nNeighbourRep, neighbourList, repCutOff)
@@ -1223,7 +1227,8 @@ contains
 
 
   !> Ensures that sparse array have enough storage to hold all necessary elements.
-  subroutine reallocateSparseArrays(sparseSize, ham, over, H0, rhoPrim, iHam, iRhoPrim, ERhoPrim)
+  subroutine reallocateSparseArrays(sparseSize, ham, over, H0, rhoPrim, iHam, iOver, iRhoPrim,&
+      & ERhoPrim)
 
     !> Size of the sparse overlap
     integer, intent(in) :: sparseSize
@@ -1243,6 +1248,9 @@ contains
     !> Sparse storage for imaginary hamitonian (not reallocated if not initially allocated)
     real(dp), allocatable, intent(inout) :: iHam(:,:)
 
+    !> Sparse storage for imaginary overlap (not reallocated if not initially allocated)
+    real(dp), allocatable, intent(inout) :: iOver(:)
+
     !> Sparse storage for imaginary part of density matrix (not reallocated if not initially
     !> allocated)
     real(dp), allocatable, intent(inout) :: iRhoPrim(:,:)
@@ -1260,6 +1268,9 @@ contains
       if (allocated(iRhoPrim)) then
         @:ASSERT(all(shape(iRhoPrim) == shape(ham)))
         @:ASSERT(all(shape(iHam) == shape(ham)))
+      end if
+      if (allocated(iOver)) then
+        @:ASSERT(all(shape(iOver) == shape(ham)))
       end if
       if (allocated(ERhoPrim)) then
         @:ASSERT(size(ERhoPrim) == size(ham, dim=1))
@@ -1285,6 +1296,10 @@ contains
       deallocate(iHam)
       allocate(iRhoPrim(sparseSize, nSpin))
       allocate(iHam(sparseSize, nSpin))
+      if (allocated(iOver)) then
+        deallocate(iOver)
+        allocate(iOver(sparseSize))
+      end if
     end if
     if (allocated(ERhoPrim)) then
       deallocate(ERhoPrim)
@@ -1866,8 +1881,8 @@ contains
       & img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, electronicSolver, tRealHS,&
       & tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken, iDistribFn,&
       & tempElec, nEl, parallelKS, Ef, mu, energy, eigen, filling, rhoPrim, Eband, TS, E0, iHam,&
-      & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
-      & rhoSqrReal, tLargeDenseMatrices, sparseIndexing)
+      & iOver, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
+      & eigvecsCplx, rhoSqrReal, tLargeDenseMatrices, sparseIndexing)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -1977,8 +1992,11 @@ contains
     !> extrapolated 0 temperature band energy
     real(dp), intent(out) :: E0(:)
 
-    !> imaginary part of hamitonian
+    !> imaginary part of hamitonian (not used if unallocated)
     real(dp), intent(in), allocatable :: iHam(:,:)
+
+    !> Sparse storage for imaginary overlap (not used if unallocated)
+    real(dp), allocatable, intent(inout) :: iOver(:)
 
     !> spin orbit constants
     real(dp), intent(in), allocatable :: xi(:,:)

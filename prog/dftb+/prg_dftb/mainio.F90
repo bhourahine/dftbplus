@@ -3351,7 +3351,7 @@ contains
 
   !> Writes Hamiltonian and overlap matrices and stops program execution.
   subroutine writeHSAndStop(env, tWriteHS, tWriteRealHS, tRealHS, over, neighbourList,&
-      & nNeighbourSK, iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, ham, iHam)
+      & nNeighbourSK, iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, ham, iHam, iOver)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3398,6 +3398,9 @@ contains
     !> imaginary part of hamitonian (used if allocated)
     real(dp), allocatable, intent(in) :: iHam(:,:)
 
+    !> imaginary part of overlap (used if allocated)
+    real(dp), allocatable, intent(in) :: iOver(:)
+
     real(dp), allocatable :: hamUpDown(:,:)
     integer :: nSpin
 
@@ -3413,7 +3416,7 @@ contains
 
     ! Write out matrices if necessary and quit.
     call writeHS(env, tWriteHS, tWriteRealHS, tRealHS, hamUpDown, over, neighbourList%iNeighbour,&
-        & nNeighbourSK, iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam)
+        & nNeighbourSK, iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam, iOver)
     write(stdOut, "(A)") "Hamilton/Overlap written, exiting program."
     call env%destruct()
     call destructGlobalEnv()
@@ -3424,7 +3427,7 @@ contains
 
   !> Invokes the writing routines for the Hamiltonian and overlap matrices.
   subroutine writeHS(env, tWriteHS, tWriteRealHS, tRealHS, ham, over, iNeighbour, nNeighbourSK,&
-      & iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam)
+      & iAtomStart, iPair, img2CentCell, kPoint, iCellVec, cellVec, iHam, iOver)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -3471,6 +3474,9 @@ contains
     !> Imaginary part of the hamiltonian if present
     real(dp), intent(in), allocatable :: iHam(:,:)
 
+    !> imaginary part of overlap (used if allocated)
+    real(dp), allocatable, intent(in) :: iOver(:)
+
     integer :: iS, nSpin
 
     nSpin = size(ham, dim=2)
@@ -3486,6 +3492,10 @@ contains
       end do
       call writeSparse("overreal.dat", over, iNeighbour, nNeighbourSK, iAtomStart, iPair,&
           & img2CentCell, iCellVec, cellVec)
+      if (allocated(iOver)) then
+        call writeSparse("overimag.dat", iOver, iNeighbour, nNeighbourSK, iAtomStart, iPair,&
+            & img2CentCell, iCellVec, cellVec)
+      end if
     end if
     if (tWriteHS) then
       if (tRealHS) then

@@ -272,6 +272,9 @@ module initprogram
   !> imaginary part of the Hamiltonian
   real(dp), allocatable :: iHam(:,:)
 
+  !> imaginary part of the overlap if complex basis functions needed
+  real(dp), allocatable :: iOver(:)
+
   !> Charge per atomic shell (shell, atom, spin channel)
   real(dp), allocatable :: chargePerShell(:,:,:)
 
@@ -378,6 +381,9 @@ module initprogram
 
   !> Is there a complex hamiltonian contribution in real space
   logical :: tImHam
+
+  !> Is there a complex overlap matrix in real space (complex basis functions?)
+  logical :: tImOver = .false.
 
   !> is this a two component calculation (spin orbit or non-collinear spin)
   logical :: t2Component
@@ -1371,6 +1377,9 @@ contains
     allocate(ham(0, nSpin))
     if (tImHam) then
       allocate(iHam(0, nSpin))
+      if (tImOver) then
+        allocate(iOver(0))
+      end if
     end if
     allocate(over(0))
     allocate(iSparseStart(0, nAtom))
