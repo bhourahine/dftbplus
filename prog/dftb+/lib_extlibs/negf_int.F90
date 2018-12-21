@@ -1186,9 +1186,11 @@ module negf_int
           allocate(S_all(NumStates,NumStates))
         end if
 
+        H_all(:,:) = 0.0_dp
         call unpackHS(H_all, ham(:,iS), iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell)
         call blockSymmetrizeHS(H_all, iAtomStart)
 
+        S_all(:,:) = 0.0_dp
         call unpackHS(S_all, over, iNeighbor, nNeighbor, iAtomStart, iPair, img2CentCell)
         call blockSymmetrizeHS(S_all, iAtomStart)
 

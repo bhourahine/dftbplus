@@ -90,10 +90,10 @@ contains
   !> filled in the lower triangle part of the matrix. To fill the matrix completely, apply the
   !> blockSymmetrizeHS subroutine.
   subroutine unpackHS_cmplx(square, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
-      & iAtomStart, iPair, img2CentCell)
+      & iAtomStart, iPair, img2CentCell, preFactor)
 
     !> Square form matrix on exit.
-    complex(dp), intent(out) :: square(:, :)
+    complex(dp), intent(inout) :: square(:, :)
 
     !> Sparse matrix
     real(dp), intent(in) :: orig(:)
@@ -122,6 +122,10 @@ contains
     !> Map from images of atoms to central cell atoms
     integer, intent(in) :: img2CentCell(:)
 
+    !> Optional scale term
+    complex(dp), intent(in), optional :: preFactor
+
+
     complex(dp) :: phase
     integer :: nAtom
     integer :: iOrig, ii, jj
@@ -140,10 +144,13 @@ contains
     @:ASSERT(all(shape(nNeighbourSK) == [nAtom]))
     @:ASSERT(size(iAtomStart) == nAtom + 1)
 
-    square(:, :) = cmplx(0, 0, dp)
+    !square(:, :) = cmplx(0, 0, dp)
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
+    if (present(preFactor)) then
+      phase = phase * preFactor
+    end if
     do iAtom1 = 1, nAtom
       ii = iAtomStart(iAtom1)
       nOrb1 = iAtomStart(iAtom1 + 1) - ii
@@ -157,6 +164,9 @@ contains
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = exp((0.0_dp, 1.0_dp) * dot_product(kPoint2p, cellVec(:, iVec)))
+          if (present(preFactor)) then
+            phase = phase * preFactor
+          end if
           iOldVec = iVec
         end if
         square(jj:jj+nOrb2-1, ii:ii+nOrb1-1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)&
@@ -280,11 +290,13 @@ contains
 
     ! 1 0 charge part
     ! 0 1
+    work(:,:) = 0.0_dp
     call unpackHS(work, ham(:, 1), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
         & cellVec, iAtomStart, iPair, img2CentCell)
     HSqrCplx(1:nOrb, 1:nOrb) = 0.5_dp*work(1:nOrb, 1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = 0.5_dp*work(1:nOrb, 1:nOrb)
     if (present(iHam)) then
+      work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 1), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, iAtomStart, iPair, img2CentCell)
       HSqrCplx(1:nOrb, 1:nOrb) = HSqrCplx(1:nOrb, 1:nOrb)&
@@ -296,6 +308,7 @@ contains
 
     ! 0 1 x part
     ! 1 0
+    work(:,:) = 0.0_dp
     call unpackHS(work, ham(:, 2), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart,&
         & iPair, img2CentCell)
     do ii = 1, nOrb
@@ -305,6 +318,7 @@ contains
     HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
         & + 0.5_dp * work(1:nOrb, 1:nOrb)
     if (present(iHam)) then
+      work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 2), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
           & iAtomStart, iPair, img2CentCell)
       do ii = 1, nOrb
@@ -316,6 +330,7 @@ contains
 
     ! 0 -i y part
     ! i  0
+    work(:,:) = 0.0_dp
     call unpackHS(work, ham(:, 3), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
         & cellVec, iAtomStart, iPair, img2CentCell)
     do ii = 1, nOrb
@@ -325,6 +340,7 @@ contains
     HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
         & + cmplx(0.0, 0.5, dp) * work(1:nOrb, 1:nOrb)
     if (present(iHam)) then
+      work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 3), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
           & iAtomStart, iPair, img2CentCell)
       do ii = 1, nOrb
@@ -340,6 +356,7 @@ contains
 
     ! 1  0 z part
     ! 0 -1
+    work(:,:) = 0.0_dp
     call unpackHS(work, ham(:, 4), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
         & cellVec, iAtomStart, iPair, img2CentCell)
     HSqrCplx(1:nOrb, 1:nOrb) = HSqrCplx(1:nOrb, 1:nOrb)&
@@ -347,6 +364,7 @@ contains
     HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb)&
         & - 0.5_dp * work(1:nOrb, 1:nOrb)
     if (present(iHam)) then
+      work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 4), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, iAtomStart, iPair, img2CentCell)
       HSqrCplx(1:nOrb, 1:nOrb) = HSqrCplx(1:nOrb, 1:nOrb)&
@@ -401,6 +419,7 @@ contains
     nOrb = size(SSqrCplx, dim=1) / 2
     allocate(work(nOrb, nOrb))
     SSqrCplx(:, :) = 0.0_dp
+    work(:,:) = 0.0_dp
     call unpackHS(work, over, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart,&
         & iPair, img2CentCell)
     SSqrCplx(1:nOrb, 1:nOrb) = work(1:nOrb, 1:nOrb)
@@ -1502,7 +1521,7 @@ contains
   !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   !>
   subroutine unpackHSCplxBlacs(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
-      & iPair, img2CentCell, desc, square)
+      & iPair, img2CentCell, desc, square, preFactor)
 
     !> BLACS matrix descriptor
     type(TBlacsEnv), intent(in) :: myBlacs
@@ -1535,7 +1554,11 @@ contains
     type(TDenseDescr), intent(in) :: desc
 
     !> dense matrix part of distributed whole
-    complex(dp), intent(out) :: square(:, :)
+    complex(dp), intent(inout) :: square(:, :)
+
+    !> Optional scale term
+    complex(dp), intent(in), optional :: preFactor
+
 
     complex(dp) :: phase
     integer :: nAtom
@@ -1552,10 +1575,13 @@ contains
     @:ASSERT(size(nNeighbourSK) == nAtom)
     @:ASSERT(size(desc%iAtomStart) == nAtom + 1)
 
-    square(:, :) = cmplx(0, 0, dp)
+    !square(:, :) = cmplx(0, 0, dp)
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
+    if (present(preFactor)) then
+      phase = phase * preFactor
+    end if
     do iAtom1 = 1, nAtom
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
@@ -1568,6 +1594,9 @@ contains
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = exp((0.0_dp, 1.0_dp) * dot_product(kPoint2p, cellVec(:, iVec)))
+          if (present(preFactor)) then
+            phase = phase * preFactor
+          end if
           iOldVec = iVec
         end if
         call scalafx_addl2g(myBlacs%orbitalGrid, phase&

@@ -1996,7 +1996,7 @@ contains
     real(dp), intent(in), allocatable :: iHam(:,:)
 
     !> Sparse storage for imaginary overlap (not used if unallocated)
-    real(dp), allocatable, intent(inout) :: iOver(:)
+    real(dp), allocatable, intent(in) :: iOver(:)
 
     !> spin orbit constants
     real(dp), intent(in), allocatable :: xi(:,:)
@@ -2036,11 +2036,9 @@ contains
 
     integer :: nSpin, iKS, iSp, iK, nAtom
     complex(dp), allocatable :: rhoSqrCplx(:,:)
-    logical :: tImHam
     real(dp), allocatable :: rVecTemp(:), orbitalLPart(:,:,:)
 
     nSpin = size(ham, dim=2)
-    tImHam = allocated(iRhoPrim)
 
 
 #:if WITH_TRANSPORT
@@ -2072,7 +2070,7 @@ contains
         else
           call buildAndDiagDenseCplxHam(env, denseDesc, ham, over, kPoint, neighbourList,&
               & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, electronicSolver,&
-              & parallelKS, HSqrCplx, SSqrCplx, eigVecsCplx, eigen)
+              & parallelKS, HSqrCplx, SSqrCplx, eigVecsCplx, eigen, iHam, iOver, iRhoPrim)
         end if
       else
         call buildAndDiagDensePauliHam(env, denseDesc, ham, over, kPoint, neighbourList,&
@@ -2233,10 +2231,12 @@ contains
           end if
 
           if (allocated(iHam)) then
+            HSqrCplx(:,:) = 0.0_dp
             call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
                 & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
                 & HSqrCplx, iorig=iHam)
           else
+            HSqrCplx(:,:) = 0.0_dp
             call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
                 & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
                 & HSqrCplx)
@@ -2275,7 +2275,7 @@ contains
               orbitalL(:,:,:) = orbitalL + kWeight(iK) * orbitalLPart
             end if
           end if
-          if (tImHam) then
+          if (allocated(iRhoPrim)) then
             call packRhoPauliBlacs(env%blacs, denseDesc, rhoSqrCplx, kPoint(:,iK), kWeight(iK),&
                 & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec,&
                 & iSparseStart, img2CentCell, rhoPrim, iRhoPrim)
@@ -2381,9 +2381,11 @@ contains
       iSpin = parallelKS%localKS(2, iKS)
     #:if WITH_SCALAPACK
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
+      HSqrReal(:,:) = 0.0_dp
       call unpackHSRealBlacs(env%blacs, ham(:,iSpin), neighbourList%iNeighbour, nNeighbourSK,&
           & iSparseStart, img2CentCell, denseDesc, HSqrReal)
       if (.not.electronicSolver%tCholeskiiDecomposed(1)) then
+        HSqrReal(:,:) = 0.0_dp
         call unpackHSRealBlacs(env%blacs, over, neighbourList%iNeighbour, nNeighbourSK,&
             & iSparseStart, img2CentCell, denseDesc, SSqrReal)
       end if
@@ -2392,8 +2394,10 @@ contains
           & eigen(:,iSpin), eigvecsReal(:,:,iKS))
     #:else
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
+      HSqrReal(:,:) = 0.0_dp
       call unpackHS(HSqrReal, ham(:,iSpin), neighbourList%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iSparseStart, img2CentCell)
+      SSqrReal(:,:) = 0.0_dp
       call unpackHS(SSqrReal, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
           & iSparseStart, img2CentCell)
       call env%globalTimer%stopTimer(globalTimers%sparseToDense)
@@ -2413,7 +2417,7 @@ contains
   !> Builds and diagonalises dense k-point dependent Hamiltonians.
   subroutine buildAndDiagDenseCplxHam(env, denseDesc, ham, over, kPoint, neighbourList,&
       & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, electronicSolver, parallelKS,&
-      & HSqrCplx, SSqrCplx, eigvecsCplx, eigen)
+      & HSqrCplx, SSqrCplx, eigvecsCplx, eigen, iHam, iOver, iRhoPrim)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -2466,6 +2470,15 @@ contains
     !> eigenvalues
     real(dp), intent(out) :: eigen(:,:,:)
 
+    !> imaginary part of hamitonian (not used if unallocated)
+    real(dp), intent(in), allocatable :: iHam(:,:)
+
+    !> Sparse storage for imaginary overlap (not used if unallocated)
+    real(dp), allocatable, intent(in) :: iOver(:)
+
+    !> imaginary part of density matrix
+    real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
+
     integer :: iKS, iK, iSpin
 
     eigen(:,:,:) = 0.0_dp
@@ -2474,21 +2487,45 @@ contains
       iSpin = parallelKS%localKS(2, iKS)
     #:if WITH_SCALAPACK
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
+      HSqrCplx(:,:) = cmplx(0, 0, dp)
       call unpackHSCplxBlacs(env%blacs, ham(:,iSpin), kPoint(:,iK), neighbourList%iNeighbour,&
           & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, HSqrCplx)
+      if (allocated(iHam)) then
+        call unpackHSCplxBlacs(env%blacs, iHam(:,iSpin), kPoint(:,iK), neighbourList%iNeighbour,&
+            & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, HSqrCplx,&
+            & cmplx(0,1,dp))
+      end if
+
       if (.not.electronicSolver%tCholeskiiDecomposed(iKS)) then
+        SSqrCplx(:,:) = cmplx(0, 0, dp)
         call unpackHSCplxBlacs(env%blacs, over, kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, SSqrCplx)
+        if (allocated(iOver)) then
+          call unpackHSCplxBlacs(env%blacs, iOver, kPoint(:,iK), neighbourList%iNeighbour,&
+              & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, SSqrCplx,&
+              & cmplx(0,1,dp))
+        end if
       end if
       call env%globalTimer%stopTimer(globalTimers%sparseToDense)
       call diagDenseMtxBlacs(electronicSolver, parallelKS, iKS, 'V', denseDesc%blacsOrbSqr,&
           & HSqrCplx, SSqrCplx, eigen(:,iK,iSpin), eigvecsCplx(:,:,iKS))
     #:else
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
+      HSqrCplx(:,:) = cmplx(0, 0, dp)
       call unpackHS(HSqrCplx, ham(:,iSpin), kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
           & iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
+      if (allocated(iHam)) then
+        call unpackHS(HSqrCplx, iHam(:,iSpin), kPoint(:,iK), neighbourList%iNeighbour,&
+            & nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell,&
+            & cmplx(0,1,dp))
+      end if
+      SSqrCplx(:,:) = cmplx(0, 0, dp)
       call unpackHS(SSqrCplx, over, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
+      if (allocated(iOver)) then
+        call unpackHS(SSqrCplx, iOver, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
+            & iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell, cmplx(0,1,dp))
+      end if
       call env%globalTimer%stopTimer(globalTimers%sparseToDense)
       call diagDenseMtx(electronicSolver, 'V', HSqrCplx, SSqrCplx, eigen(:,iK,iSpin))
       eigvecsCplx(:,:,iKS) = HSqrCplx
@@ -2578,27 +2615,33 @@ contains
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
     #:if WITH_SCALAPACK
       if (allocated(iHam)) then
+        HSqrCplx(:,:) = 0.0_dp
         call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
             & HSqrCplx, iorig=iHam)
       else
+        HSqrCplx(:,:) = 0.0_dp
         call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
             & HSqrCplx)
       end if
       if (.not.electronicSolver%tCholeskiiDecomposed(iKS)) then
+        SSqrCplx(:,:) = 0.0_dp
         call unpackSPauliBlacs(env%blacs, over, kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
             & SSqrCplx)
       endif
     #:else
       if (allocated(iHam)) then
+        HSqrCplx(:,:) = 0.0_dp
         call unpackHPauli(ham, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iSparseStart,&
             & denseDesc%iAtomStart, img2CentCell, iCellVec, cellVec, HSqrCplx, iHam=iHam)
       else
+        HSqrCplx(:,:) = 0.0_dp
         call unpackHPauli(ham, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iSparseStart,&
             & denseDesc%iAtomStart, img2CentCell, iCellVec, cellVec, HSqrCplx)
       end if
+      SSqrCplx(:,:) = 0.0_dp
       call unpackSPauli(over, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iSparseStart, img2CentCell, iCellVec, cellVec, SSqrCplx)
     #:endif
@@ -3845,6 +3888,7 @@ contains
     energy%Eexcited = 0.0_dp
     allocate(dQAtom(nAtom))
     dQAtom(:) = sum(qOutput(:,:,1) - q0(:,:,1), dim=1)
+    work(:,:) = 0.0_dp
     call unpackHS(work, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
         & iSparseStart, img2CentCell)
     call blockSymmetrizeHS(work, denseDesc%iAtomStart)
@@ -4334,6 +4378,7 @@ contains
       case(forceDynT0)
         ! Correct force for XLBOMD for T=0K (DHD)
       #:if WITH_SCALAPACK
+        work(:,:) = 0.0_dp
         call unpackHSRealBlacs(env%blacs, ham(:,iS), neighbourList%iNeighbour, nNeighbourSK,&
             & iSparseStart, img2CentCell, denseDesc, work)
         call makeDensityMtxRealBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,1,iS),&
@@ -4343,6 +4388,7 @@ contains
         call pblasfx_psymm(work2, denseDesc%blacsOrbSqr, eigvecsReal(:,:,iKS),&
             & denseDesc%blacsOrbSqr, work, denseDesc%blacsOrbSqr, side="R", alpha=0.5_dp)
       #:else
+        work(:,:) = 0.0_dp
         call unpackHS(work, ham(:,iS), neighbourlist%iNeighbour, nNeighbourSK,&
             & denseDesc%iAtomStart, iSparseStart, img2CentCell)
         call blockSymmetrizeHS(work, denseDesc%iAtomStart)
@@ -4358,10 +4404,12 @@ contains
       #:if WITH_SCALAPACK
         call makeDensityMtxRealBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,1,iS),&
             & eigVecsReal(:,:,iKS), work)
+        work2(:,:) = 0.0_dp
         call unpackHSRealBlacs(env%blacs, ham(:,iS), neighbourlist%iNeighbour, nNeighbourSK,&
             & iSparseStart, img2CentCell, denseDesc, work2)
         call pblasfx_psymm(work, denseDesc%blacsOrbSqr, work2, denseDesc%blacsOrbSqr,&
             & eigvecsReal(:,:,iKS), denseDesc%blacsOrbSqr, side="L")
+        work(:,:) = 0.0_dp
         call unpackHSRealBlacs(env%blacs, over, neighbourlist%iNeighbour, nNeighbourSK,&
             & iSparseStart, img2CentCell, denseDesc, work)
         call psymmatinv(denseDesc%blacsOrbSqr, work)
@@ -4372,10 +4420,12 @@ contains
             & beta=1.0_dp)
       #:else
         call makeDensityMatrix(work, eigvecsReal(:,:,iKS), filling(:,1,iS))
+        work2(:,:) = 0.0_dp
         call unpackHS(work2, ham(:,iS), neighbourlist%iNeighbour, nNeighbourSK,&
             & denseDesc%iAtomStart, iSparseStart, img2CentCell)
         call blocksymmetrizeHS(work2, denseDesc%iAtomStart)
         call symm(eigvecsReal(:,:,iKS), "L", work, work2)
+        work(:,:) = 0.0_dp
         call unpackHS(work, over, neighbourlist%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
             & iSparseStart, img2CentCell)
         call symmatinv(work)
@@ -4501,6 +4551,7 @@ contains
       case(forceDynT0)
         ! Correct force for XLBOMD for T=0K (DHD)
       #:if WITH_SCALAPACK
+        work(:,:) = 0.0_dp
         call unpackHSCplxBlacs(env%blacs, ham(:,iS), kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, work)
         call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,1,iS),&
@@ -4511,6 +4562,7 @@ contains
             & denseDesc%blacsOrbSqr, work, denseDesc%blacsOrbSqr, side="R", alpha=(0.5_dp, 0.0_dp))
       #:else
         call makeDensityMatrix(work2, eigvecsCplx(:,:,iKS), filling(:,iK,iS))
+        work(:,:) = 0.0_dp
         call unpackHS(work, ham(:,iS), kPoint(:,iK), neighbourlist%iNeighbour, nNeighbourSK,&
             & iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
         call blockHermitianHS(work, denseDesc%iAtomStart)
@@ -4523,10 +4575,12 @@ contains
       #:if WITH_SCALAPACK
         call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr,&
             & filling(:,iK,iS), eigVecsCplx(:,:,iKS), work)
+        work2(:,:) = 0.0_dp
         call unpackHSCplxBlacs(env%blacs, ham(:,iS), kPoint(:,iK), neighbourlist%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, work2)
         call pblasfx_phemm(work, denseDesc%blacsOrbSqr, work2, denseDesc%blacsOrbSqr,&
             & eigvecsCplx(:,:,iKS), denseDesc%blacsOrbSqr, side="L")
+        work(:,:) = 0.0_dp
         call unpackHSCplxBlacs(env%blacs, over, kPoint(:,iK), neighbourlist%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, work)
         call phermatinv(denseDesc%blacsOrbSqr, work)
@@ -4537,10 +4591,12 @@ contains
             & alpha=(1.0_dp, 0.0_dp), beta=(1.0_dp, 0.0_dp))
       #:else
         call makeDensityMatrix(work, eigvecsCplx(:,:,iKS), filling(:,iK,iS))
+        work2(:,:) = 0.0_dp
         call unpackHS(work2, ham(:,iS), kPoint(:,iK), neighbourlist%iNeighbour, nNeighbourSK,&
             & iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
         call blockHermitianHS(work2, denseDesc%iAtomStart)
         call hemm(eigvecsCplx(:,:,iKS), "L", work, work2)
+        work(:,:) = 0.0_dp
         call unpackHS(work, over, kPoint(:,iK), neighbourlist%iNeighbour, nNeighbourSK, iCellVec,&
             & cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
         call hermatinv(work)
@@ -5479,6 +5535,7 @@ contains
     end if
 
     if (allocated(eigvecsReal)) then
+      SSqrReal(:,:) = 0.0_dp
       call unpackHS(SSqrReal,over,neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
           & iSparseStart, img2CentCell)
       do iKS = 1, parallelKS%nLocalKS

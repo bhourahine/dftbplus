@@ -795,6 +795,7 @@ contains
 
     tmp = 0.0_dp
 
+    S(:,:) = 0.0_dp
     call unpackHS(S, over, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart,&
         & iPair, img2CentCell)
 
@@ -897,7 +898,7 @@ contains
     allocate(ciTmp1(nOrb))
     allocate(ciTmp2(nOrb))
 
-    S = cmplx(0,0,dp)
+    S(:,:) = cmplx(0,0,dp)
     call unpackHS(S, over, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart, iPair,&
         & img2CentCell)
 

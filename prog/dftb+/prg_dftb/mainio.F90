@@ -546,6 +546,7 @@ contains
           end if
           iS = parallelKS%groupKS(2, iKS, iGroup)
           if (iGroup == 0) then
+            globalS(:,:) = 0.0_dp
             call unpackHSRealBlacs(env%blacs, over, iNeighbour, nNeighbourSK, iSparseStart,&
                 & img2CentCell, denseDesc, globalS)
             call pblasfx_psymm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -569,6 +570,7 @@ contains
     else
       ! All processes except the global master process
       do iKS = 1, parallelKS%nLocalKS
+        globalS(:,:) = 0.0_dp
         call unpackHSRealBlacs(env%blacs, over, iNeighbour, nNeighbourSK, iSparseStart,&
             & img2CentCell, denseDesc, globalS)
         call pblasfx_psymm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS), denseDesc%blacsOrbSqr,&
@@ -647,6 +649,7 @@ contains
     nAtom = size(nNeighbourSK)
     call prepareEigvecFileTxt(fd, .false., fileName)
     allocate(rVecTemp(size(eigvecs, dim=1)))
+    SSqr(:,:) = 0.0_dp
     call unpackHS(SSqr, over, neighlist%iNeighbour, nNeighbourSK, denseDesc%iAtomStart, iPair,&
         & img2CentCell)
     do iKS = 1, parallelKS%nLocalKS
@@ -751,6 +754,7 @@ contains
           iK = parallelKS%groupKS(1, iKS, iGroup)
           iS = parallelKS%groupKS(2, iKS, iGroup)
           if (iGroup == 0) then
+            globalS(:,:) = 0.0_dp
             call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK,&
                 & iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
             call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -774,6 +778,7 @@ contains
     else
       do iKS = 1, parallelKS%nLocalKS
         iK = parallelKS%localKS(1, iKS)
+        globalS(:,:) = 0.0_dp
         call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK, iCellVec,&
             & cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -869,6 +874,7 @@ contains
     do iKS = 1, parallelKS%nLocalKS
       iK = parallelKS%localKS(1, iKS)
       iS = parallelKS%localKS(2, iKS)
+      SSqr(:,:) = 0.0_dp
       call unpackHS(SSqr, over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, denseDesc%iAtomStart, iPair, img2CentCell)
       do iEig = 1, nEigvecs
@@ -975,6 +981,7 @@ contains
           end if
           iK = parallelKS%groupKS(1, iKS, iGroup)
           if (iGroup == 0) then
+            globalS(:,:) = 0.0_dp
             call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK,&
                 & iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc, globalS)
             call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -999,6 +1006,7 @@ contains
       ! All processes except the global master process
       do iKS = 1, parallelKS%nLocalKS
         iK = parallelKS%localKS(1, iKS)
+        globalS(:,:) = 0.0_dp
         call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK, iCellVec,&
             & cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc, globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1092,6 +1100,7 @@ contains
 
     do iKS = 1, parallelKS%nLocalKS
       iK = parallelKS%localKS(1, iKS)
+      SSqr(:,:) = 0.0_dp
       call unpackSPauli(over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iPair, img2CentCell, iCellVec, cellVec, SSqr)
       do iEig = 1, nEigvecs
@@ -1284,6 +1293,7 @@ contains
           end if
           iS = parallelKS%groupKS(2, iKS, iGroup)
           if (iGroup == 0) then
+            globalS(:,:) = 0.0_dp
             call unpackHSRealBlacs(env%blacs, over, neighbourList%iNeighbour, nNeighbourSK,&
                 & iSparseStart, img2CentCell, denseDesc, globalS)
             call pblasfx_psymm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1305,6 +1315,7 @@ contains
     else
       ! All processes except the global master process
       do iKS = 1, parallelKS%nLocalKS
+        globalS(:,:) = 0.0_dp
         call unpackHSRealBlacs(env%blacs, over, neighbourList%iNeighbour, nNeighbourSK,&
             & iSparseStart, img2CentCell, denseDesc, globalS)
         call pblasfx_psymm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS), denseDesc%blacsOrbSqr,&
@@ -1378,6 +1389,7 @@ contains
     call prepareProjEigvecFiles(fd, fileNames)
 
     allocate(rVecTemp(size(eigvecs, dim=1)))
+    work(:,:) = 0.0_dp
     call unpackHS(work, over, neighlist%iNeighbour, nNeighbourSK, denseDesc%iAtomStart, iPair,&
         & img2CentCell)
     do iKS = 1, parallelKS%nLocalKS
@@ -1487,6 +1499,7 @@ contains
           iK = parallelKS%groupKS(1, iKS, iGroup)
           iS = parallelKS%groupKS(2, iKS, iGroup)
           if (iGroup == 0) then
+            globalS(:,:) = 0.0_dp
             call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
                 & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
             call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1509,6 +1522,7 @@ contains
       ! All processes except the global master process
       do iKS = 1, parallelKS%nLocalKS
         iK = parallelKS%localKS(1, iKS)
+        globalS(:,:) = 0.0_dp
         call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1600,6 +1614,7 @@ contains
       iK = parallelKS%localKS(1, iKS)
       iS = parallelKS%localKS(2, iKS)
       call writeProjEigvecHeader(fd, iS, iK, kWeights(iK))
+      work(:,:) = 0.0_dp
       call unpackHS(work, over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, denseDesc%iAtomStart, iPair, img2CentCell)
       do iEig = 1, nOrb
@@ -1711,6 +1726,7 @@ contains
           end if
           iK = parallelKS%groupKS(1, iKS, iGroup)
           if (iGroup == 0) then
+            globalS(:,:) = 0.0_dp
             call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
                 & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
                 & globalS)
@@ -1737,6 +1753,7 @@ contains
       ! All processes except the global master process
       do iKS = 1, parallelKS%nLocalKS
         iK = parallelKS%localKS(1, iKS)
+        globalS(:,:) = 0.0_dp
         call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
             & globalS)
@@ -1835,6 +1852,7 @@ contains
     do iKS = 1, parallelKS%nLocalKS
       iK = parallelKS%localKS(1, iKS)
       call writeProjEigvecHeader(fd, 1, iK, kWeights(iK))
+      work(:,:) = 0.0_dp
       call unpackSPauli(over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iPair, img2CentCell, iCellVec, cellVec, work)
       do iEig = 1, nOrb

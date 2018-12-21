@@ -385,6 +385,7 @@ contains
     write(fd, "(1X,L10,I10,I10,I10)") .true., nOrb, 1
 
     write (strForm, "(A,I0,A)") "(", nOrb, "ES24.15)"
+    square(:,:) = 0.0_dp
     call unpackHS(square, sparse, iNeighbour, nNeighbourSK, iAtomStart, iPair, img2CentCell)
     call blockSymmetrizeHS(square, iAtomStart)
     write(fd, "(A1,A10,A10)") "#", "IKPOINT"
@@ -452,6 +453,7 @@ contains
 
     write (strForm, "(A,I0,A)") "(", 2 * nOrb, "ES24.15)"
     do iK = 1, nKPoint
+      square(:,:) = 0.0_dp
       call unpackHS(square, sparse, kPoints(:,iK), iNeighbour, nNeighbourSK, iCellVec, cellVec,&
           & iAtomStart, iPair, img2CentCell)
       call blockHermitianHS(square, iAtomStart)
