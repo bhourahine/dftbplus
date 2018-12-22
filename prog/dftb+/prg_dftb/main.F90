@@ -555,13 +555,13 @@ contains
       if (tPrintEigVecs) then
         call writeEigenvectors(env, runId, neighbourList, nNeighbourSK, cellVec, iCellVec,&
             & denseDesc, iSparseStart, img2CentCell, species, speciesName, orb, kPoint, over,&
-            & parallelKS, tPrintEigvecsTxt, eigvecsReal, SSqrReal, eigvecsCplx, SSqrCplx)
+            & iOver, parallelKS, tPrintEigvecsTxt, eigvecsReal, SSqrReal, eigvecsCplx, SSqrCplx)
       end if
 
       if (tProjEigenvecs) then
         call writeProjectedEigenvectors(env, regionLabels, eigen, neighbourList, nNeighbourSK,&
-            & cellVec, iCellVec, denseDesc, iSparseStart, img2CentCell, orb, over, kPoint, kWeight,&
-            & iOrbRegion, parallelKS, eigvecsReal, SSqrReal, eigvecsCplx, SSqrCplx)
+            & cellVec, iCellVec, denseDesc, iSparseStart, img2CentCell, orb, over, iOver, kPoint,&
+            & kWeight, iOrbRegion, parallelKS, eigvecsReal, SSqrReal, eigvecsCplx, SSqrCplx)
       end if
       call env%globalTimer%stopTimer(globalTimers%eigvecWriting)
 
@@ -2073,7 +2073,7 @@ contains
               & parallelKS, HSqrCplx, SSqrCplx, eigVecsCplx, eigen, iHam, iOver, iRhoPrim)
         end if
       else
-        call buildAndDiagDensePauliHam(env, denseDesc, ham, over, kPoint, neighbourList,&
+        call buildAndDiagDensePauliHam(env, denseDesc, ham, over, iOver, kPoint, neighbourList,&
             & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
             & parallelKS, eigen(:,:,1), HSqrCplx, SSqrCplx, eigVecsCplx, iHam, xi, species)
       end if
@@ -2230,20 +2230,13 @@ contains
             orbitalL(:,:,:) = 0.0_dp
           end if
 
-          if (allocated(iHam)) then
-            HSqrCplx(:,:) = 0.0_dp
-            call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
-                & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
-                & HSqrCplx, iorig=iHam)
-          else
-            HSqrCplx(:,:) = 0.0_dp
-            call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
-                & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
-                & HSqrCplx)
-          end if
+          HSqrCplx(:,:) = 0.0_dp
+          call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
+              & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
+              & HSqrCplx, iHam)
           if (.not.electronicSolver%tCholeskiiDecomposed(iKS)) then
             SSqrCplx = 0.0_dp
-            call unpackSPauliBlacs(env%blacs, over, kPoint(:,iK), neighbourList%iNeighbour,&
+            call unpackSPauliBlacs(env%blacs, over, iOver, kPoint(:,iK), neighbourList%iNeighbour,&
                 & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
                 & SSqrCplx)
             if (electronicSolver%ELSI_OMM_Choleskii .or. electronicSolver%iSolver&
@@ -2540,7 +2533,7 @@ contains
 
 
   !> Builds and diagonalizes Pauli two-component Hamiltonians.
-  subroutine buildAndDiagDensePauliHam(env, denseDesc, ham, over, kPoint, neighbourList,&
+  subroutine buildAndDiagDensePauliHam(env, denseDesc, ham, over, iOver, kPoint, neighbourList,&
       & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
       & parallelKS, eigen, HSqrCplx, SSqrCplx, eigvecsCplx, iHam, xi, species)
 
@@ -2555,6 +2548,9 @@ contains
 
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
+
+    !> Imaginary part of sparse overlap storage
+    real(dp), allocatable, intent(in) :: iOver(:)
 
     !> k-points
     real(dp), intent(in) :: kPoint(:,:)
@@ -2614,35 +2610,21 @@ contains
       iK = parallelKS%localKS(1, iKS)
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
     #:if WITH_SCALAPACK
-      if (allocated(iHam)) then
-        HSqrCplx(:,:) = 0.0_dp
-        call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
-            & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
-            & HSqrCplx, iorig=iHam)
-      else
-        HSqrCplx(:,:) = 0.0_dp
-        call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour,&
-            & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
-            & HSqrCplx)
-      end if
+      HSqrCplx(:,:) = 0.0_dp
+      call unpackHPauliBlacs(env%blacs, ham, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
+          & iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc, HSqrCplx, iHam)
       if (.not.electronicSolver%tCholeskiiDecomposed(iKS)) then
         SSqrCplx(:,:) = 0.0_dp
-        call unpackSPauliBlacs(env%blacs, over, kPoint(:,iK), neighbourList%iNeighbour,&
+        call unpackSPauliBlacs(env%blacs, over, iOver, kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
             & SSqrCplx)
       endif
     #:else
-      if (allocated(iHam)) then
-        HSqrCplx(:,:) = 0.0_dp
-        call unpackHPauli(ham, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iSparseStart,&
-            & denseDesc%iAtomStart, img2CentCell, iCellVec, cellVec, HSqrCplx, iHam=iHam)
-      else
-        HSqrCplx(:,:) = 0.0_dp
-        call unpackHPauli(ham, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iSparseStart,&
-            & denseDesc%iAtomStart, img2CentCell, iCellVec, cellVec, HSqrCplx)
-      end if
+      HSqrCplx(:,:) = 0.0_dp
+      call unpackHPauli(ham, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iSparseStart,&
+          & denseDesc%iAtomStart, img2CentCell, iCellVec, cellVec, HSqrCplx, iHam)
       SSqrCplx(:,:) = 0.0_dp
-      call unpackSPauli(over, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
+      call unpackSPauli(over, iOver, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iSparseStart, img2CentCell, iCellVec, cellVec, SSqrCplx)
     #:endif
       if (allocated(xi) .and. .not. allocated(iHam)) then
@@ -5527,6 +5509,8 @@ contains
     integer :: nFilledLev, nAtom, nSpin
     integer :: iSpin, iKS, iK
 
+    real(dp), allocatable :: dummy(:)
+
     nAtom = size(orb%nOrbAtom)
     nSpin = size(nEl)
 
@@ -5552,8 +5536,8 @@ contains
       end do
 
       call writeRealEigvecs(env, runId, neighbourList, nNeighbourSK, denseDesc, iSparseStart,&
-          & img2CentCell, species(:nAtom), speciesName, orb, over, parallelKS, tPrintEigvecsTxt,&
-          & eigvecsReal, SSqrReal, fileName="localOrbs")
+          & img2CentCell, species(:nAtom), speciesName, orb, over, parallelKS,&
+          & tPrintEigvecsTxt, eigvecsReal, SSqrReal, fileName="localOrbs")
     else
 
       localisation = 0.0_dp
@@ -5589,7 +5573,7 @@ contains
       write(stdOut, "(A, E20.12)") 'Final localisation', localisation
 
       call writeCplxEigvecs(env, runId, neighbourList, nNeighbourSK, cellVec, iCellVec, denseDesc,&
-          & iSparseStart, img2CentCell, species, speciesName, orb, kPoint, over, parallelKS,&
+          & iSparseStart, img2CentCell, species, speciesName, orb, kPoint, over, dummy, parallelKS,&
           & tPrintEigvecsTxt, eigvecsCplx, SSqrCplx, fileName="localOrbs")
 
     end if

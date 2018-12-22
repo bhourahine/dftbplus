@@ -276,7 +276,7 @@ contains
     complex(dp), intent(out) :: HSqrCplx(:, :)
 
     !> imaginary part of sparse hamiltonian
-    real(dp), intent(in), optional :: iHam(:, :)
+    real(dp), intent(in), allocatable :: iHam(:, :)
 
     complex(dp), allocatable :: work(:, :)
     integer :: nOrb
@@ -295,7 +295,7 @@ contains
         & cellVec, iAtomStart, iPair, img2CentCell)
     HSqrCplx(1:nOrb, 1:nOrb) = 0.5_dp*work(1:nOrb, 1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = 0.5_dp*work(1:nOrb, 1:nOrb)
-    if (present(iHam)) then
+    if (allocated(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 1), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, iAtomStart, iPair, img2CentCell)
@@ -317,7 +317,7 @@ contains
 
     HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
         & + 0.5_dp * work(1:nOrb, 1:nOrb)
-    if (present(iHam)) then
+    if (allocated(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 2), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
           & iAtomStart, iPair, img2CentCell)
@@ -339,7 +339,7 @@ contains
 
     HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
         & + cmplx(0.0, 0.5, dp) * work(1:nOrb, 1:nOrb)
-    if (present(iHam)) then
+    if (allocated(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 3), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
           & iAtomStart, iPair, img2CentCell)
@@ -363,7 +363,7 @@ contains
         & + 0.5_dp * work(1:nOrb, 1:nOrb)
     HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb)&
         & - 0.5_dp * work(1:nOrb, 1:nOrb)
-    if (present(iHam)) then
+    if (allocated(iHam)) then
       work(:,:) = 0.0_dp
       call unpackHS(work, iHam(:, 4), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, iAtomStart, iPair, img2CentCell)
@@ -380,11 +380,14 @@ contains
   !>
   !> Note: The non on-site blocks are only filled in the lower triangle part of the matrix. To fill
   !> the matrix completely, apply the blockSymmetrizeHS subroutine.
-  subroutine unpackSPauli(over, kPoint, iNeighbour, nNeighbourSK, iAtomStart, iPair, img2CentCell,&
-      & iCellVec, cellVec, SSqrCplx)
+  subroutine unpackSPauli(over, iOver, kPoint, iNeighbour, nNeighbourSK, iAtomStart, iPair,&
+      & img2CentCell, iCellVec, cellVec, SSqrCplx)
 
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
 
     !> k-point at which to unpack
     real(dp), intent(in) :: kPoint(:)
@@ -422,6 +425,10 @@ contains
     work(:,:) = 0.0_dp
     call unpackHS(work, over, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart,&
         & iPair, img2CentCell)
+    if (allocated(iOver)) then
+      call unpackHS(work, over, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart,&
+          & iPair, img2CentCell, cmplx(0,1,dp))
+    end if
     SSqrCplx(1:nOrb, 1:nOrb) = work(1:nOrb, 1:nOrb)
     SSqrCplx(nOrb + 1 : 2 * nOrb, nOrb + 1 : 2 * nOrb) = work(1:nOrb, 1:nOrb)
 
@@ -1662,7 +1669,7 @@ contains
     square(:, :) = cmplx(0, 0, dp)
     call unpackHPauliBlacsHelper(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
         & cellVec, iPair, img2CentCell, mOrb, cmplx(1, 0, dp), cmplx(1, 0, dp), desc, square)
-    if (present(iorig)) then
+    if (present(iOrig)) then
       call unpackHPauliBlacsHelper(myBlacs, iorig, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, iPair, img2CentCell, mOrb, cmplx(0, 1, dp), cmplx(-1, 0, dp), desc, square)
     end if
@@ -1799,14 +1806,17 @@ contains
   !>
   !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   !>
-  subroutine unpackSPauliBlacs(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
-      & iPair, img2CentCell, mOrb, desc, square)
+  subroutine unpackSPauliBlacs(myBlacs, orig, imOrig, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
+      & cellVec, iPair, img2CentCell, mOrb, desc, square)
 
     !> BLACS matrix descriptor
     type(TBlacsEnv), intent(in) :: myBlacs
 
     !> sparse matrix to unpack
     real(dp), intent(in) :: orig(:)
+
+    !> imaginary part of sparse matrix to unpack
+    real(dp), intent(in), allocatable :: imOrig(:)
 
     !> k-point at which to unpack
     real(dp), intent(in) :: kPoint(:)
@@ -1867,6 +1877,10 @@ contains
         end if
         ptmp => tmpSqr(1:nOrb2, 1:nOrb1)
         ptmp(:, :) = phase * reshape(orig(iOrig:iOrig+nOrb1*nOrb2-1), [nOrb2, nOrb1])
+        if (allocated(imOrig)) then
+          ptmp(:, :) = ptmp(:,:) + phase * cmplx(0,1,dp)&
+              & * reshape(imOrig(iOrig:iOrig+nOrb1*nOrb2-1), [nOrb2, nOrb1])
+        end if
         ! up-up component
         call scalafx_addl2g(myBlacs%orbitalGrid, ptmp, desc%blacsOrbSqr, jj, ii, square)
         ! down-down component
@@ -2111,7 +2125,7 @@ contains
 
     call packRhoPauliBlacsHelper(myBlacs, desc, square, kPoint, kWeight, iNeighbour, nNeighbourSK,&
         & mOrb, iCellVec, cellVec, iPair, img2CentCell, cmplx(1, 0, dp), .true., primitive)
-    if (present(iprimitive)) then
+    if (present(iPrimitive)) then
       call packRhoPauliBlacsHelper(myBlacs, desc, square, kPoint, kWeight, iNeighbour,&
           & nNeighbourSK, mOrb, iCellVec, cellVec, iPair, img2CentCell, cmplx(0, -1, dp), .false.,&
           & iprimitive)

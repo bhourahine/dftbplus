@@ -110,7 +110,7 @@ contains
 
   !> Writes the eigenvectors to disc.
   subroutine writeEigenvectors(env, runId, neighbourList, nNeighbourSK, cellVec, iCellVec,&
-      & denseDesc, iPair, img2CentCell, species, speciesName, orb, kPoint, over, parallelKS,&
+      & denseDesc, iPair, img2CentCell, species, speciesName, orb, kPoint, over, iOver, parallelKS,&
       & tPrintEigvecsTxt, eigvecsReal, SSqrReal, eigvecsCplx, SSqrCplx)
 
     !> Environment settings
@@ -155,6 +155,9 @@ contains
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
 
+    !> sparse overlap matrixa
+    real(dp), intent(in), allocatable :: iOver(:)
+
     !> K-points and spins to process
     type(TParallelKS), intent(in) :: parallelKS
 
@@ -178,9 +181,10 @@ contains
 
     if (allocated(eigvecsCplx)) then
       call writeCplxEigvecs(env, runId, neighbourList, nNeighbourSK, cellVec, iCellVec, denseDesc,&
-          & iPair, img2CentCell, species, speciesName, orb, kPoint, over, parallelKS,&
+          & iPair, img2CentCell, species, speciesName, orb, kPoint, over, iOver, parallelKS,&
           & tPrintEigvecsTxt, eigvecsCplx, SSqrCplx)
     else
+    @:ASSERT(.not. allocated(iOver))
       call writeRealEigvecs(env, runId, neighbourList, nNeighbourSK, denseDesc, iPair,&
           & img2CentCell, species, speciesName, orb, over, parallelKS, tPrintEigvecsTxt,&
           & eigvecsReal, SSqrReal)
@@ -262,7 +266,7 @@ contains
 
   !> Writes complex eigenvectors.
   subroutine writeCplxEigvecs(env, runId, neighbourList, nNeighbourSK, cellVec, iCellVec,&
-      & denseDesc, iPair, img2CentCell, species, speciesName, orb, kPoint, over, parallelKS,&
+      & denseDesc, iPair, img2CentCell, species, speciesName, orb, kPoint, over, iOver, parallelKS,&
       & tPrintEigvecsTxt, eigvecsCplx, SSqrCplx, fileName)
 
     !> Environment settings
@@ -307,6 +311,9 @@ contains
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
 
+    !> sparse overlap matrixa
+    real(dp), intent(in), allocatable :: iOver(:)
+
     !> K-points and spins to process
     type(TParallelKS), intent(in) :: parallelKS
 
@@ -326,13 +333,13 @@ contains
     call writeCplxEigvecsBinBlacs(env, denseDesc, eigvecsCplx, runId, parallelKS, fileName=fileName)
     if (tPrintEigvecsTxt) then
       if (denseDesc%t2Component) then
-        call writePauliEigvecsTxtBlacs(env, denseDesc, eigvecsCplx, parallelKS, orb, over, kPoint,&
-            & neighbourList%iNeighbour, nNeighbourSK, iCellVec, cellVec, iPair, img2CentCell,&
-            & species, speciesName, fileName=fileName)
+        call writePauliEigvecsTxtBlacs(env, denseDesc, eigvecsCplx, parallelKS, orb, over, iOver,&
+            & kPoint, neighbourList%iNeighbour, nNeighbourSK, iCellVec, cellVec, iPair,&
+            & img2CentCell, species, speciesName, fileName=fileName)
       else
-        call writeCplxEigvecsTxtBlacs(env, denseDesc, eigvecsCplx, parallelKS, orb, over, kPoint,&
-            & neighbourList%iNeighbour, nNeighbourSK, iCellVec, cellVec, iPair, img2CentCell,&
-            & species, speciesName, fileName=fileName)
+        call writeCplxEigvecsTxtBlacs(env, denseDesc, eigvecsCplx, parallelKS, orb, over, iOver,&
+            & kPoint, neighbourList%iNeighbour, nNeighbourSK, iCellVec, cellVec, iPair,&
+            & img2CentCell, species, speciesName, fileName=fileName)
       end if
     end if
   #:else
@@ -340,12 +347,12 @@ contains
     if (tPrintEigvecsTxt) then
       if (denseDesc%t2Component) then
         call writePauliEigvecsTxtSerial(neighbourList, nNeighbourSK, denseDesc, iPair,&
-            & img2CentCell, iCellVec, cellVec, orb, species, speciesName, over, parallelKS, kPoint,&
-            & eigvecsCplx, SSqrCplx, fileName=fileName)
+            & img2CentCell, iCellVec, cellVec, orb, species, speciesName, over, iOver, parallelKS,&
+            & kPoint, eigvecsCplx, SSqrCplx, fileName=fileName)
       else
         call writeCplxEigvecsTxtSerial(neighbourList, nNeighbourSK, denseDesc, iPair, img2CentCell,&
-            & iCellVec, cellVec, orb, species, speciesName, over, parallelKS, kPoint, eigvecsCplx,&
-            & SSqrCplx, fileName=fileName)
+            & iCellVec, cellVec, orb, species, speciesName, over, iOver, parallelKS, kPoint,&
+            & eigvecsCplx, SSqrCplx, fileName=fileName)
       end if
     end if
   #:endif
@@ -671,8 +678,8 @@ contains
 #:if WITH_SCALAPACK
 
   !> Write the complex eigvectors into human readible output file (BLACS version).
-  subroutine writeCplxEigvecsTxtBlacs(env, denseDesc, eigvecs, parallelKS, orb, over, kPoints,&
-      & iNeighbour, nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, species,&
+  subroutine writeCplxEigvecsTxtBlacs(env, denseDesc, eigvecs, parallelKS, orb, over, iOver,&
+      & kPoints, iNeighbour, nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, species,&
       & speciesName, fileName)
 
     !> Environment settings
@@ -692,6 +699,9 @@ contains
 
     !> Sparse overlap
     real(dp), intent(in) :: over(:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
 
     !> Kpoints
     real(dp), intent(in) :: kPoints(:,:)
@@ -757,6 +767,11 @@ contains
             globalS(:,:) = 0.0_dp
             call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK,&
                 & iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
+            if (allocated(iOver)) then
+              call unpackHSCplxBlacs(env%blacs, iOver, kPoints(:,iK), iNeighbour, nNeighbourSK,&
+                  & iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS,&
+                  & cmplx(0,1,dp))
+            end if
             call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
                 & denseDesc%blacsOrbSqr, globalSDotC, denseDesc%blacsOrbSqr)
             globalFrac(:,:) = real(conjg(eigvecs(:,:,iKS)) * globalSDotC)
@@ -779,8 +794,12 @@ contains
       do iKS = 1, parallelKS%nLocalKS
         iK = parallelKS%localKS(1, iKS)
         globalS(:,:) = 0.0_dp
-        call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK, iCellVec,&
-            & cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
+        call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK,&
+            & iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
+        if (allocated(iOver)) then
+          call unpackHSCplxBlacs(env%blacs, iOver, kPoints(:,iK), iNeighbour, nNeighbourSK,&
+              & iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS, cmplx(0,1,dp))
+        end if
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
             & denseDesc%blacsOrbSqr, globalSDotC, denseDesc%blacsOrbSqr)
         globalFrac(:,:) = real(conjg(eigvecs(:,:,iKS)) * globalSDotC)
@@ -809,8 +828,8 @@ contains
 
     !> Writes complex eigenvectors in text form.
   subroutine writeCplxEigvecsTxtSerial(neighlist, nNeighbourSK, denseDesc, iPair, img2CentCell,&
-      & iCellVec, cellVec, orb, species, speciesName, over, parallelKS, kPoints, eigvecs, SSqr,&
-      & fileName)
+      & iCellVec, cellVec, orb, species, speciesName, over, iOver, parallelKS, kPoints, eigvecs,&
+      & SSqr, fileName)
 
     !> Neighbour list.
     type(TNeighbourList), intent(in) :: neighlist
@@ -845,6 +864,9 @@ contains
     !> Sparse overlap matrix.
     real(dp), intent(in) :: over(:)
 
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
+
     !> K-points and spins to process
     type(TParallelKS), intent(in) :: parallelKS
 
@@ -877,6 +899,10 @@ contains
       SSqr(:,:) = 0.0_dp
       call unpackHS(SSqr, over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, denseDesc%iAtomStart, iPair, img2CentCell)
+      if (allocated(iOver)) then
+        call unpackHS(SSqr, iOver, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
+            & cellVec, denseDesc%iAtomStart, iPair, img2CentCell, cmplx(0,1,dp))
+      end if
       do iEig = 1, nEigvecs
         call hemv(cVecTemp, SSqr, eigvecs(:,iEig,iKS))
         fracs(:) = real(conjg(eigvecs(:,iEig,iKS)) * cVecTemp)
@@ -894,8 +920,8 @@ contains
 #:if WITH_SCALAPACK
 
   !> Write the complex eigvectors into human readible output file (BLACS version).
-  subroutine writePauliEigvecsTxtBlacs(env, denseDesc, eigvecs, parallelKS, orb, over, kPoints,&
-      & iNeighbour, nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, species,&
+  subroutine writePauliEigvecsTxtBlacs(env, denseDesc, eigvecs, parallelKS, orb, over, iOver,&
+      & kPoints, iNeighbour, nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, species,&
       & speciesName, fileName)
 
     !> Environment settings
@@ -915,6 +941,9 @@ contains
 
     !> Sparse overlap
     real(dp), intent(in) :: over(:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
 
     !> Kpoints
     real(dp), intent(in) :: kPoints(:,:)
@@ -982,7 +1011,7 @@ contains
           iK = parallelKS%groupKS(1, iKS, iGroup)
           if (iGroup == 0) then
             globalS(:,:) = 0.0_dp
-            call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK,&
+            call unpackSPauliBlacs(env%blacs, over, iOver, kPoints(:,iK), iNeighbour, nNeighbourSK,&
                 & iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc, globalS)
             call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
                 & denseDesc%blacsOrbSqr, globalSDotC, denseDesc%blacsOrbSqr)
@@ -1007,8 +1036,8 @@ contains
       do iKS = 1, parallelKS%nLocalKS
         iK = parallelKS%localKS(1, iKS)
         globalS(:,:) = 0.0_dp
-        call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK, iCellVec,&
-            & cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc, globalS)
+        call unpackSPauliBlacs(env%blacs, over, iOver, kPoints(:,iK), iNeighbour, nNeighbourSK,&
+            & iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc, globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
             & denseDesc%blacsOrbSqr, globalSDotC, denseDesc%blacsOrbSqr)
         do iEig = 1, nOrb
@@ -1036,8 +1065,8 @@ contains
 
     !> Writes complex eigenvectors in text form.
   subroutine writePauliEigvecsTxtSerial(neighlist, nNeighbourSK, denseDesc, iPair, img2CentCell,&
-      & iCellVec, cellVec, orb, species, speciesName, over, parallelKS, kPoints, eigvecs, SSqr,&
-      & fileName)
+      & iCellVec, cellVec, orb, species, speciesName, over, iOver, parallelKS, kPoints, eigvecs,&
+      & SSqr, fileName)
 
     !> Neighbour list.
     type(TNeighbourList), intent(in) :: neighlist
@@ -1072,6 +1101,9 @@ contains
     !> Sparse overlap matrix.
     real(dp), intent(in) :: over(:)
 
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
+
     !> K-points and spins to process
     type(TParallelKS), intent(in) :: parallelKS
 
@@ -1101,7 +1133,7 @@ contains
     do iKS = 1, parallelKS%nLocalKS
       iK = parallelKS%localKS(1, iKS)
       SSqr(:,:) = 0.0_dp
-      call unpackSPauli(over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
+      call unpackSPauli(over, iOver, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iPair, img2CentCell, iCellVec, cellVec, SSqr)
       do iEig = 1, nEigvecs
         call hemv(cVecTemp, SSqr, eigvecs(:,iEig,iKS))
@@ -1119,8 +1151,8 @@ contains
 
   !> Write projected eigenvectors.
   subroutine writeProjectedEigenvectors(env, regionLabels, eigen, neighbourList, nNeighbourSK,&
-      & cellVec, iCellVec, denseDesc, iPair, img2CentCell, orb, over, kPoint, kWeight, iOrbRegion,&
-      & parallelKS, eigvecsReal, workReal, eigvecsCplx, workCplx)
+      & cellVec, iCellVec, denseDesc, iPair, img2CentCell, orb, over, iOver, kPoint, kWeight,&
+      & iOrbRegion, parallelKS, eigvecsReal, workReal, eigvecsCplx, workCplx)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -1158,6 +1190,9 @@ contains
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
 
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
+
     !> k-points
     real(dp), intent(in) :: kPoint(:,:)
 
@@ -1189,12 +1224,12 @@ contains
     if (allocated(eigvecsCplx)) then
       if (denseDesc%t2Component) then
         call writeProjPauliEigvecsBlacs(env, denseDesc, regionLabels, iOrbRegion, eigen,&
-            & eigvecsCplx, orb, parallelKS, kPoint, kWeight, over, neighbourList, nNeighbourSK,&
-            & iPair, img2CentCell, iCellVec, cellVec)
+            & eigvecsCplx, orb, parallelKS, kPoint, kWeight, over, iOver, neighbourList,&
+            & nNeighbourSK, iPair, img2CentCell, iCellVec, cellVec)
       else
         call writeProjCplxEigvecsBlacs(env, denseDesc, regionLabels, iOrbRegion, eigen,&
-            & eigvecsCplx, parallelKS, kPoint, kWeight, over, neighbourList, nNeighbourSK, iPair,&
-            & img2CentCell, iCellVec, cellVec)
+            & eigvecsCplx, parallelKS, kPoint, kWeight, over, iOver, neighbourList, nNeighbourSK,&
+            & iPair, img2CentCell, iCellVec, cellVec)
       end if
     else
       call writeProjRealEigvecsBlacs(env, denseDesc, regionLabels, iOrbRegion, eigen, eigvecsReal,&
@@ -1204,11 +1239,11 @@ contains
     if (allocated(eigvecsCplx)) then
       if (denseDesc%t2Component) then
         call writeProjPauliEigvecsSerial(regionLabels, eigen, neighbourList, nNeighbourSK, cellVec,&
-            & iCellVec, denseDesc, iPair, img2CentCell, over, kpoint, kWeight, parallelKS,&
+            & iCellVec, denseDesc, iPair, img2CentCell, over, iOVer, kpoint, kWeight, parallelKS,&
             & eigvecsCplx, workCplx, iOrbRegion)
       else
         call writeProjCplxEigvecsSerial(regionLabels, eigen, neighbourList, nNeighbourSK, cellVec,&
-            & iCellVec, denseDesc, iPair, img2CentCell, over, kpoint, kWeight, parallelKS,&
+            & iCellVec, denseDesc, iPair, img2CentCell, over, iOver, kpoint, kWeight, parallelKS,&
             & eigvecsCplx, workCplx, iOrbRegion)
       end if
     else
@@ -1390,8 +1425,8 @@ contains
 
     allocate(rVecTemp(size(eigvecs, dim=1)))
     work(:,:) = 0.0_dp
-    call unpackHS(work, over, neighlist%iNeighbour, nNeighbourSK, denseDesc%iAtomStart, iPair,&
-        & img2CentCell)
+    call unpackHS(work, over, neighlist%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+        & iPair, img2CentCell)
     do iKS = 1, parallelKS%nLocalKS
       iS = parallelKS%localKS(2, iKS)
       call writeProjEigvecHeader(fd, iS)
@@ -1414,7 +1449,7 @@ contains
 
   !> Write the complex eigvectors into human readible output file (BLACS version).
   subroutine writeProjCplxEigvecsBlacs(env, denseDesc, fileNames, iOrbRegion, eigvals, eigvecs,&
-      & parallelKS, kPoints, kWeights, over, neighbourList, nNeighbourSK, iSparseStart,&
+      & parallelKS, kPoints, kWeights, over, iOver, neighbourList, nNeighbourSK, iSparseStart,&
       & img2CentCell, iCellVec, cellVec)
 
     !> Environment settings
@@ -1446,6 +1481,9 @@ contains
 
     !> Sparse overlap
     real(dp), intent(in) :: over(:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
 
     !> Neighbours of each atom
     type(TNeighbourList), intent(in) :: neighbourList
@@ -1502,6 +1540,11 @@ contains
             globalS(:,:) = 0.0_dp
             call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
                 & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
+            if (allocated(iOver)) then
+              call unpackHSCplxBlacs(env%blacs, iOver, kPoints(:,iK), neighbourList%iNeighbour,&
+                  & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc,&
+                  & globalS, cmplx(0,1,dp))
+            end if
             call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
                 & denseDesc%blacsOrbSqr, globalSDotC, denseDesc%blacsOrbSqr)
             globalFrac(:,:) = real(globalSDotC * conjg(eigvecs(:,:,iKS)))
@@ -1525,6 +1568,11 @@ contains
         globalS(:,:) = 0.0_dp
         call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
+        if (allocated(iOver)) then
+          call unpackHSCplxBlacs(env%blacs, iOver, kPoints(:,iK), neighbourList%iNeighbour,&
+              & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS,&
+              & cmplx(0,1,dp))
+        end if
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
             & denseDesc%blacsOrbSqr, globalSDotC, denseDesc%blacsOrbSqr)
         globalFrac(:,:) = real(conjg(eigvecs(:,:,iKS)) * globalSDotC)
@@ -1549,8 +1597,8 @@ contains
 
   !> Write the projected complex eigenstates into text files.
   subroutine writeProjCplxEigvecsSerial(fileNames, eigvals, neighlist, nNeighbourSK, cellVec,&
-      & iCellVec, denseDesc, iPair, img2CentCell, over, kPoints, kWeights, parallelKS, eigvecs,&
-      & work, iOrbRegion)
+      & iCellVec, denseDesc, iPair, img2CentCell, over, iOver, kPoints, kWeights, parallelKS,&
+      & eigvecs, work, iOrbRegion)
 
     !> list of region names
     type(ListCharLc), intent(inout) :: fileNames
@@ -1581,6 +1629,9 @@ contains
 
     !> Sparse overlap matrix.
     real(dp), intent(in) :: over(:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
 
     !> KPoints.
     real(dp), intent(in) :: kPoints(:,:)
@@ -1617,6 +1668,10 @@ contains
       work(:,:) = 0.0_dp
       call unpackHS(work, over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, denseDesc%iAtomStart, iPair, img2CentCell)
+      if (allocated(iOver)) then
+        call unpackHS(work, iOver, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
+            & cellVec, denseDesc%iAtomStart, iPair, img2CentCell, cmplx(0,1,dp))
+      end if
       do iEig = 1, nOrb
         call hemv(cVecTemp, work, eigvecs(:,iEig,iKS))
         cVecTemp(:) = cVecTemp * conjg(eigvecs(:,iEig,iKS))
@@ -1636,7 +1691,7 @@ contains
 
   !> Write the complex eigvectors into human readible output file (BLACS version).
   subroutine writeProjPauliEigvecsBlacs(env, denseDesc, fileNames, iOrbRegion, eigvals, eigvecs,&
-      & orb, parallelKS, kPoints, kWeights, over, neighbourList, nNeighbourSK, iSparseStart,&
+      & orb, parallelKS, kPoints, kWeights, over, iOver, neighbourList, nNeighbourSK, iSparseStart,&
       & img2CentCell, iCellVec, cellVec)
 
     !> Environment settings
@@ -1671,6 +1726,9 @@ contains
 
     !> Sparse overlap
     real(dp), intent(in) :: over(:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
 
     !> Neighbours of each atom
     type(TNeighbourList), intent(in) :: neighbourList
@@ -1727,7 +1785,7 @@ contains
           iK = parallelKS%groupKS(1, iKS, iGroup)
           if (iGroup == 0) then
             globalS(:,:) = 0.0_dp
-            call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
+            call unpackSPauliBlacs(env%blacs, over, iOver, kPoints(:,iK), neighbourList%iNeighbour,&
                 & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
                 & globalS)
             call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1754,7 +1812,7 @@ contains
       do iKS = 1, parallelKS%nLocalKS
         iK = parallelKS%localKS(1, iKS)
         globalS(:,:) = 0.0_dp
-        call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
+        call unpackSPauliBlacs(env%blacs, over, iOver, kPoints(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
             & globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1784,8 +1842,8 @@ contains
 
   !> Write the projected complex eigenstates into text files.
   subroutine writeProjPauliEigvecsSerial(fileNames, eigvals, neighlist, nNeighbourSK, cellVec,&
-      & iCellVec, denseDesc, iPair, img2CentCell, over, kPoints, kWeights, parallelKS, eigvecs,&
-      & work, iOrbRegion)
+      & iCellVec, denseDesc, iPair, img2CentCell, over, iOver, kPoints, kWeights, parallelKS,&
+      & eigvecs, work, iOrbRegion)
 
     !> list of region names
     type(ListCharLc), intent(inout) :: fileNames
@@ -1816,6 +1874,9 @@ contains
 
     !> Sparse overlap matrix.
     real(dp), intent(in) :: over(:)
+
+    !> sparse overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
 
     !> KPoints.
     real(dp), intent(in) :: kPoints(:,:)
@@ -1853,7 +1914,7 @@ contains
       iK = parallelKS%localKS(1, iKS)
       call writeProjEigvecHeader(fd, 1, iK, kWeights(iK))
       work(:,:) = 0.0_dp
-      call unpackSPauli(over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
+      call unpackSPauli(over, iOver, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iPair, img2CentCell, iCellVec, cellVec, work)
       do iEig = 1, nOrb
         call hemv(cVecTemp, work, eigvecs(:,iEig,iKS))
