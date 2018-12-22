@@ -184,7 +184,7 @@ contains
   subroutine unpackHS_real(square, orig, iNeighbour, nNeighbourSK, iAtomStart, iPair, img2CentCell)
 
     !> Square form matrix on exit.
-    real(dp), intent(out) :: square(:, :)
+    real(dp), intent(inout) :: square(:, :)
 
     !> Sparse matrix
     real(dp), intent(in) :: orig(:)
@@ -273,7 +273,7 @@ contains
     real(dp), intent(in) :: cellVec(:, :)
 
     !> dense hamiltonian matrix
-    complex(dp), intent(out) :: HSqrCplx(:, :)
+    complex(dp), intent(inout) :: HSqrCplx(:, :)
 
     !> imaginary part of sparse hamiltonian
     real(dp), intent(in), allocatable :: iHam(:, :)
@@ -414,7 +414,7 @@ contains
     real(dp), intent(in) :: cellVec(:, :)
 
     !> dense overlap matrix
-    complex(dp), intent(out) :: SSqrCplx(:, :)
+    complex(dp), intent(inout) :: SSqrCplx(:, :)
 
     complex(dp), allocatable :: work(:, :)
     integer :: nOrb
@@ -1485,7 +1485,7 @@ contains
     type(TDenseDescr), intent(in) :: desc
 
     !> dense matrix part of distributed whole
-    real(dp), intent(out) :: square(:, :)
+    real(dp), intent(inout) :: square(:, :)
 
     integer :: nAtom
     integer :: iOrig, ii, jj, nOrb1, nOrb2
@@ -1661,7 +1661,7 @@ contains
     type(TDenseDescr), intent(in) :: desc
 
     !> local part of distributed whole dense matrix
-    complex(dp), intent(out) :: square(:, :)
+    complex(dp), intent(inout) :: square(:, :)
 
     !> imaginary part of sparse matrix
     real(dp), intent(in), optional :: iorig(:, :)
@@ -1846,7 +1846,7 @@ contains
     type(TDenseDescr), intent(in) :: desc
 
     !> Local part of of distributed whole dense matrix
-    complex(dp), intent(out) :: square(:, :)
+    complex(dp), intent(inout) :: square(:, :)
 
     integer :: iAtom1, iAtom2, iAtom2f, nAtom, nOrb1, nOrb2, nOrb
     integer :: iNeigh, iOrig, ii, jj, iOldVec, iVec

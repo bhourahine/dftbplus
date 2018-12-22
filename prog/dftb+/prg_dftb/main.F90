@@ -1270,7 +1270,7 @@ contains
         @:ASSERT(all(shape(iHam) == shape(ham)))
       end if
       if (allocated(iOver)) then
-        @:ASSERT(all(shape(iOver) == shape(ham)))
+        @:ASSERT(size(iOver) == size(ham,dim=1))
       end if
       if (allocated(ERhoPrim)) then
         @:ASSERT(size(ERhoPrim) == size(ham, dim=1))
@@ -2378,7 +2378,7 @@ contains
       call unpackHSRealBlacs(env%blacs, ham(:,iSpin), neighbourList%iNeighbour, nNeighbourSK,&
           & iSparseStart, img2CentCell, denseDesc, HSqrReal)
       if (.not.electronicSolver%tCholeskiiDecomposed(1)) then
-        HSqrReal(:,:) = 0.0_dp
+        SSqrReal(:,:) = 0.0_dp
         call unpackHSRealBlacs(env%blacs, over, neighbourList%iNeighbour, nNeighbourSK,&
             & iSparseStart, img2CentCell, denseDesc, SSqrReal)
       end if
