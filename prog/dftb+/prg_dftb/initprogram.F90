@@ -383,14 +383,16 @@ module initprogram
   logical :: tImHam
 
   !> Is there a complex overlap matrix in real space (complex basis functions?)
-  logical :: tImOver = .false.
+  logical :: tImOver
 
   !> is this a two component calculation (spin orbit or non-collinear spin)
   logical :: t2Component
 
+  !> Is there magnetic field or similar present
+  logical :: tVectorPotential
+
   !> Common Fermi level accross spin channels
   logical :: tSpinSharedEf
-
 
   !> Geometry optimization needed?
   logical :: tGeoOpt
@@ -1367,13 +1369,22 @@ contains
     allocate(img2CentCell(nAllAtom))
     allocate(iCellVec(nAllAtom))
 
-    ! Intialize Hamilton and overlap
-    tImHam = tDualSpinOrbit .or. (tSpinOrbit .and. tDFTBU) ! .or. tBField
+    ! vector potential present?
+    tVectorPotential = input%ctrl%tHField
+
+    ! imaginary part of real-space hamiltonian
+    tImHam = tDualSpinOrbit .or. (tSpinOrbit .and. tDFTBU) .or. tVectorPotential
+
+    ! are there complex spatial basis functions present
+    tImOver = tVectorPotential
+
     if (tSccCalc) then
       allocate(chargePerShell(orb%mShell,nAtom,nSpin))
     else
-       allocate(chargePerShell(0,0,0))
+      allocate(chargePerShell(0,0,0))
     end if
+
+    ! Intialize Hamilton and overlap
     allocate(ham(0, nSpin))
     if (tImHam) then
       allocate(iHam(0, nSpin))
