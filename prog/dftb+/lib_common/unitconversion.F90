@@ -151,15 +151,15 @@ module unitconversion
 
 
   !> Number of magnetic field units
-  integer, parameter :: nBFieldUnit = 5
+  integer, parameter :: nHFieldUnit = 5
 
 
-  !> Magnetic field units (Atomic "Gaussian" CGS unit system!)
-  type(unit), parameter :: BFieldUnits(nBFieldUnit) = (/ &
-      &unit("t                 ", 1.0E+24_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
-      &unit("tesla             ", 1.0E+24_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
-      &unit("gauss             ", 1.0E+20_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
-      &unit("g                 ", 1.0E+20_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
+  !> Magnetic field units (Atomic gaussian CGS unit system!)
+  type(unit), parameter :: HFieldUnits(nHFieldUnit) = (/ &
+      &unit("t                 ", (au__Coulomb*(Bohr__AA**2))/(alpha_fs*1E+20_dp*hbar)),&
+      &unit("tesla             ", (au__Coulomb*(Bohr__AA**2))/(alpha_fs*1E+20_dp*hbar)),&
+      &unit("gauss             ", (au__Coulomb*(Bohr__AA**2))/(alpha_fs*1E+24_dp*hbar)),&
+      &unit("g                 ", (au__Coulomb*(Bohr__AA**2))/(alpha_fs*1E+24_dp*hbar)),&
       &unit("au                  ", 1.0_dp) &
       &/)
 

@@ -1213,7 +1213,7 @@ contains
     type(listRealR2) :: lCharges
     type(listRealR1) :: lBlurs
     logical, allocatable :: repPoly(:,:)
-    integer :: iSp1, iSp2, iSh1, ii, jj, kk, ind
+    integer :: iSp1, iSp2, iSh1, ii, jj, kk, ind, iTmp
     character(lc) :: prefix, suffix, separator, elem1, elem2, strTmp
     character(lc) :: errorStr
     logical :: tLower, tExist
@@ -1736,6 +1736,44 @@ contains
       end do
     end if
 
+    call getChildValue(node, "MagneticField", value, "", child=child, allowEmptyValue=.true.,&
+        & dummyValue=.true.)
+    if (associated(value)) then
+      !call getChildValue(child, "OrbitalZeeman", ctrl%tLZeeman, .true.)
+      !if (ctrl%tLZeeman .or. ctrl%tSpinOrbit) then
+      !  INITALLOCATE_PARR(ctrl%OrbitalRexpect, (slako%orb%mShell, geo%nSpecie))
+      !  call getChild(child, "RadialConstants", child2)
+      !  do iSp1 = 1, geo%nSpecie
+      !    call getChildValue(child2, geo%specieNames(iSp1), &
+      !        &ctrl%OrbitalRexpect(:slako%orb%nShell(iSp1), iSp1))
+      !  end do
+      !end if
+      if (geo%tPeriodic) then
+        call getChildValue(child, "Quanta", iTmp)
+        !do ii = 1, 3
+        !  do jj = ii+1, 3
+        !    if (dot_product(geo%latVecs(:,ii),geo%latVecs(:,jj)) > epsilon(1.0_dp)) then
+        !      call error("H fields for periodic cells currently require orthorhomic cells")
+        !    end if
+        !  end do
+        !end do
+        if (any(abs(geo%latVecs(3,1:2)) > epsilon(0.0_dp))) then
+          call error("Hz fields for periodic cells requires first two lattice vectors in z plane")
+        end if
+        call cross3(rTmp3,geo%latVecs(:,1),geo%latvecs(:,2))
+        ctrl%HFieldStrength = real(iTmp) * 2.0_dp * pi / sqrt(sum(rTmp3**2))
+      else
+        call getChildValue(child, "Strength", ctrl%HFieldStrength, &
+            & modifier=modifier, child=field)
+        call convertByMul(char(modifier), HFieldUnits, field, &
+            & ctrl%HFieldStrength)
+      end if
+      ctrl%tHField = .true.
+    else
+      ctrl%tHField = .false.
+      ctrl%HFieldStrength = 0.0_dp
+    end if
+
     ! Filling (temperature only read, if AdaptFillingTemp was not set for the selected MD
     ! thermostat.)
     call getChildValue(node, "Filling", value, "Fermi", child=child)
@@ -1928,7 +1966,7 @@ contains
           call detailedError(value, "The components of the supercell matrix &
               &must be integers.")
         end if
-        if (.not.ctrl%tSpinOrbit) then
+        if (.not.(ctrl%tSpinOrbit .or. ctrl%tHField)) then
           call getSuperSampling(coeffsAndShifts(:,1:3), modulo(coeffsAndShifts(:,4), 1.0_dp),&
               & ctrl%kPoint, ctrl%kWeight, reduceByInversion=.true.)
         else

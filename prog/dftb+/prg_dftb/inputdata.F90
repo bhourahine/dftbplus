@@ -206,6 +206,7 @@ module inputdata_module
 
     !> Is there a vector potential present?
     logical :: tHField = .false.
+    real(dp) :: HFieldStrength
 
     !> initial spin pattern
     real(dp), allocatable :: initialSpins(:,:)

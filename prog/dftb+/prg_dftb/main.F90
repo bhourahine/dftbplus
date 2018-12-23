@@ -38,6 +38,7 @@ module main
   use scc
   use sccinit
   use externalcharges
+  use hfields
   use periodic
   use mixer
   use geoopt
@@ -196,6 +197,8 @@ contains
     !> All of the excited energies actuall solved by Casida routines (if used)
     real(dp), allocatable :: energiesCasida(:)
 
+    integer :: iSpin
+    real(dp), allocatable :: overTmp(:)
 
     call initGeoOptParameters(tCoordOpt, nGeoSteps, tGeomEnd, tCoordStep, tStopDriver, iGeoStep,&
         & iLatGeoStep)
@@ -399,6 +402,18 @@ contains
         call getSccHamiltonian(H0, over, nNeighbourSK, neighbourList, species, orb, iSparseStart,&
             & img2CentCell, potential, ham, iHam)
 
+        if (tVectorPotential) then
+          allocate(overTmp(size(over)))
+          overTmp(:) = over
+          do iSpin = 1, nSpin
+            call phaseHfield(ham(:,iSpin), iHam(:,iSpin), HFieldStrength, orb, coord,&
+                & neighbourList%iNeighbour, nNeighbourSK, iSparseStart, img2CentCell)
+          end do
+          iOver = 0.0_dp
+          call phaseHfield(over(:), iOver(:), HFieldStrength, orb, coord,&
+              & neighbourList%iNeighbour, nNeighbourSK, iSparseStart, img2CentCell)
+        end if
+
         if (tWriteRealHS .or. tWriteHS .and. any(electronicSolver%iSolver ==&
             & [electronicSolverTypes%qr, electronicSolverTypes%divideandconquer,&
             & electronicSolverTypes%relativelyrobust])) then
@@ -422,13 +437,23 @@ contains
           call writeBandOut(bandOut, eigen, filling, kWeight)
         end if
 
+        if (tVectorPotential) then
+          over(:) = overTmp(:)
+          deallocate(overTmp)
+          !do iSpin = 1, nSpin
+          !  call unphaseHfield(rhoPrim(:,iSpin), iRhoPrim(:,iSpin), HFieldStrength, orb, coord,&
+          !      & neighbourList%iNeighbour, nNeighbourSK, iSparseStart, img2CentCell)
+          !end do
+        end if
+
+
         if (tMulliken) then
           call getMullikenPopulation(rhoPrim, over, orb, neighbourList, nNeighbourSK, img2CentCell,&
               & iSparseStart, qOutput, iRhoPrim=iRhoPrim, qBlock=qBlockOut, qiBlock=qiBlockOut)
         end if
 
         #:if WITH_TRANSPORT
-          ! Override charges with uploaded contact charges
+          ! Over-ride charges with uploaded contact charges
           if (tUpload) then
             call overrideContactCharges(qOutput, chargeUp, transpar)
           end if

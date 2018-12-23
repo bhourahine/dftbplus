@@ -301,10 +301,8 @@ module initprogram
   !> Barostat coupling strength
   real(dp) :: BarostatStrength
 
-
   !> H and S are real
   logical :: tRealHS
-
 
   !> nr. of electrons
   real(dp), allocatable :: nEl(:)
@@ -388,8 +386,14 @@ module initprogram
   !> is this a two component calculation (spin orbit or non-collinear spin)
   logical :: t2Component
 
-  !> Is there magnetic field or similar present
+  !> Is there vector potential present
   logical :: tVectorPotential
+
+  !> Is there magnetic field present
+  logical :: tHField
+
+  !> strength
+  real(dp) :: HFieldStrength
 
   !> Common Fermi level accross spin channels
   logical :: tSpinSharedEf
@@ -1063,6 +1067,9 @@ contains
     else
       tRealHS = .false.
     end if
+    if (tVectorPotential) then
+      tRealHS = .false.
+    end if
 
   #:if WITH_MPI
 
@@ -1369,8 +1376,16 @@ contains
     allocate(img2CentCell(nAllAtom))
     allocate(iCellVec(nAllAtom))
 
+    ! magnetic field
+    tHField = input%ctrl%tHField
+    if (tHField) then
+      HFieldStrength = input%ctrl%HFieldStrength
+    else
+      HFieldStrength = 0.0_dp
+    end if
+
     ! vector potential present?
-    tVectorPotential = input%ctrl%tHField
+    tVectorPotential = tHField
 
     ! imaginary part of real-space hamiltonian
     tImHam = tDualSpinOrbit .or. (tSpinOrbit .and. tDFTBU) .or. tVectorPotential
@@ -2583,6 +2598,17 @@ contains
       end if
     else
       write(stdOut, "(A,':',T30,A)") "Self consistent charges", "No"
+    end if
+
+    if (tHField) then
+      write(*,*)alpha_fs
+      write(*,"(2E20.12)")1E+20_dp*hbar/(au__Coulomb*(Bohr__AA**2)), 1E+20_dp*alpha_fs*hbar/(au__Coulomb*(Bohr__AA**2))
+      write (stdout, "(A, ':', T32, F18.10, T51, A, T54, E13.6, T71, A)") "magnetic field",&
+          & HFieldStrength, "au",&
+          & HFieldStrength * (alpha_fs*1E+20_dp*hbar/(au__Coulomb*(Bohr__AA**2))), "T"
+      if (tForces .or. tStress) then
+        call error("Sorry, no forces with magnetic fields yet")
+      end if
     end if
 
     select case (nSpin)
