@@ -1750,16 +1750,16 @@ contains
       !end if
       if (geo%tPeriodic) then
         call getChildValue(child, "Quanta", iTmp)
-        !do ii = 1, 3
-        !  do jj = ii+1, 3
-        !    if (dot_product(geo%latVecs(:,ii),geo%latVecs(:,jj)) > epsilon(1.0_dp)) then
-        !      call error("H fields for periodic cells currently require orthorhomic cells")
-        !    end if
-        !  end do
-        !end do
-        if (any(abs(geo%latVecs(3,1:2)) > epsilon(0.0_dp))) then
-          call error("Hz fields for periodic cells requires first two lattice vectors in z plane")
-        end if
+        do ii = 1, 3
+          do jj = ii+1, 3
+            if (dot_product(geo%latVecs(:,ii),geo%latVecs(:,jj)) > epsilon(1.0_dp)) then
+              call error("H fields for periodic cells currently require orthorhomic cells")
+            end if
+          end do
+        end do
+        !if (any(abs(geo%latVecs(3,1:2)) > epsilon(0.0_dp))) then
+        !  call error("Hz fields for periodic cells requires first two lattice vectors in z plane")
+        !end if
         call cross3(rTmp3,geo%latVecs(:,1),geo%latvecs(:,2))
         ctrl%HFieldStrength = real(iTmp) * 2.0_dp * pi / sqrt(sum(rTmp3**2))
       else
