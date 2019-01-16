@@ -36,6 +36,15 @@ module blasroutines
   end interface ger
 
 
+  !> Rank 2 update operation on a symmetric/hermitian matrix
+  !> A := alpha*x*y' + alpha*y*x' + A, where only one triangle of A is constructed
+  interface syr2
+  #:for IFACETYPE in [('real'), ('dble')]
+    module procedure syr2_${IFACETYPE}$
+  #:endfor
+  end interface syr2
+
+
   !> Symmetric matrix vector multiply y := alpha*A*x + beta*y
   !> Wrapper for the level 2 blas routine
   interface hemv
@@ -319,6 +328,48 @@ contains
     n = size(y)
     call zgerc(m,n,alpha,x,1,y,1,a,m)
   end subroutine ger_dblecmplx
+
+
+#:for LABEL, VTYPE, VPREC, NAME in [('real', 'real', 'rsp', 'ssyr2'),&
+  & ('dble', 'real', 'rdp', 'dsyr2')]
+  !> performs the rank 2 update operation on a symmetric/hermitian matrix
+  !> A := alpha*x*y' + alpha*y*x' + A, where only one triangle of A is constructed
+  subroutine syr2_${LABEL}$(a, alpha, x, y, uplo)
+
+    !> contains the matrix for the update
+    ${VTYPE}$(${VPREC}$), intent(inout) :: a(:,:)
+
+    !> scaling value for the update contribution
+    real(${VPREC}$), intent(in) :: alpha
+
+    !> 1st vector x
+    ${VTYPE}$(${VPREC}$), intent(in) :: x(:)
+
+    !> 2nd vector y
+    ${VTYPE}$(${VPREC}$), intent(in) :: y(:)
+
+    !> optional upper, 'U', or lower 'L' triangle, defaults to lower
+    character, intent(in),optional :: uplo
+
+    integer :: n
+    character :: iuplo
+
+    @:ASSERT(size(a,dim=1) == size(a,dim=2))
+    @:ASSERT(size(a,dim=1) == size(x))
+    @:ASSERT(size(x) == size(y))
+
+    if (present(uplo)) then
+      iuplo = uplo
+    else
+      iuplo = 'l'
+    end if
+    @:ASSERT(iuplo == 'u' .or. iuplo == 'U' .or. iuplo == 'l' .or. iuplo == 'L')
+
+    n = size(x)
+    call ${NAME}$(iuplo,n,alpha,x,1,y,1,a,n)
+
+  end subroutine syr2_${LABEL}$
+#:endfor
 
 
   !> real symmetric matrix*vector product

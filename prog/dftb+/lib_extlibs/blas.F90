@@ -5,6 +5,8 @@
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
 
+#:include 'common.fypp'
+
 !> Interface wrapper for the blas routines.
 !>
 !> ALL BLAS routines which are called from the main code must be included here.
@@ -261,6 +263,43 @@ module blas
       !> matrix A
       complex(rdp), intent(inout) :: aa(lda, *)
     end subroutine zgerc
+
+
+  #:for VPREC, VTYPE, NAME in [('rsp', 'real', 'ssyr2'), ('rdp', 'real', 'dsyr2')]
+    !> performs the rank 2 update operation on a symmetric/hermitian matrix
+    !> A := alpha*x*y' + alpha*y*x' + A, where only one triangle of A is constructed
+    subroutine ${NAME}$(uplo, nn, alpha, xx, incx, yy, incy, aa, lda)
+      import ${VPREC}$
+
+      !> Upper 'U' or lower 'L' triangle
+      character, intent(in) :: uplo
+
+      !> matrix  size
+      integer, intent(in) :: nn
+
+      !> scaling factor
+      real(${VPREC}$), intent(in) :: alpha
+
+      !> 1st vector
+      ${VTYPE}$(${VPREC}$), intent(in) :: xx(*)
+
+      !> x stride
+      integer, intent(in) :: incx
+
+      !> 2nd vector
+      ${VTYPE}$(${VPREC}$), intent(in) :: yy(*)
+
+      !> y stride
+      integer, intent(in) :: incy
+
+      !> leading matrix dimension
+      integer, intent(in) :: lda
+
+      !> matrix A
+      ${VTYPE}$(${VPREC}$), intent(inout) :: aa(lda, *)
+
+    end subroutine ${NAME}$
+  #:endfor
 
 
     !> performs the matrix-vector operation
