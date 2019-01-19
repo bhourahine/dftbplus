@@ -466,6 +466,9 @@ contains
     ! requirement combined with the need to get at least nexc states
     nxov_rd = max(nxov_rd,min(nexc+1,nxov))
 
+    !call orderByLevels(wij(:nxov_rd), sposz(:nxov_rd), win(:nxov_rd), snglPartTransDip(:nxov_rd,:),&
+    !    & getij)
+
     if (fdXplusY >  0) then
       open(fdXplusY, file=XplusYOut, position="rewind", status="replace")
     end if
@@ -1849,15 +1852,16 @@ contains
 
     ! xpycc(mu,nu) = sum_ia (X+Y)_ia grndEigVecs(mu,i) grndEigVecs(nu,a)
     ! xpycc(mu, nu) += sum_ia (X+Y)_ia grndEigVecs(mu,a) grndEigVecs(nu,i)
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,i,a) SCHEDULE(RUNTIME) REDUCTION(+:xpycc)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
-      do nu = 1, norb
-        do mu = 1, norb
-          xpycc(mu,nu) = xpycc(mu,nu) + xpy(ia) *&
-              & ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
-              & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
-        end do
-      end do
+      call syr2(xpycc, xpy(ia), grndEigVecs(:,i,1), grndEigVecs(:,a,1))
+    end do
+    !$OMP  END PARALLEL DO
+
+    ! fill other triangle
+    do nu = 1, norb
+      xpycc(nu, nu+1:) = xpycc(nu+1:, nu)
     end do
 
     ! calculate wcc = c_mu,i * W_ij * c_j,nu. We have only W_ab b > a and W_ij j > i:
@@ -1865,45 +1869,36 @@ contains
     ! + grndEigVecs(nu,p)grndEigVecs(mu,q))
     ! complexity norb * norb * norb
 
-    ! calculate the occ-occ part
     wcc(:,:) = 0.0_dp
 
+    ! calculate the occ-occ part
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ij,i,j) SCHEDULE(RUNTIME) REDUCTION(+:wcc)
     do ij = 1, nxoo
       call indxoo(homo, nocc, ij, i, j)
-      do mu = 1, norb
-        do nu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + woo(ij) *&
-              & ( grndEigVecs(mu,i,1)*grndEigVecs(nu,j,1)&
-              & + grndEigVecs(mu,j,1)*grndEigVecs(nu,i,1) )
-        end do
-      end do
-
+      call syr2(wcc, woo(ij), grndEigVecs(:,i,1), grndEigVecs(:,j,1))
     end do
+    !$OMP  END PARALLEL DO
 
     ! calculate the occ-virt part : the same way as for xpycc
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,i,a) SCHEDULE(RUNTIME) REDUCTION(+:wcc)
     do ia = 1, nxov
       call indxov(win, ia, getij, i, a)
-      do nu = 1, norb
-        do mu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + wov(ia) *&
-              & ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
-              & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
-        end do
-      end do
+      call syr2(wcc, wov(ia), grndEigVecs(:,i,1), grndEigVecs(:,a,1))
     end do
+    !$OMP  END PARALLEL DO
 
     ! calculate the virt - virt part
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ab,a,b) SCHEDULE(RUNTIME) REDUCTION(+:wcc)
     do ab =1, nxvv
       call indxvv(homo, ab, a, b)
-      do mu = 1, norb
-        do nu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + wvv(ab) *&
-              & ( grndEigVecs(mu,a,1)*grndEigVecs(nu,b,1)&
-              & + grndEigVecs(mu,b,1)*grndEigVecs(nu,a,1) )
-        end do
-      end do
+      call syr2(wcc, wvv(ab), grndEigVecs(:,a,1), grndEigVecs(:,b,1))
     end do
+    !$OMP  END PARALLEL DO
 
+    ! fill other triangle
+    do nu = 1, norb
+      wcc(nu, nu+1:) = wcc(nu+1:, nu)
+    end do
 
     ! now calculating the force complexity : norb * norb * 3
 

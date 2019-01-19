@@ -150,6 +150,43 @@ contains
   end subroutine dipSelect
 
 
+  !>
+  subroutine orderByLevels(wij, sposz, win, transd, getij)
+
+    !> Energies of transitions
+    real(dp), intent(inout) :: wij(:)
+
+    !> array to be sorted containing single particle transition strengths
+    real(dp), intent(inout) :: sposz(:)
+
+    !> index array for transitions to single particle transitions
+    integer, intent(inout) :: win(:)
+
+    !> dipole moments (to be ordered on first index according to sposz sorting)
+    real(dp), intent(inout) :: transd(:,:)
+
+    !> Index array of transitions after sorting of eigenvalues
+    integer, intent(in) :: getij(:,:)
+
+    integer, allocatable :: tmpIndx(:), tmpKeys(:)
+    integer :: ii, jj, nxov
+
+    nxov = size(win)
+
+    allocate(tmpIndx(nxov))
+    allocate(tmpKeys(nxov))
+
+    tmpKeys(:) = getij(win(:),2)
+
+    call index_heap_sort(tmpIndx, tmpKeys)
+    win(:) = win(tmpIndx)
+    wij(:) = wij(tmpIndx)
+    sposz(:) = sposz(tmpIndx)
+    transd(:,:) = transd(tmpIndx,:)
+
+  end subroutine orderByLevels
+
+
   !> counts number of transition involving either the HOMO or LUMO levels.  Used to find number of
   !> states in the occupied and empty spaces.
   subroutine getNorb_r(nxov, win, getij, homo, no, nv)
