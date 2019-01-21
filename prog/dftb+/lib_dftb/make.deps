@@ -133,8 +133,8 @@ h5correction.o = h5correction.o $(_mod_vdwdata) $(common.fypp) $(_mod_accuracy) 
 _mod_h5correction: h5correction.o
 _mod_h5correction = $(h5correction.o)
 
-magfield.o: _mod_commontypes common.fypp _mod_accuracy _mod_constants _mod_angmomentum
-magfield.o = magfield.o $(_mod_commontypes) $(common.fypp) $(_mod_accuracy) $(_mod_constants) $(_mod_angmomentum)
+magfield.o: _mod_commontypes common.fypp _mod_constants _mod_angmomentum _mod_assert _mod_accuracy
+magfield.o = magfield.o $(_mod_commontypes) $(common.fypp) $(_mod_constants) $(_mod_angmomentum) $(_mod_assert) $(_mod_accuracy)
 _mod_hfields: magfield.o
 _mod_hfields = $(magfield.o)
 

@@ -11,6 +11,7 @@
 module HFields
   use accuracy, only : dp
   use constants
+  use assert
   use angmomentum, only : getLOperators
   use CommonTypes, only : TOrbitals
   implicit none
@@ -177,7 +178,7 @@ contains
         iStart = iPair(iNeigh,iAtom1) + 1
         iEnd = iPair(iNeigh,iAtom1) + nOrb
         ! minimal coupling, CGS
-        phase = exp( im * alpha_fs * 0.5_dp * dot_product(&
+        phase = exp( im * 0.5_dp * dot_product(&
             & (gauge(coords(:,iAtom2),HFieldStrength)+gauge(coords(:,iAtom1),HFieldStrength)),&
             & (coords(:,iAtom2)-coords(:,iAtom1))) )
         tmp(:nOrb) = phase * (sparseRe(iStart:iEnd) + im * sparseIm(iStart:iEnd))
@@ -242,7 +243,7 @@ contains
         iStart = iPair(iNeigh,iAtom1) + 1
         iEnd = iPair(iNeigh,iAtom1) + nOrb
         ! minimal coupling, CGS
-        phase = exp( -im * alpha_fs * 0.5_dp * dot_product(&
+        phase = exp( -im * 0.5_dp * dot_product(&
             & (gauge(coords(:,iAtom2),HFieldStrength)+gauge(coords(:,iAtom1),HFieldStrength)),&
             & (coords(:,iAtom2)-coords(:,iAtom1))) )
         tmp(:nOrb) = phase * (sparseRe(iStart:iEnd) + im * sparseIm(iStart:iEnd))
