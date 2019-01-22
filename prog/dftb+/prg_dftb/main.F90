@@ -198,7 +198,6 @@ contains
     real(dp), allocatable :: energiesCasida(:)
 
     integer :: iSpin
-    real(dp), allocatable :: overTmp(:)
 
     call initGeoOptParameters(tCoordOpt, nGeoSteps, tGeomEnd, tCoordStep, tStopDriver, iGeoStep,&
         & iLatGeoStep)
@@ -403,8 +402,6 @@ contains
             & img2CentCell, potential, ham, iHam)
 
         if (tVectorPotential) then
-          allocate(overTmp(size(over)))
-          overTmp(:) = over
           do iSpin = 1, nSpin
             call phaseHfield(ham(:,iSpin), iHam(:,iSpin), HFieldStrength, orb, coord,&
                 & neighbourList%iNeighbour, nNeighbourSK, iSparseStart, img2CentCell)
@@ -437,19 +434,9 @@ contains
           call writeBandOut(bandOut, eigen, filling, kWeight)
         end if
 
-        if (tVectorPotential) then
-          over(:) = overTmp(:)
-          deallocate(overTmp)
-          !do iSpin = 1, nSpin
-          !  call unphaseHfield(rhoPrim(:,iSpin), iRhoPrim(:,iSpin), HFieldStrength, orb, coord,&
-          !      & neighbourList%iNeighbour, nNeighbourSK, iSparseStart, img2CentCell)
-          !end do
-        end if
-
-
         if (tMulliken) then
           call getMullikenPopulation(rhoPrim, over, orb, neighbourList, nNeighbourSK, img2CentCell,&
-              & iSparseStart, qOutput, iRhoPrim=iRhoPrim, qBlock=qBlockOut, qiBlock=qiBlockOut)
+              & iSparseStart, qOutput, iRhoPrim, qBlockOut, qiBlockOut, iOver)
         end if
 
         #:if WITH_TRANSPORT
@@ -3134,7 +3121,7 @@ contains
 
   !> Calculate Mulliken population from sparse density matrix.
   subroutine getMullikenPopulation(rhoPrim, over, orb, neighbourList, nNeighbourSK, img2CentCell,&
-      & iSparseStart, qOrb, iRhoPrim, qBlock, qiBlock)
+      & iSparseStart, qOrb, iRhoPrim, qBlock, qiBlock, iOver)
 
     !> sparse density matrix
     real(dp), intent(in) :: rhoPrim(:,:)
@@ -3169,6 +3156,9 @@ contains
     !> Imaginary part of dual atomic charges
     real(dp), intent(inout), allocatable :: qiBlock(:,:,:,:)
 
+    !> imaginary part of overlap matrix
+    real(dp), intent(in), allocatable :: iOver(:)
+
     integer :: iSpin
 
     qOrb(:,:,:) = 0.0_dp
@@ -3176,6 +3166,14 @@ contains
       call mulliken(qOrb(:,:,iSpin), over, rhoPrim(:,iSpin), orb, neighbourList%iNeighbour,&
           & nNeighbourSK, img2CentCell, iSparseStart)
     end do
+
+    ! not correct yet for complex basis in sparse representation:
+    if (allocated(iRhoPrim) .and. allocated(iOver)) then
+      do iSpin = 1, size(qOrb, dim=3)
+        call mulliken(qOrb(:,:,iSpin), iOver, iRhoPrim(:,iSpin), orb, neighbourList%iNeighbour,&
+            & nNeighbourSK, img2CentCell, iSparseStart)
+      end do
+    end if
 
     if (allocated(qBlock)) then
       qBlock(:,:,:,:) = 0.0_dp
