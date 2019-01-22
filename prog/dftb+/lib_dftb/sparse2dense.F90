@@ -1983,9 +1983,9 @@ contains
   end subroutine packRhoRealBlacs
 
 
-  !> Packs distributed dense real matrix into sparse form (real).
+  !> Packs distributed dense real matrix into sparse form (complex).
   subroutine packRhoCplxBlacs(myblacs, desc, square, kPoint, kWeight, iNeighbour, nNeighbourSK,&
-      & mOrb, iCellVec, cellVec, iPair, img2CentCell, primitive)
+      & mOrb, iCellVec, cellVec, iPair, img2CentCell, primitive, preFactor)
 
     !> BLACS matrix descriptor
     type(TBlacsEnv), intent(in) :: myBlacs
@@ -2026,6 +2026,9 @@ contains
     !> sparse matrix to add this contribution into
     real(dp), intent(inout) :: primitive(:)
 
+    !> Optional scale term
+    complex(dp), intent(in), optional :: preFactor
+
     complex(dp) :: phase
     integer :: nAtom
     integer :: iOrig, ii, jj, kk
@@ -2053,6 +2056,9 @@ contains
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
+    if (present(preFactor)) then
+      phase = phase * preFactor
+    end if
     do iAtom1 = 1, nAtom
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
@@ -2065,6 +2071,9 @@ contains
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
           phase = exp(cmplx(0, -1, dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
+          if (present(preFactor)) then
+            phase = phase * preFactor
+          end if
           iOldVec = iVec
         end if
         call scalafx_cpg2l(myBlacs%orbitalGrid, desc%blacsOrbSqr, jj, ii, square,&

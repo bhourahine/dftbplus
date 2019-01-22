@@ -2213,6 +2213,11 @@ contains
             call packRhoCplxBlacs(env%blacs, denseDesc, rhoSqrCplx, kPoint(:,iK), kWeight(iK),&
                 & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec,&
                 & iSparseStart, img2CentCell, rhoPrim(:,iSp))
+            if (allocated(iRhoPrim)) then
+              call packRhoCplxBlacs(env%blacs, denseDesc, rhoSqrCplx, kPoint(:,iK), kWeight(iK),&
+                   & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec,&
+                   & iSparseStart, img2CentCell, iRhoPrim(:,iSp), preFactor = (0.0_dp,-1.0_dp))
+            end if
             deallocate(rhoSqrCplx)
           else
             call calcDensityComplexElsi(sparseIndexing, parallelKS, electronicSolver, kPoint(:,iK),&
@@ -2809,11 +2814,13 @@ contains
       call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,iK&
           &,iSpin), eigvecs(:,:,iKS), work)
       call env%globalTimer%startTimer(globalTimers%denseToSparse)
-      if (tImHam) then
-      else
+      call packRhoCplxBlacs(env%blacs, denseDesc, work, kPoint(:,iK), kWeight(iK),&
+           & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec, iSparseStart,&
+           & img2CentCell, rhoPrim(:,iSpin))
+      if (allocated(iRhoPrim)) then
         call packRhoCplxBlacs(env%blacs, denseDesc, work, kPoint(:,iK), kWeight(iK),&
-            & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec, iSparseStart,&
-            & img2CentCell, rhoPrim(:,iSpin))
+           & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec, iSparseStart,&
+           & img2CentCell, iRhoPrim(:,iSpin), preFactor = (0.0_dp,-1.0_dp))
       end if
       call env%globalTimer%stopTimer(globalTimers%denseToSparse)
     #:else
@@ -2839,6 +2846,10 @@ contains
   #:if WITH_SCALAPACK
     ! Add up and distribute density matrix contribution from each group
     call mpifx_allreduceip(env%mpi%globalComm, rhoPrim, MPI_SUM)
+    if (allocated(iRhoPrim)) then
+      ! likewise, imaginary part
+      call mpifx_allreduceip(env%mpi%globalComm, iRhoPrim, MPI_SUM)
+    end if
   #:endif
 
   end subroutine getDensityFromCplxEigvecs
