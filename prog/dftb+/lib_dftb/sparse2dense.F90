@@ -437,7 +437,7 @@ contains
 
   !> Pack squared matrix in the sparse form (complex version).
   subroutine packHS_cmplx(primitive, square, kPoint, kWeight, iNeighbour, nNeighbourSK, mOrb,&
-      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell)
+      & iCellVec, cellVec, iAtomStart, iPair, img2CentCell, preFactor)
 
     !> Sparse matrix
     real(dp), intent(inout) :: primitive(:)
@@ -475,6 +475,9 @@ contains
     !> Mapping between image atoms and corresponding atom in the central cell.
     integer, intent(in) :: img2CentCell(:)
 
+    !> Optional scale term
+    complex(dp), intent(in), optional :: preFactor
+
     complex(dp) :: phase
     integer :: nAtom
     integer :: iOrig, ii, jj, kk
@@ -504,6 +507,9 @@ contains
     kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     iOldVec = 0
     phase = 1.0_dp
+    if (present(preFactor)) then
+      phase = phase * preFactor
+    end if
     do iAtom1 = 1, nAtom
       ii = iAtomStart(iAtom1)
       nOrb1 = iAtomStart(iAtom1 + 1) - ii
@@ -518,6 +524,9 @@ contains
         if (iVec /= iOldVec) then
           phase = exp(cmplx(0, -1, dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
           iOldVec = iVec
+          if (present(preFactor)) then
+            phase = phase * preFactor
+          end if
         end if
         tmpSqr(1:nOrb2, 1:nOrb1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)
 

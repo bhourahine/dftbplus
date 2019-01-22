@@ -2082,7 +2082,7 @@ contains
         else
           call buildAndDiagDenseCplxHam(env, denseDesc, ham, over, kPoint, neighbourList,&
               & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, electronicSolver,&
-              & parallelKS, HSqrCplx, SSqrCplx, eigVecsCplx, eigen, iHam, iOver, iRhoPrim)
+              & parallelKS, HSqrCplx, SSqrCplx, eigVecsCplx, eigen, iHam, iOver)
         end if
       else
         call buildAndDiagDensePauliHam(env, denseDesc, ham, over, iOver, kPoint, neighbourList,&
@@ -2103,7 +2103,7 @@ contains
         else
           call getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighbourList,&
               & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, parallelKS,&
-              & eigvecsCplx, rhoPrim, SSqrCplx)
+              & eigvecsCplx, rhoPrim, SSqrCplx, iRhoPrim)
         end if
         call ud2qm(rhoPrim)
       else
@@ -2422,7 +2422,7 @@ contains
   !> Builds and diagonalises dense k-point dependent Hamiltonians.
   subroutine buildAndDiagDenseCplxHam(env, denseDesc, ham, over, kPoint, neighbourList,&
       & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, electronicSolver, parallelKS,&
-      & HSqrCplx, SSqrCplx, eigvecsCplx, eigen, iHam, iOver, iRhoPrim)
+      & HSqrCplx, SSqrCplx, eigvecsCplx, eigen, iHam, iOver)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -2480,9 +2480,6 @@ contains
 
     !> Sparse storage for imaginary overlap (not used if unallocated)
     real(dp), allocatable, intent(in) :: iOver(:)
-
-    !> imaginary part of density matrix
-    real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
 
     integer :: iKS, iK, iSpin
 
@@ -2744,7 +2741,7 @@ contains
   !> Creates sparse density matrix from complex eigenvectors.
   subroutine getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighbourList,&
       & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, parallelKS, eigvecs,&
-      & rhoPrim, work)
+      & rhoPrim, work, iRhoPrim)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -2794,9 +2791,16 @@ contains
     !> workspace array
     complex(dp), intent(out) :: work(:,:)
 
+    !> imaginary part of density matrix in sparse storage
+    real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
+
     integer :: iKS, iK, iSpin
 
+
     rhoPrim(:,:) = 0.0_dp
+    if (allocated(iRhoPrim)) then
+      iRhoPrim(:,:) = 0.0_dp
+    end if
 
     do iKS = 1, parallelKS%nLocalKS
       iK = parallelKS%localKS(1, iKS)
@@ -2805,9 +2809,12 @@ contains
       call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,iK&
           &,iSpin), eigvecs(:,:,iKS), work)
       call env%globalTimer%startTimer(globalTimers%denseToSparse)
-      call packRhoCplxBlacs(env%blacs, denseDesc, work, kPoint(:,iK), kWeight(iK),&
-          & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec, iSparseStart,&
-          & img2CentCell, rhoPrim(:,iSpin))
+      if (tImHam) then
+      else
+        call packRhoCplxBlacs(env%blacs, denseDesc, work, kPoint(:,iK), kWeight(iK),&
+            & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec, iSparseStart,&
+            & img2CentCell, rhoPrim(:,iSpin))
+      end if
       call env%globalTimer%stopTimer(globalTimers%denseToSparse)
     #:else
       if (tDensON2) then
@@ -2820,6 +2827,11 @@ contains
       call packHS(rhoPrim(:,iSpin), work, kPoint(:,iK), kWeight(iK), neighbourList%iNeighbour,&
           & nNeighbourSK, orb%mOrb, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart,&
           & img2CentCell)
+      if (allocated(iRhoPrim)) then
+        call packHS(iRhoPrim(:,iSpin), work, kPoint(:,iK), kWeight(iK), neighbourList%iNeighbour,&
+          & nNeighbourSK, orb%mOrb, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart,&
+          & img2CentCell, preFactor = (0.0_dp,-1.0_dp))
+      end if
       call env%globalTimer%stopTimer(globalTimers%denseToSparse)
     #:endif
     end do
@@ -3166,8 +3178,7 @@ contains
       call mulliken(qOrb(:,:,iSpin), over, rhoPrim(:,iSpin), orb, neighbourList%iNeighbour,&
           & nNeighbourSK, img2CentCell, iSparseStart)
     end do
-
-    ! not correct yet for complex basis in sparse representation:
+    ! complex basis in sparse representation:
     if (allocated(iRhoPrim) .and. allocated(iOver)) then
       do iSpin = 1, size(qOrb, dim=3)
         call mulliken(qOrb(:,:,iSpin), iOver, iRhoPrim(:,iSpin), orb, neighbourList%iNeighbour,&
@@ -3181,6 +3192,12 @@ contains
         call mulliken(qBlock(:,:,:,iSpin), over, rhoPrim(:,iSpin), orb, neighbourList%iNeighbour,&
             & nNeighbourSK, img2CentCell, iSparseStart)
       end do
+      if (allocated(iRhoPrim) .and. allocated(iOver)) then
+        do iSpin = 1, size(qBlock, dim=4)
+          call mulliken(qBlock(:,:,:,iSpin), iOver, iRhoPrim(:,iSpin), orb,&
+              & neighbourList%iNeighbour, nNeighbourSK, img2CentCell, iSparseStart)
+        end do
+      end if
     end if
 
     if (allocated(qiBlock)) then
