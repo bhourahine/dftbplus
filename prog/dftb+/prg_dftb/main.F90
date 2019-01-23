@@ -469,7 +469,8 @@ contains
         call getEnergies(sccCalc, qOutput, q0, chargePerShell, species, tEField, tXlbomd,&
             & tDftbU, tDualSpinOrbit, rhoPrim, H0, orb, neighbourList, nNeighbourSK, img2CentCell,&
             & iSparseStart, cellVol, extPressure, TS, potential, energy, thirdOrd, qBlockOut,&
-            & qiBlockOut, nDftbUFunc, UJ, nUJ, iUJ, niUJ, xi, iAtInCentralRegion, tFixEf, Ef)
+            & qiBlockOut, nDftbUFunc, UJ, nUJ, iUJ, niUJ, xi, iAtInCentralRegion, tFixEf, Ef,&
+            & tVectorPotential, HFieldStrength, iRhoPrim, coord)
 
         tStopScc = hasStopFile(fStopScc)
 
@@ -3226,7 +3227,8 @@ contains
   subroutine getEnergies(sccCalc, qOrb, q0, chargePerShell, species, tEField, tXlbomd, tDftbU,&
       & tDualSpinOrbit, rhoPrim, H0, orb, neighbourList, nNeighbourSK, img2CentCell, iSparseStart,&
       & cellVol, extPressure, TS, potential, energy, thirdOrd, qBlock, qiBlock, nDftbUFunc, UJ,&
-      & nUJ, iUJ, niUJ, xi, iAtInCentralRegion, tFixEf, Ef)
+      & nUJ, iUJ, niUJ, xi, iAtInCentralRegion, tFixEf, Ef, tVectorPotential, HFieldStrength,&
+      & iRhoPrim, coord)
 
     !> SCC module internal variables
     type(TScc), allocatable, intent(in) :: sccCalc
@@ -3256,7 +3258,7 @@ contains
     logical, intent(in) :: tDualSpinOrbit
 
     !> density matrix in sparse storage
-    real(dp), intent(in) :: rhoPRim(:,:)
+    real(dp), intent(in) :: rhoPrim(:,:)
 
     !> non-self-consistent hamiltonian
     real(dp), intent(in) :: H0(:)
@@ -3328,15 +3330,42 @@ contains
     !> from the given number of electrons
     real(dp), intent(inout) :: Ef(:)
 
+    !> Is a vector potential present
+    logical, intent(in) :: tVectorPotential
+
+    !> magnetic field strength
+    real(dp), intent(in) :: HFieldStrength
+
+    !> Imaginary part of real space density matrix in sparse storage
+    real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
+
+    !> atomic coordinates
+    real(dp), intent(in) :: coord(:,:)
+
     integer :: nSpin
     real(dp) :: nEl(2)
+    real(dp), allocatable :: phaseH0Re(:), phaseH0Im(:)
 
     nSpin = size(rhoPrim, dim=2)
 
     ! Tr[H0 * Rho] can be done with the same algorithm as Mulliken-analysis
     energy%atomNonSCC(:) = 0.0_dp
-    call mulliken(energy%atomNonSCC, rhoPrim(:,1), H0, orb, neighbourList%iNeighbour, nNeighbourSK,&
-        & img2CentCell, iSparseStart)
+    if (tVectorPotential) then
+    @:ASSERT(allocated(iRhoPrim))
+      allocate(phaseH0Re(size(H0)))
+      allocate(phaseH0Im(size(H0)))
+      phaseH0Re(:) = H0
+      phaseH0Im(:) = 0.0_dp
+      call phaseHfield(phaseH0Re, phaseH0Im, HFieldStrength, orb, coord, neighbourList%iNeighbour,&
+          & nNeighbourSK, iSparseStart, img2CentCell)
+      call mulliken(energy%atomNonSCC, rhoPrim(:,1), phaseH0Re, orb, neighbourList%iNeighbour,&
+          & nNeighbourSK, img2CentCell, iSparseStart)
+      call mulliken(energy%atomNonSCC, iRhoPrim(:,1), phaseH0Im, orb, neighbourList%iNeighbour,&
+          & nNeighbourSK, img2CentCell, iSparseStart)
+    else
+      call mulliken(energy%atomNonSCC, rhoPrim(:,1), H0, orb, neighbourList%iNeighbour,&
+          & nNeighbourSK, img2CentCell, iSparseStart)
+    end if
     energy%EnonSCC = sum(energy%atomNonSCC(iAtInCentralRegion(:)))
 
     if (tEfield) then
