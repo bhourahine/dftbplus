@@ -1570,7 +1570,13 @@ contains
       if (.not. ctrl%tReadChrg) then
         call getInitialSpins(value, geo, 3, ctrl%initialSpins)
       end if
-
+      if (geo%tPeriodic) then
+        call getChild(value, "SpinWave", child2, requested=.false.)
+        if (associated(child2)) then
+          allocate(ctrl%spinQVectors(3))
+          call getChildValue(child2, "", ctrl%spinQVectors)
+        end if
+      end if
     case default
       call getNodeHSDName(value, buffer)
       call detailedError(child, "Invalid spin polarisation type '" //&

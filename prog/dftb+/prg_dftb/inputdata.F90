@@ -298,6 +298,10 @@ module inputdata_module
     !> spin constants
     real(dp), allocatable :: spinW(:,:,:)
 
+    !> non-collinear spin wave patterns for supercells, simplest case of length of waves along
+    !> lattice vectors
+    integer, allocatable :: spinQVectors(:)
+
     !> customised Hubbard U values
     real(dp), allocatable :: hubbU(:,:)
 
