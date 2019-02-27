@@ -33,6 +33,7 @@ module mainio
   use linkedlist
   use taggedoutput
   use fileid
+  use elecsolvers, only : TElectronicSolver, electronicSolverTypes
   use spin, only : qm2ud
   use energies
   use xmlf90
@@ -2247,7 +2248,6 @@ contains
 
   end subroutine writeHessianOut
 
-
   !> Open file detailed.out
   subroutine openDetailedOut(fd, fileName, tAppendDetailedOut, iGeoStep, iSccIter)
     !> File  ID
@@ -2274,14 +2274,13 @@ contains
 
   end subroutine openDetailedOut
 
-
   !> First group of data to go to detailed.out
-  subroutine writeDetailedOut1(fd, iDistribFn, nGeoSteps, iGeoStep,&
-      & tMD, tDerivs, tCoordOpt, tLatOpt, iLatGeoStep, iSccIter, energy, diffElec, sccErrorQ,&
-      & indMovedAtom, coord0Out, q0, qInput, qOutput, eigen, filling, orb, species,&
-      & tDFTBU, tImHam, tPrintMulliken, orbitalL, qBlockOut, Ef, Eband, TS, E0, pressure, cellVol,&
-      & tAtomicEnergy, tDispersion, tEField, tPeriodic, nSpin, tSpinOrbit, tScc, tNegf, &
-      & invLatVec, kPoints, iAtInCentralRegion)
+  subroutine writeDetailedOut1(fd, iDistribFn, nGeoSteps, iGeoStep, tMD, tDerivs, tCoordOpt,&
+      & tLatOpt, iLatGeoStep, iSccIter, energy, diffElec, sccErrorQ, indMovedAtom, coord0Out, q0,&
+      & qInput, qOutput, eigen, filling, orb, species, tDFTBU, tImHam, tPrintMulliken, orbitalL,&
+      & qBlockOut, Ef, Eband, TS, E0, pressure, cellVol, tAtomicEnergy, tDispersion, tEField,&
+      & tPeriodic, nSpin, tSpin, tSpinOrbit, tScc, tNegf,  invLatVec, kPoints, iAtInCentralRegion,&
+      & electronicSolver)
 
     !> File ID
     integer, intent(in) :: fd
@@ -2397,6 +2396,9 @@ contains
     !> Number of spin channels
     integer, intent(in) :: nSpin
 
+    !> is this a spin polarized calculation?
+    logical :: tSpin
+
     !> Are spin orbit interactions present
     logical, intent(in) :: tSpinOrbit
 
@@ -2415,12 +2417,14 @@ contains
     !> atoms in the central cell (or device region if transport)
     integer, intent(in) :: iAtInCentralRegion(:)
 
+    !> Electronic solver information
+    type(TElectronicSolver), intent(in) :: electronicSolver
+
     real(dp), allocatable :: qInputUpDown(:,:,:), qOutputUpDown(:,:,:), qBlockOutUpDown(:,:,:,:)
     real(dp) :: angularMomentum(3)
     integer :: ang
     integer :: nAtom, nKPoint, nSpinHams, nMovedAtom
     integer :: iAt, iSpin, iK, iSp, iSh, iOrb, ii, kk
-    logical :: tSpin
 
     character(lc) :: strTmp
 
@@ -2428,7 +2432,6 @@ contains
     nKPoint = size(eigen, dim=2)
     nSpinHams = size(eigen, dim=3)
     nMovedAtom = size(indMovedAtom)
-    tSpin = (nSpin == 2 .or. nSpin == 4)
 
     qInputUpDown = qInput
     call qm2ud(qInputUpDown)
@@ -2439,15 +2442,18 @@ contains
       call qm2ud(qBlockOutUpDown)
     end if
 
-    select case(iDistribFn)
-    case(0)
-      write(fd,*) 'Fermi distribution function'
-    case(1)
-      write(fd,*) 'Gaussian distribution function'
-    case default
-      write(fd,*) 'Methfessel-Paxton distribution function order', iDistribFn
-    end select
-    write(fd,*)
+    if (.not. tNegf) then
+      ! depends on the contact calculations
+      select case(iDistribFn)
+      case(0)
+        write(fd,*) 'Fermi distribution function'
+      case(1)
+        write(fd,*) 'Gaussian distribution function'
+      case default
+        write(fd,*) 'Methfessel-Paxton distribution function order', iDistribFn
+      end select
+      write(fd,*)
+    end if
 
     if (nGeoSteps > 0) then
       if (tMD) then
@@ -2509,12 +2515,6 @@ contains
       end do
       write(fd, *)
     end if
-
-
-    if (.not.tNegf) then
-      call writeDetailedOutEigenvalues(fd, eigen, filling)
-    end if
-
 
     if (nSpin == 4) then
       if (tPrintMulliken) then
@@ -2684,12 +2684,22 @@ contains
       if (nSpin == 2) then
         write(fd, "(A, 1X, A)") 'Spin ', trim(spinName(iSpin))
       end if
-      write(fd, format2U) 'Fermi level', Ef(iSpin), "H", Hartree__eV * Ef(iSpin), 'eV'
-      write(fd, format2U) 'Band energy', Eband(iSpin), "H", Hartree__eV * Eband(iSpin), 'eV'
-      write(fd, format2U)'TS', TS(iSpin), "H", Hartree__eV * TS(iSpin), 'eV'
-      write(fd, format2U) 'Band free energy (E-TS)', Eband(iSpin) - TS(iSpin), "H",&
-          & Hartree__eV * (Eband(iSpin) - TS(iSpin)), 'eV'
-      write(fd, format2U) 'Extrapolated E(0K)', E0(iSpin), "H", Hartree__eV * (E0(iSpin)), 'eV'
+      if (.not. tNegf) then
+        ! set in the input and for multiple contact Ef values not meaningful anyway
+        write(fd, format2U) 'Fermi level', Ef(iSpin), "H", Hartree__eV * Ef(iSpin), 'eV'
+      end if
+      if (all(electronicSolver%iSolver /= [electronicSolverTypes%pexsi,&
+          & electronicSolverTypes%GF, electronicSolverTypes%OnlyTransport])) then
+        write(fd, format2U) 'Band energy', Eband(iSpin), "H", Hartree__eV * Eband(iSpin), 'eV'
+      end if
+      if (any(electronicSolver%iSolver == [electronicSolverTypes%qr,&
+          & electronicSolverTypes%divideandconquer, electronicSolverTypes%relativelyrobust,&
+          & electronicSolverTypes%elpa])) then
+        write(fd, format2U)'TS', TS(iSpin), "H", Hartree__eV * TS(iSpin), 'eV'
+        write(fd, format2U) 'Band free energy (E-TS)', Eband(iSpin) - TS(iSpin), "H",&
+            & Hartree__eV * (Eband(iSpin) - TS(iSpin)), 'eV'
+        write(fd, format2U) 'Extrapolated E(0K)', E0(iSpin), "H", Hartree__eV * (E0(iSpin)), 'eV'
+      end if
       if (tPrintMulliken) then
         if (nSpin == 2) then
           write(fd, "(3A, 2F18.10)") 'Input / Output electrons (', trim(spinName(iSpin)), '):',&
@@ -2735,9 +2745,13 @@ contains
     end if
 
     write(fd, format2U) 'Total energy', energy%Etotal, 'H', energy%Etotal * Hartree__eV, 'eV'
-    write(fd, format2U) 'Extrapolated to 0', energy%Ezero, 'H', energy%Ezero * Hartree__eV, 'eV'
-    write(fd, format2U) 'Total Mermin free energy', energy%Etotal - sum(TS), 'H',&
-        & (energy%Etotal - sum(TS)) * Hartree__eV, 'eV'
+    if (any(electronicSolver%iSolver == [electronicSolverTypes%qr,&
+        & electronicSolverTypes%divideandconquer, electronicSolverTypes%relativelyrobust,&
+        & electronicSolverTypes%elpa])) then
+      write(fd, format2U) 'Extrapolated to 0', energy%Ezero, 'H', energy%Ezero * Hartree__eV, 'eV'
+      write(fd, format2U) 'Total Mermin free energy', energy%Etotal - sum(TS), 'H',&
+          & (energy%Etotal - sum(TS)) * Hartree__eV, 'eV'
+    end if
     if (energy%EForceRelated /= 0.0_dp) then
       write(fd, format2U) 'Force related energy', energy%EForceRelated, 'H',&
           & energy%EForceRelated * Hartree__eV, 'eV'
@@ -2774,76 +2788,6 @@ contains
     end if
 
   end subroutine writeDetailedOut1
-
-
-  !> Helper routine to write formatted eigenvalues and fillings
-  subroutine writeDetailedOutEigenvalues(fd, eigen, filling)
-
-    !> File ID
-    integer, intent(in) :: fd
-
-    !> Eigenvalues/single particle states
-    real(dp), intent(in) :: eigen(:,:,:)
-
-    !> Occupation numbers
-    real(dp), intent(in) :: filling(:,:,:)
-
-    integer :: iSpin, nSpin, iK, kk, nKPoint, iEgy, nEgy, ii
-    real(dp) :: scaleFactor
-
-    ! meV level accuracy format for eigenvalues
-    character(*), parameter :: formatEigen(2) = [&
-        & character(21) :: "(4X, F10.5, 2X, F8.5)", "(4X, F10.3, 2X, F8.5)"]
-
-    ! K-points per group
-    integer, parameter :: nKPointPerGroup = 3
-
-    nEgy = size(filling, dim=1)
-    nKPoint = size(filling, dim=2)
-    nSpin = size(filling, dim=3)
-
-    lpSpinPrint: do iSpin = 1, nSpin
-
-      if (nSpin == 2) then
-        write(fd, "(2A)") 'COMPONENT = ', trim(spinName(iSpin))
-      else
-        write(fd, "(2A)") 'COMPONENT = ', trim(quaternionName(iSpin))
-      end if
-
-      do ii = 1, 2
-        if (ii == 1) then
-          write(fd, "(/, A)") 'Eigenvalues (H) and fillings (e)'
-          scaleFactor = 1.0_dp
-        else
-          write(fd, "(/, A)") 'Eigenvalues (eV) and fillings (e)'
-          scaleFactor = Hartree__eV
-        end if
-        do iK = 1, nKPoint, nKPointPerGroup
-          if (nKPoint > 1) then
-            if (nKPoint - iK > 0) then
-              write(fd, "(A, I0, ':', I0)") 'K-points ', iK, min(iK + nKPointPerGroup - 1, nKPoint)
-            else
-              write(fd, "(A, I0)") 'K-point ', iK
-            end if
-          end if
-          do iEgy = 1, nEgy
-            write(fd, "(I8)", advance='no') iEgy
-            do kk = 0, nKPointPerGroup - 1
-              if (iK + kk > nKPoint) then
-                exit
-              end if
-              write(fd, formatEigen(ii), advance='no') scaleFactor * eigen(iEgy, iK + kk, iSpin),&
-                  & filling(iEgy, iK + kk, iSpin)
-            end do
-            write(fd, *)
-          end do
-        end do
-      end do
-      write(fd, *)
-
-    end do lpSpinPrint
-
-  end subroutine writeDetailedOutEigenvalues
 
 
   !> Second group of data for detailed.out
@@ -3840,10 +3784,16 @@ contains
 
 
   !> Prints current total energies
-  subroutine printEnergies(energy)
+  subroutine printEnergies(energy, TS, electronicSolver)
 
     !> energy components
     type(TEnergies), intent(in) :: energy
+
+    !> Electron entropy times temperature
+    real(dp), intent(in) :: TS(:)
+
+    !> Electronic solver information
+    type(TElectronicSolver), intent(in) :: electronicSolver
 
     write(stdOut, *)
     write(stdOut, format2U) "Total Energy", energy%Etotal,"H", Hartree__eV * energy%Etotal,"eV"
