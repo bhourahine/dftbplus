@@ -82,6 +82,7 @@ module dftbp_initprogram
   use dftbp_elstatpot
   use dftbp_pmlocalisation
   use dftbp_energies
+  use dftbp_forces
   use dftbp_potentials
   use dftbp_taggedoutput
   use dftbp_formatout
@@ -780,6 +781,9 @@ module dftbp_initprogram
 
   !> Total energy components
   type(TEnergies) :: energy
+
+  !> Total force components
+  type(TForce) :: forces
 
   !> Potentials for orbitals
   type(TPotentials) :: potential

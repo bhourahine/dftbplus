@@ -123,8 +123,8 @@ externalcharges.o = externalcharges.o $(_mod_dftbp_environment) $(_mod_dftbp_ass
 _mod_dftbp_externalcharges: externalcharges.o
 _mod_dftbp_externalcharges = $(externalcharges.o)
 
-forces.o: _mod_dftbp_environment _mod_dftbp_assert common.fypp _mod_dftbp_accuracy _mod_dftbp_nonscc _mod_dftbp_scc _mod_dftbp_schedule _mod_dftbp_commontypes _mod_dftbp_slakocont
-forces.o = forces.o $(_mod_dftbp_environment) $(_mod_dftbp_assert) $(common.fypp) $(_mod_dftbp_accuracy) $(_mod_dftbp_nonscc) $(_mod_dftbp_scc) $(_mod_dftbp_schedule) $(_mod_dftbp_commontypes) $(_mod_dftbp_slakocont)
+forces.o: _mod_dftbp_environment _mod_dftbp_assert common.fypp _mod_dftbp_accuracy _mod_dftbp_nonscc _mod_dftbp_schedule _mod_dftbp_commontypes _mod_dftbp_slakocont
+forces.o = forces.o $(_mod_dftbp_environment) $(_mod_dftbp_assert) $(common.fypp) $(_mod_dftbp_accuracy) $(_mod_dftbp_nonscc) $(_mod_dftbp_schedule) $(_mod_dftbp_commontypes) $(_mod_dftbp_slakocont)
 _mod_dftbp_forces: forces.o
 _mod_dftbp_forces = $(forces.o)
 

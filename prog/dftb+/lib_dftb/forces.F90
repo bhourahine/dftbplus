@@ -10,18 +10,43 @@
 !> Code to calculate forces for several different types of calculation (non-scc, scc, sDFTB etc)
 module dftbp_forces
   use dftbp_assert
-  use dftbp_accuracy
+  use dftbp_accuracy, only : dp
   use dftbp_nonscc, only : NonSccDiff
-  use dftbp_scc
-  use dftbp_commontypes
-  use dftbp_slakocont
-  use dftbp_schedule
-  use dftbp_environment
+  use dftbp_commontypes, only : TOrbitals
+  use dftbp_slakocont, only : OSlakoCont
+  use dftbp_schedule, only : distributeRangeInChunks, assembleChunks
+  use dftbp_environment, only : TEnvironment
   implicit none
 
   private
 
-  public :: derivative_shift
+  public :: derivative_shift, TForce, init
+
+  !> Data type to store components of the force as named variables.
+  type TForce
+
+    !> atom resolved repulsive
+    real(dp), allocatable :: forceRep(:,:)
+
+    !> atom resolved Helmann-Feynman
+    real(dp), allocatable :: forceHF(:,:)
+
+    !> atom resolved SCC
+    real(dp), allocatable :: forceSCC(:,:)
+
+    !> atom resolved external field
+    real(dp), allocatable :: forceExt(:,:)
+
+    !> atom resolved dispersion
+    real(dp), allocatable :: forceDisp(:,:)
+
+    !> atom resolved total
+    real(dp), allocatable :: forceTotal(:,:)
+
+    !> data structure initialised
+    logical :: tInitialised = .false.
+
+  end type TForce
 
 
   !> forces with shift vectors present
@@ -37,6 +62,7 @@ module dftbp_forces
     module procedure derivative_iBlock
 
   end interface derivative_shift
+
 
 contains
 
@@ -416,5 +442,35 @@ contains
     call assembleChunks(env, deriv)
 
   end subroutine derivative_iBlock
+
+
+  !> Allocates storage for the force components
+  subroutine init(self, nAtom)
+
+    !> data structure to allocate
+    type(TForce), intent(out) :: self
+
+    !> number of atoms needed for atom resolved arrays
+    integer, intent(in) :: nAtom
+
+    allocate(self%forceRep(3, nAtom))
+    allocate(self%forceHF(3, nAtom))
+    allocate(self%forceSCC(3, nAtom))
+    allocate(self%forceExt(3, nAtom))
+    allocate(self%forceDisp(3, nAtom))
+    allocate(self%forceCasida(3, nAtom))
+    allocate(self%forceTotal(3, nAtom))
+
+    self%forceRep(:,:) = 0.0_dp
+    self%forceHF(:,:) = 0.0_dp
+    self%forceSCC(:,:) = 0.0_dp
+    self%forceExt(:,:) = 0.0_dp
+    self%forceDisp(:,:) = 0.0_dp
+    self%forceCasida(:,:) = 0.0_dp
+    self%forceTotal(:,:) = 0.0_dp
+
+    self%tInitialised = .true.
+
+  end subroutine init
 
 end module dftbp_forces
