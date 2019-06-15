@@ -4799,8 +4799,8 @@ contains
     type(fnode), pointer :: pTmp, field
     type(fnode), pointer :: pGeom, pDevice, pNode
     type(fnodeList), pointer :: pNodeList
-    integer :: ii, jj, ind, ncont, nKT
-    real(dp) :: eRange(2), eRangeDefault(2)
+    integer :: ii, jj, ind, ncont
+    real(dp) :: nKT, eRange(2), eRangeDefault(2)
     type(string) :: buffer, modif
     type(WrappedInt1), allocatable :: iAtInRegion(:)
     logical, allocatable :: tShellResInRegion(:)
@@ -4848,11 +4848,9 @@ contains
 
     if (all(transpar%contacts(:)%potential.eq.0.0)) then
       ! No default meaningful
-      call getChildValue(root, "EnergyRange", eRange, modifier=modif,&
-      & child=field)
+      call getChildValue(root, "EnergyRange", eRange, modifier=modif, child=field)
       call convertByMul(char(modif), energyUnits, field, eRange)
-      call getChildValue(root, "EnergyStep", tundos%estep,&
-      & modifier=modif, child=field)
+      call getChildValue(root, "EnergyStep", tundos%estep, modifier=modif, child=field)
       call convertByMul(char(modif), energyUnits, field, tundos%estep)
     else
       ! Default meaningful
@@ -4862,18 +4860,15 @@ contains
       ! Emin = min(-mu); Emax=max(-mu) where mu is Vi-min(Efi)
       ! Note: if Efi != min(Efi) a built in potential is added in poisson
       ! to aling the leads, we don't need to include it here
-      nKT = 10
+      nKT = 10.0_dp
       eRangeDefault(1) = minval(-1.0*transpar%contacts(:)%potential) + &
-                        & minval(1.0*transpar%contacts(:)%eFermi(1)) -   &
-                        & nKT * maxval(tundos%kbT)
+          & minval(1.0*transpar%contacts(:)%eFermi(1)) - nKT * maxval(tundos%kbT)
       eRangeDefault(2) = maxval(-1.0*transpar%contacts(:)%potential) + &
-                        & minval(transpar%contacts(:)%eFermi(1)) +   &
-                        & nKT * maxval(tundos%kbT)
-      call getChildValue(root, "EnergyStep", tundos%estep, 6.65e-4_dp, &
-                          &modifier=modif, child=field)
+          & minval(transpar%contacts(:)%eFermi(1)) + nKT * maxval(tundos%kbT)
+      call getChildValue(root, "EnergyStep", tundos%estep, 6.65e-4_dp, modifier=modif, child=field)
       call convertByMul(char(modif), energyUnits, field, tundos%estep)
-      call getChildValue(root, "EnergyRange", eRange, eRangeDefault, &
-                          modifier=modif, child=field)
+      call getChildValue(root, "EnergyRange", eRange, eRangeDefault, modifier=modif,&
+          & child=field)
       call convertByMul(char(modif), energyUnits, field, eRange)
     end if
 
@@ -4881,47 +4876,45 @@ contains
     tundos%emax = eRange(2)
     ! Terminal currents
     call getChild(root, "TerminalCurrents", pTmp, requested=.false.)
-      if (associated(pTmp)) then
-        call getChildren(pTmp, "EmitterCollector", pNodeList)
-        allocate(tundos%ni(getLength(pNodeList)))
-        allocate(tundos%nf(getLength(pNodeList)))
-        do ii = 1, getLength(pNodeList)
-          call getItem1(pNodeList, ii, pNode)
-          call getEmitterCollectorByName(pNode, tundos%ni(ii), tundos%nf(ii),&
-              & transpar%contacts(:)%name)
-        end do
-        call destroyNodeList(pNodeList)
-      else
-        allocate(tundos%ni(ncont-1) )
-        allocate(tundos%nf(ncont-1) )
-        call setChild(root, "TerminalCurrents", pTmp)
-        ind = 1
-        do ii = 1, 1
-          do jj = ii + 1, ncont
-            call setChildValue(pTmp, "EmitterCollector", &
-                &(/ transpar%contacts(ii)%name, transpar%contacts(jj)%name /))
-            tundos%ni(ind) = ii
-            tundos%nf(ind) = jj
-            ind = ind + 1
-          end do
-        end do
-      end if
-      call getChildValue(root, "Delta", tundos%delta, &
-          &1.0e-5_dp, modifier=modif, child=field)
-      call convertByMul(char(modif), energyUnits, field, &
-          &tundos%delta)
-      call getChildValue(root, "BroadeningDelta", tundos%broadeningDelta, &
-          &0.0_dp, modifier=modif, child=field)
-      call convertByMul(char(modif), energyUnits, field, &
-          &tundos%broadeningDelta)
-
-      call getChildren(root, "Region", pNodeList)
-      call readPDOSRegions(pNodeList, geo, iAtInRegion, tShellResInRegion, &
-          & regionLabelPrefixes)
+    if (associated(pTmp)) then
+      call getChildren(pTmp, "EmitterCollector", pNodeList)
+      allocate(tundos%ni(getLength(pNodeList)))
+      allocate(tundos%nf(getLength(pNodeList)))
+      do ii = 1, getLength(pNodeList)
+        call getItem1(pNodeList, ii, pNode)
+        call getEmitterCollectorByName(pNode, tundos%ni(ii), tundos%nf(ii),&
+            & transpar%contacts(:)%name)
+      end do
       call destroyNodeList(pNodeList)
-      call transformPdosRegionInfo(iAtInRegion, tShellResInRegion, &
-          & regionLabelPrefixes, orb, geo%species, tundos%dosOrbitals, &
-          & tundos%dosLabels)
+    else
+      allocate(tundos%ni(ncont-1) )
+      allocate(tundos%nf(ncont-1) )
+      call setChild(root, "TerminalCurrents", pTmp)
+      ind = 1
+      do ii = 1, 1
+        do jj = ii + 1, ncont
+          call setChildValue(pTmp, "EmitterCollector",&
+              &(/ transpar%contacts(ii)%name, transpar%contacts(jj)%name /))
+          tundos%ni(ind) = ii
+          tundos%nf(ind) = jj
+          ind = ind + 1
+        end do
+      end do
+    end if
+    call getChildValue(root, "Delta", tundos%delta, 1.0e-5_dp, modifier=modif, child=field)
+    call convertByMul(char(modif), energyUnits, field, tundos%delta)
+    call getChildValue(root, "BroadeningDelta", tundos%broadeningDelta, 0.0_dp,&
+        & modifier=modif, child=field)
+    call convertByMul(char(modif), energyUnits, field, tundos%broadeningDelta)
+
+    call getChildren(root, "Region", pNodeList)
+    if (getLength(pNodeList) == 0 .and. tundos%writeLDOS) then
+      call error("Local density of states evaluation requires a region to be defined")
+    end if
+    call readPDOSRegions(pNodeList, geo, iAtInRegion, tShellResInRegion, regionLabelPrefixes)
+    call destroyNodeList(pNodeList)
+    call transformPdosRegionInfo(iAtInRegion, tShellResInRegion, regionLabelPrefixes, orb,&
+        & geo%species, tundos%dosOrbitals, tundos%dosLabels)
 
   end subroutine readTunAndDos
 
@@ -5151,17 +5144,14 @@ contains
     allocate(iAtInRegion(nReg))
     do iReg = 1, nReg
       call getItem1(children, iReg, child)
-      call getChildValue(child, "Atoms", buffer, child=child2, &
-          & multiple=.true.)
-      call convAtomRangeToInt(char(buffer), geo%speciesNames, &
-          & geo%species, child2, tmpI1)
+      call getChildValue(child, "Atoms", buffer, child=child2, multiple=.true.)
+      call convAtomRangeToInt(char(buffer), geo%speciesNames, geo%species, child2, tmpI1)
       iAtInRegion(iReg)%data = tmpI1
-      call getChildValue(child, "ShellResolved", &
-          & tShellResInRegion(iReg), .false., child=child2)
+      call getChildValue(child, "ShellResolved", tShellResInRegion(iReg), .false., child=child2)
       if (tShellResInRegion(iReg)) then
         if (.not. all(geo%species(tmpI1) == geo%species(tmpI1(1)))) then
-          call detailedError(child2, "Shell resolved PDOS can only summed up &
-              & over atoms of the same type")
+          call detailedError(child2, "Shell resolved PDOS can only summed up over atoms of the same&
+              & type")
         end if
       end if
       write(strTmp, "('region',I0)") iReg
