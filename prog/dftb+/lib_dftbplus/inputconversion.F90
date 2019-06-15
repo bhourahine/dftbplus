@@ -1,8 +1,13 @@
-!> Contains routines to convert data (typically delivered by the parser)
-!! to the internal form.
-!!
+!--------------------------------------------------------------------------------------------------!
+!  DFTB+: general package for performing fast atomistic simulations                                !
+!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!                                                                                                  !
+!  See the LICENSE file for terms of usage and distribution.                                       !
+!--------------------------------------------------------------------------------------------------!
+
 #:include 'common.fypp'
 
+!> Contains routines to convert data (typically delivered by the parser) to the internal form.
 module dftbp_inputconversion
   use dftbp_assert
   use dftbp_accuracy
@@ -17,26 +22,30 @@ module dftbp_inputconversion
 contains
 
   !> Transforms the PDOS region as returned by the parser to the internal form.
-  !!
-  !! \param iAtInRegion  Array of 1D arrays. Each 1D array represents one
-  !!     region. Elements in the 1D array gives the index of the atoms in
-  !!     the region.
-  !! \param tShellResInRegion  Whether a region must be treated shell resolved.
-  !! \param regionLabelPrefixes  Label prefix for each region.
-  !! \param orb  Orbital information.
-  !! \param specie0  Atom type of each atom in the unit cell
-  !! \param iOrbRegion  Array of 1D arrays, each containing the list of orbitals
-  !!     which must be summed up in the given region.
-  !! \param regionLabels  File name for each region.
-  !!
-  subroutine transformPdosRegionInfo(iAtInRegion, tShellResInRegion, &
-      & regionLabelPrefixes, orb, specie0, iOrbRegion, regionLabels)
+  subroutine transformPdosRegionInfo(iAtInRegion, tShellResInRegion, regionLabelPrefixes, orb,&
+      & specie0, iOrbRegion, regionLabels)
+
+    !> Array of 1D arrays. Each 1D array represents one region. Elements in the 1D array gives the
+    !> index of the atoms in the region.
     type(WrappedInt1), intent(in) :: iAtInregion(:)
+
+    !> Whether a region must be treated shell resolved.
     logical, intent(in) :: tShellResInRegion(:)
+
+    !> Label prefix for each region.
     character(lc), intent(in) :: regionLabelPrefixes(:)
+
+    !> Orbital information.
     type(TOrbitals), intent(in) :: orb
+
+    !> Atom type of each atom in the unit cell
     integer, intent(in) :: specie0(:)
+
+    !> Array of 1D arrays, each containing the list of orbitals which must be summed up in the given
+    !> region.
     type(WrappedInt1), allocatable, intent(out) :: iOrbRegion(:)
+
+    !> File name for each region.
     character(lc), allocatable, intent(out) :: regionLabels(:)
 
     integer, allocatable :: iAtomStart(:)
@@ -68,13 +77,24 @@ contains
   end subroutine transformPdosRegionInfo
 
 
-  !! Determines nr. of regions when shell resolution is also considered.
-  function countRegionsWithShellResolution(iAtInRegion, tShellResInRegion, &
-      & specie0, orb) result(nRegShell)
+  !> Determines nr. of regions when shell resolution is also considered.
+  function countRegionsWithShellResolution(iAtInRegion, tShellResInRegion, specie0, orb)&
+      & result(nRegShell)
+
+    !> Array of 1D arrays. Each 1D array represents one region. Elements in the 1D array gives the
+    !> index of the atoms in the region.
     type(WrappedInt1), intent(in) :: iAtInRegion(:)
+
+    !> Whether a region must be treated shell resolved.
     logical, intent(in) :: tShellResInRegion(:)
+
+    !> Atom type of each atom in the unit cell
     integer, intent(in) :: specie0(:)
+
+    !> Orbital information.
     type(TOrbitals), intent(in) :: orb
+
+    !> number of shells in the region
     integer :: nRegShell
 
     integer :: iReg, firstAtom
@@ -92,16 +112,33 @@ contains
   end function countRegionsWithShellResolution
 
 
-  !! Adds regions according to the shells of the constituting atoms.
-  subroutine addShellResolvedRegions(atomIndices, regionLabelPrefix, specie0, &
-      & orb, iAtomStart, iOrbRegion, regionLabels, curReg)
+  !> Adds regions according to the shells of the constituting atoms.
+  subroutine addShellResolvedRegions(atomIndices, regionLabelPrefix, specie0, orb, iAtomStart,&
+      & iOrbRegion, regionLabels, curReg)
+
+    !> Atoms in the region
     integer, intent(in) :: atomIndices(:)
+
+    !> Label prefix for this region
     character(*), intent(in) :: regionLabelPrefix
+
+    !> Atom type of each atom in the unit cell
     integer, intent(in) :: specie0(:)
+
+    !> Orbital information.
     type(TOrbitals), intent(in) :: orb
+
+    !> Starting location of orbitals from an atom
     integer, intent(in) :: iAtomStart(:)
+
+    !> Array of 1D arrays, each containing the list of orbitals which must be summed up in the given
+    !> region.
     type(WrappedInt1), intent(inout) :: iOrbRegion(:)
+
+    !> File name for each region
     character(*), intent(inout) :: regionLabels(:)
+
+    !> Region being processed
     integer, intent(inout) :: curReg
 
     integer :: nOrb, nAtom
@@ -130,15 +167,30 @@ contains
   end subroutine addShellResolvedRegions
 
 
-  !! Adds one region with all the orbitals of the atoms in it.
-  subroutine addAtomResolvedRegion(atomIndices, regionLabelPrefix, orb, &
-      & iAtomStart, iOrbRegion, regionLabels, curReg)
+  !> Adds one region with all the orbitals of the atoms in it.
+  subroutine addAtomResolvedRegion(atomIndices, regionLabelPrefix, orb, iAtomStart, iOrbRegion,&
+      & regionLabels, curReg)
+
+    !> Atoms in the region
     integer, intent(in) :: atomIndices(:)
+
+    !> Label prefix for this region
     character(*), intent(in) :: regionLabelPrefix
+
+    !> Orbital information.
     type(TOrbitals), intent(in) :: orb
+
+    !> Starting location of orbitals from an atom
     integer, intent(in) :: iAtomStart(:)
+
+    !> Array of 1D arrays, each containing the list of orbitals which must be summed up in the given
+    !> region.
     type(WrappedInt1), intent(inout) :: iOrbRegion(:)
+
+    !> File name for each region
     character(*), intent(inout) :: regionLabels(:)
+
+    !> Region being processed
     integer, intent(inout) :: curReg
 
     integer :: nOrb, ind, ii, jj, iAt
