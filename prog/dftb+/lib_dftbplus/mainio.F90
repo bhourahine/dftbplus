@@ -3521,24 +3521,35 @@ contains
 
 
   !> Writes the contact potential shifts per shell (for transport)
-  subroutine writeContShifts(filename, orb, shiftPerL, charges, Ef)
+  subroutine writeContShifts(filename, orb, shiftPerL, charges, Ef, blockShift, blockCharges)
+
     !> filename where shifts are written
     character(*), intent(in) :: filename
+
     !> orbital structure
     type(TOrbitals), intent(in) :: orb
+
     !> array of shifts per shell and spin
     real(dp), intent(in) :: shiftPerL(:,:,:)
+
     !> array of charges per shell and spin
     real(dp), intent(in) :: charges(:,:,:)
+
     !> Fermi level
     real(dp), intent(in) :: Ef(:)
 
-    integer :: fdHS, nAtom, nSpin
+    !> block shifts (for DFTB+U etc.)
+    real(dp), allocatable, intent(in) :: blockShift(:,:,:,:)
+
+    !> block charge populations
+    real(dp), allocatable, intent(in) :: blockCharges(:,:,:,:)
+
+    integer :: fdHS, nAtom, nSpin, iAt, iSp
 
     nSpin = size(shiftPerL,3)
     nAtom = size(shiftPerL,2)
 
-    if (size(shiftPerL,1) /= orb%mShell) then
+    if (size(shiftPerL,dim=1) /= orb%mShell) then
       call error("Internal error in writeContShifts: size(shiftPerL,1)")
     endif
 
@@ -3551,10 +3562,24 @@ contains
     endif
 
     open(newunit=fdHS, file=trim(filename), form="formatted")
-    write(fdHS, *) nAtom, orb%mShell, orb%mOrb, nSpin
+    write(fdHS, *) nAtom, orb%mShell, orb%mOrb, nSpin, allocated(blockCharges)
     write(fdHS, *) orb%nOrbAtom
     write(fdHS, *) shiftPerL
     write(fdHS, *) charges
+
+    if (allocated(blockShift)) then
+      do iSp = 1, nSpin
+        do iAt = 1, nAtom
+          write(fdHS, *) blockShift(:orb%nOrbAtom(iAt), :orb%nOrbAtom(iAt), iAt, iSp)
+        end do
+      end do
+      do iSp = 1, nSpin
+        do iAt = 1, nAtom
+          write(fdHS, *) blockCharges(:orb%nOrbAtom(iAt), :orb%nOrbAtom(iAt), iAt, iSp)
+        end do
+      end do
+    end if
+
     if (nSpin == 2) then
       write(fdHS, *) 'Fermi level (up):', Ef(1), "H", Hartree__eV * Ef(1), 'eV'
       write(fdHS, *) 'Fermi level (down):', Ef(2), "H", Hartree__eV * Ef(2), 'eV'

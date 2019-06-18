@@ -953,6 +953,12 @@ module dftbp_initprogram
   !> Orbital-resolved charges uploaded from contacts
   real(dp), allocatable :: chargeUp(:,:,:)
 
+  !> Shell-resolved block potential shifts uploaded from contacts
+  real(dp), allocatable :: shiftBlockUp(:,:,:,:)
+
+  !> Block populations uploaded from contacts
+  real(dp), allocatable :: blockUp(:,:,:,:)
+
   !> Details of energy interval for tunneling used in output
   real(dp) :: Emin, Emax, Estep
 
@@ -1811,9 +1817,6 @@ contains
       if (tSpin) then
         call error("Spin polarization temporarily disabled for transport calculations.")
       end if
-      if (tDFTBU) then
-        call error("Orbital potentials temporarily disabled for transport calculations.")
-      end if
       if (tExtChrg) then
         call error("External charges temporarily disabled for transport calculations&
             & (electrostatic gates are available).")
@@ -2494,7 +2497,7 @@ contains
     ! note, this has the side effect of setting up module variable transpar as copy of
     ! input%transpar
     call initTransportArrays(tUpload, tPoisson, input%transpar, species0, orb, nAtom, nSpin,&
-        & shiftPerLUp, chargeUp, poissonDerivs)
+        & shiftPerLUp, chargeUp, poissonDerivs, allocated(qBlockIn), blockUp, shiftBlockUp)
     if (tContCalc) then
       ! geometry is reduced to contacts only
       allocate(iAtInCentralRegion(nAtom))
@@ -3757,7 +3760,7 @@ contains
 
   !> initialize arrays for tranpsport
   subroutine initTransportArrays(tUpload, tPoisson, transpar, species0, orb, nAtom, nSpin,&
-      & shiftPerLUp, chargeUp, poissonDerivs)
+      & shiftPerLUp, chargeUp, poissonDerivs, tBlockUp, blockUp, shiftBlockUp)
 
     !> Are contacts being uploaded
     logical, intent(in) :: tUpload
@@ -3789,10 +3792,25 @@ contains
     !> Poisson Derivatives (needed for forces)
     real(dp), allocatable, intent(out) :: poissonDerivs(:,:)
 
+    !> Are block charges and potentials present?
+    logical, intent(in) :: tBlockUp
+
+    !> uploded potential per shell per atom
+    real(dp), allocatable, intent(inout) :: shiftblockUp(:,:,:,:)
+
+    !> uploaded charges for atoms
+    real(dp), allocatable, intent(inout) :: blockUp(:,:,:,:)
+
+
     if (tUpload) then
       allocate(shiftPerLUp(orb%mShell, nAtom))
       allocate(chargeUp(orb%mOrb, nAtom, nSpin))
-      call uploadContShiftPerL(shiftPerLUp, chargeUp, transpar, orb, species0)
+      if (tBlockUp) then
+        allocate(shiftBlockUp(orb%mOrb, orb%mOrb, nAtom, nSpin))
+        allocate(blockUp(orb%mOrb, orb%mOrb, nAtom, nSpin))
+      end if
+      call uploadContShiftPerL(shiftPerLUp, chargeUp, transpar, orb, species0, shiftBlockUp,&
+          & blockUp)
     end if
     if (tPoisson) then
       allocate(poissonDerivs(3,nAtom))
@@ -3801,8 +3819,8 @@ contains
   end subroutine initTransportArrays
 
 
-  !> Read contact potential shifts from file
-  subroutine uploadContShiftPerL(shiftPerL, charges, tp, orb, species)
+  !> Read the potential shifts due to contacts and their charges
+  subroutine uploadContShiftPerL(shiftPerL, charges, tp, orb, species, shiftBlockUp, blockUp)
 
     !> shifts for atoms in contacts
     real(dp), intent(out) :: shiftPerL(:,:)
@@ -3819,13 +3837,19 @@ contains
     !> species of atoms in the system
     integer, intent(in) :: species(:)
 
+    !> uploded block per atom
+    real(dp), allocatable, intent(inout) :: shiftBlockUp(:,:,:,:)
+
+    !> uploaded block charges for atoms
+    real(dp), allocatable, intent(inout) :: blockUp(:,:,:,:)
+
     real(dp), allocatable :: shiftPerLSt(:,:,:), chargesSt(:,:,:)
     integer, allocatable :: nOrbAtom(:)
     integer :: nAtomSt, mShellSt, nContAtom, mOrbSt, nSpinSt, nSpin
-    integer :: iCont, iStart, iEnd, ii
+    integer :: iCont, iStart, iEnd, ii, iAt, iSp
     integer :: fdH
     character(lc) :: strTmp
-    logical :: iexist
+    logical :: iexist, tBlock
 
     nSpin = size(charges, dim=3)
 
@@ -3833,8 +3857,13 @@ contains
       call error("Mismatch between array charges and shifts")
     endif
 
-    shiftPerL = 0.0_dp
-    charges = 0.0_dp
+    shiftPerL(:,:) = 0.0_dp
+    charges(:,:,:) = 0.0_dp
+
+    if (allocated(shiftBlockUp)) then
+      shiftblockUp(:,:,:,:) = 0.0_dp
+      blockUp(:,:,:,:) = 0.0_dp
+    end if
 
     do iCont = 1, tp%ncont
       inquire(file="shiftcont_"// trim(tp%contacts(iCont)%name) // ".dat", exist = iexist)
@@ -3845,7 +3874,7 @@ contains
 
       open(newunit=fdH, file="shiftcont_" // trim(tp%contacts(iCont)%name) // ".dat",&
           & form="formatted", status="OLD", action="READ")
-      read(fdH, *) nAtomSt, mShellSt, mOrbSt, nSpinSt
+      read(fdH, *) nAtomSt, mShellSt, mOrbSt, nSpinSt, tBlock
       iStart = tp%contacts(iCont)%idxrange(1)
       iEnd = tp%contacts(iCont)%idxrange(2)
       nContAtom = iEnd - iStart + 1
@@ -3870,6 +3899,27 @@ contains
       read(fdH, *) shiftPerLSt(:,:,:)
       allocate(chargesSt(orb%mOrb, nAtomSt, nSpin))
       read(fdH, *) chargesSt
+
+    @:ASSERT(allocated(shiftBlockUp) .eqv. allocated(blockUp))
+      if (tBlock .neqv. allocated(blockUp)) then
+        write(*,*)tBlock, allocated(blockUp), allocated(shiftBlockUp)
+        call error("Shift and orbital potential mismatch for "//trim(tp%contacts(iCont)%name))
+      end if
+      if (tBlock) then
+        do iSp = 1, size(shiftBlockUp,dim=4)
+          do ii = 0, iEnd-iStart
+            iAt = iStart + ii
+            read(fdH, *) shiftBlockUp(:orb%nOrbAtom(iAt), :orb%nOrbAtom(iAt), iAt, iSp)
+          end do
+        end do
+        do iSp = 1, size(blockUp,dim=4)
+          do ii = 0, iEnd-iStart
+            iAt = iStart + ii
+            read(fdH, *) blockUp(:orb%nOrbAtom(iAt),:orb%nOrbAtom(iAt),iAt,iSp)
+          end do
+        end do
+      end if
+
       close(fdH)
 
       if (any(nOrbAtom /= orb%nOrbAtom(iStart:iEnd))) then
