@@ -930,6 +930,9 @@ module dftbp_initprogram
   !> True if LDOS is stored on separate files for k-points
   logical :: tWriteLDOS
 
+  !> Are atom resolved regions appended to the LDOS
+  logical :: tWriteAtomLDOS
+
   !> Labels for LDOS regions, if needed
   character(lc), allocatable :: regionLabelLDOS(:)
 
@@ -3398,6 +3401,7 @@ contains
     !Write Dos and tunneling on separate files?
     writeTunn = ginfo%tundos%writeTunn
     tWriteLDOS = ginfo%tundos%writeLDOS
+    tWriteAtomLDOS = ginfo%tundos%writeAtomLDOS
 
     if (tWriteLDOS) then
       call move_alloc(ginfo%tundos%dosLabels, regionLabelLDOS)

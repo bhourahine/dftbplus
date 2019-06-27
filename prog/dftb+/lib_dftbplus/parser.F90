@@ -5124,17 +5124,21 @@ contains
     !> Labels for the regions
     character(lc), allocatable, intent(out) :: regionLabels(:)
 
-    integer :: nReg, iReg
+    integer :: nReg, iReg, nRegAll, iAt
     integer, allocatable :: tmpI1(:)
     type(fnodeList), pointer :: children
     type(fnode), pointer :: child, child2
     type(string) :: buffer
     character(lc) :: strTmp
+    logical :: tAtoms
+
 
     call getChildren(node, "Region", children)
     nReg = getLength(children)
 
-    if (nReg == 0) then
+    call getChildValue(node, "AtomResolved", tAtoms, .false.)
+
+    if (nReg == 0 .and. .not. tAtoms) then
       write(strTmp,"(I0, ':', I0)") idxdevice(1), idxdevice(2)
       call setChild(node, "Region", child)
       call setChildValue(child, "Atoms", trim(strTmp))
@@ -5143,9 +5147,14 @@ contains
       nReg = getLength(children)
     end if
 
-    allocate(tShellResInRegion(nReg))
-    allocate(regionLabels(nReg))
-    allocate(iAtInRegion(nReg))
+    nRegAll = nReg
+    if (tAtoms) then
+      nRegAll = nReg + idxdevice(2) - idxdevice(1) + 1
+    end if
+    allocate(tShellResInRegion(nRegAll))
+    allocate(regionLabels(nRegAll))
+    allocate(iAtInRegion(nRegAll))
+
     do iReg = 1, nReg
       call getItem1(children, iReg, child)
       call getChildValue(child, "Atoms", buffer, child=child2, multiple=.true.)
@@ -5166,6 +5175,15 @@ contains
       call getChildValue(child, "Label", buffer, trim(strTmp))
       regionLabels(iReg) = unquote(char(buffer))
     end do
+
+    if (tAtoms) then
+      tShellResInRegion(nReg+1:) = .false.
+      do iAt = 1, idxdevice(2) - idxdevice(1) + 1
+        write(regionLabels(nReg+iAt), "(I0)")iAt
+        iAtInRegion(nReg+iAt)%data = [iAt]
+      end do
+    end if
+
     call destroyNodeList(children)
 
   end subroutine readPDOSRegions

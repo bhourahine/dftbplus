@@ -1275,14 +1275,14 @@ module negf_int
 #:if WITH_MPI
   subroutine calc_current(mpicomm, groupKS, ham, over, iNeighbor, nNeighbor, iAtomStart, iPair,&
       & img2CentCell, iCellVec, cellVec, orb, kPoints, kWeights, tunnMat, currMat, ldosMat,&
-      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, mu)
+      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, tWriteAtomLDOS, mu)
 
     !> MPI communicator
     type(mpifx_comm), intent(in) :: mpicomm
 #:else
   subroutine calc_current(groupKS, ham, over, iNeighbor, nNeighbor, iAtomStart, iPair,&
       & img2CentCell, iCellVec, cellVec, orb, kPoints, kWeights, tunnMat, currMat, ldosMat,&
-      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, mu)
+      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, tWriteAtomLDOS, mu)
 #:endif
 
     !> kpoint and spin descriptor
@@ -1344,6 +1344,9 @@ module negf_int
 
     !> labels for DOS projected regions
     character(lc), allocatable, intent(in) :: regionLabelLDOS(:)
+
+    !> should atom resolved DOS data be written
+    logical, intent(in) :: tWriteAtomLDOS
 
     !> We need this now for different fermi levels in colinear spin
     !> Note: the spin polarised does not work with
@@ -1513,7 +1516,8 @@ module negf_int
       ! Write Total localDOS on a separate file (optional)
       if (tIoProc .and. tWriteLDOS) then
     @:ASSERT(allocated(regionLabelLDOS))
-        call write_files(negf, ldosMat, ldosSKRes, groupKS, kpoints, kWeights, regionLabelLDOS)
+        call write_files(negf, ldosMat, ldosSKRes, groupKS, kpoints, kWeights, regionLabelLDOS,&
+            & tWriteAtomLDOS)
         if (allocated(ldosSKRes)) then
           deallocate(ldosSKRes)
         end if
@@ -1685,7 +1689,8 @@ module negf_int
 
 
   !> utility to write tunneling/ldos files with names from labels
-  subroutine write_files(negf, matTot, matSKRes, groupKS, kpoints, kWeights, regionLabels)
+  subroutine write_files(negf, matTot, matSKRes, groupKS, kpoints, kWeights, regionLabels,&
+      & tWriteAtomLDOS)
 
     !> Contains input data, runtime quantities and output data
     type(TNegf) :: negf
@@ -1707,6 +1712,9 @@ module negf_int
 
     !> Labels for the separate regions
     character(lc), intent(in) :: regionLabels(:)
+
+    !> Are atom resolved values stored after the end of the regions
+    logical, intent(in) :: tWriteAtomLDOS
 
     integer :: ii, jj, nKS, iKS, nK, nS, iK, iS, fdUnit
     type(lnParams) :: params
