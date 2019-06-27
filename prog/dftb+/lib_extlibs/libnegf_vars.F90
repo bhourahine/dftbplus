@@ -125,7 +125,7 @@ module libnegf_vars
     !> Labels of regions for LDOS calculations
     character(lc), allocatable :: dosLabels(:)
 
-    !> write DOS on separate files
+    !> write DOS from various regions to files
     logical :: writeLDOS = .false.
 
     !> write atom resolved DOS on separate files

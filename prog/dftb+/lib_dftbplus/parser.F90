@@ -4900,7 +4900,7 @@ contains
           &tundos%broadeningDelta)
 
       call readPDOSRegions(root, geo, transpar%idxdevice, iAtInRegion, &
-          & tShellResInRegion, regionLabelPrefixes)
+          & tShellResInRegion, regionLabelPrefixes, tundos%writeAtomLDOS)
       call transformPdosRegionInfo(iAtInRegion, tShellResInRegion, &
           & regionLabelPrefixes, orb, geo%species, tundos%dosOrbitals, &
           & tundos%dosLabels)
@@ -5104,7 +5104,8 @@ contains
 
 
   !> Read the names of regions to calculate PDOS for
-  subroutine readPDOSRegions(node, geo, idxdevice, iAtInregion, tShellResInRegion, regionLabels)
+  subroutine readPDOSRegions(node, geo, idxdevice, iAtInregion, tShellResInRegion, regionLabels,&
+      & tAtoms)
 
     !> Node to be parsed
     type(fnode), pointer, intent(in) :: node
@@ -5124,21 +5125,23 @@ contains
     !> Labels for the regions
     character(lc), allocatable, intent(out) :: regionLabels(:)
 
+    !> Should atom resolved LDOS be saved for the device region
+    logical, intent(out) :: tAtoms
+
     integer :: nReg, iReg, nRegAll, iAt
     integer, allocatable :: tmpI1(:)
     type(fnodeList), pointer :: children
     type(fnode), pointer :: child, child2
     type(string) :: buffer
     character(lc) :: strTmp
-    logical :: tAtoms
 
 
     call getChildren(node, "Region", children)
     nReg = getLength(children)
 
-    call getChildValue(node, "AtomResolved", tAtoms, .false.)
+    call getChildValue(node, "WriteAtomsLDOS", tAtoms, .false.)
 
-    if (nReg == 0 .and. .not. tAtoms) then
+    if (nReg == 0) then
       write(strTmp,"(I0, ':', I0)") idxdevice(1), idxdevice(2)
       call setChild(node, "Region", child)
       call setChildValue(child, "Atoms", trim(strTmp))

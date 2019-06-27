@@ -1275,14 +1275,14 @@ module negf_int
 #:if WITH_MPI
   subroutine calc_current(mpicomm, groupKS, ham, over, iNeighbor, nNeighbor, iAtomStart, iPair,&
       & img2CentCell, iCellVec, cellVec, orb, kPoints, kWeights, tunnMat, currMat, ldosMat,&
-      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, tWriteAtomLDOS, mu)
+      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, tWriteAtomLDOS, mu, transpar)
 
     !> MPI communicator
     type(mpifx_comm), intent(in) :: mpicomm
 #:else
   subroutine calc_current(groupKS, ham, over, iNeighbor, nNeighbor, iAtomStart, iPair,&
       & img2CentCell, iCellVec, cellVec, orb, kPoints, kWeights, tunnMat, currMat, ldosMat,&
-      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, tWriteAtomLDOS, mu)
+      & currLead, writeTunn, tWriteLDOS, regionLabelLDOS, tWriteAtomLDOS, mu, transpar)
 #:endif
 
     !> kpoint and spin descriptor
@@ -1354,6 +1354,9 @@ module negf_int
     !> I do not set the fermi because it seems that in libnegf it is
     !> not really needed
     real(dp), intent(in) :: mu(:,:)
+
+    !> Transport settings
+    type(TTransPar), intent(in) :: transpar
 
     real(dp), allocatable :: tunnSKRes(:,:,:), currSKRes(:,:,:), ldosSKRes(:,:,:)
     real(dp), pointer    :: tunnPMat(:,:)=>null()
@@ -1517,7 +1520,7 @@ module negf_int
       if (tIoProc .and. tWriteLDOS) then
     @:ASSERT(allocated(regionLabelLDOS))
         call write_files(negf, ldosMat, ldosSKRes, groupKS, kpoints, kWeights, regionLabelLDOS,&
-            & tWriteAtomLDOS)
+            & tWriteAtomLDOS, transpar)
         if (allocated(ldosSKRes)) then
           deallocate(ldosSKRes)
         end if
@@ -1690,7 +1693,7 @@ module negf_int
 
   !> utility to write tunneling/ldos files with names from labels
   subroutine write_files(negf, matTot, matSKRes, groupKS, kpoints, kWeights, regionLabels,&
-      & tWriteAtomLDOS)
+      & tWriteAtomLDOS, transpar)
 
     !> Contains input data, runtime quantities and output data
     type(TNegf) :: negf
@@ -1716,7 +1719,10 @@ module negf_int
     !> Are atom resolved values stored after the end of the regions
     logical, intent(in) :: tWriteAtomLDOS
 
-    integer :: ii, jj, nKS, iKS, nK, nS, iK, iS, fdUnit
+    !> Transport settings
+    type(TTransPar), intent(in) :: transpar
+
+    integer :: ii, jj, nKS, iKS, nK, nS, iK, iS, fdUnit, nAtom, nReg
     type(lnParams) :: params
 
     call get_params(negf, params)
@@ -1724,8 +1730,13 @@ module negf_int
     nKS = size(groupKS, dim=2)
     nK = size(kpoints, dim=2)
     nS = nKS/nK
+    nAtom = transpar%idxdevice(2) - transpar%idxdevice(1) + 1
+    nReg = size(matTot, dim=2)
+    if (tWriteAtomLDOS) then
+      nReg = nReg - nAtom
+    end if
 
-    do jj=1,size(matTot, dim=2)
+    do jj = 1, nReg
       open(newunit=fdUnit, file=trim(regionLabels(jj))//'.dat')
       write(fdUnit,"(A)")'# Energy / eV     States / e'
       do ii=1,size(matTot, dim=1)
@@ -1735,9 +1746,22 @@ module negf_int
       close(fdUnit)
     enddo
 
+    if (tWriteAtomLDOS) then
+      open(newunit=fdUnit, file='atomDOS.dat')
+      do jj = nReg+1, nReg+nAtom
+        do ii = 1, size(matTot, dim=1)
+          write(fdUnit,'(F12.6)',ADVANCE='NO') (params%Emin+(ii-1)*params%Estep) * Hartree__eV
+          write(fdUnit,'(ES20.8)') matTot(ii,jj)
+        end do
+        write(fdUnit,*)
+        write(fdUnit,*)
+      end do
+      close(fdUnit)
+    end if
+
     if (allocated(matSKRes)) then
       if (nKS > 1) then
-        do jj = 1, size(matSKRes(:,:,:), dim=2)
+        do jj = 1, nReg
           open(newunit=fdUnit, file=trim(regionLabels(jj))//'_kpoints.dat')
           write(fdUnit,"(A,I0)")'# NKpoints = ', nK
           write(fdUnit,"(A,I1)")'# NSpin = ', nS
@@ -1752,7 +1776,7 @@ module negf_int
           end do
           write(fdUnit,*)
 
-          do ii = 1, size(matSKRes(:,:,:), dim=1)
+          do ii = 1, size(matSKRes, dim=1)
             write(fdUnit,'(f20.6)',ADVANCE='NO') (params%Emin+(ii-1)*params%Estep) * Hartree__eV
             do iKS = 1,nKS
               write(fdUnit,'(es20.8)',ADVANCE='NO') matSKRes(ii,jj, iKS)
