@@ -11,58 +11,114 @@
 module dftbp_qm
   use dftbp_assert
   use dftbp_accuracy, only : dp, rsp
-
+  use dftbp_blasroutines, only : gemm
+  use dftbp_message, only : error
   implicit none
 
   private
-  public :: makeSimiliarityTrans
+  public :: makeSimiliarityTrans, commutator
 
-  !> perform a similarity (or unitary) transformation of a matrix X' = U X U^T*
+#:set FLAVOURS = [('Real', 'real'), ('Cmplx', 'complex')]
+
+  !> perform a similarity (or unitary) transformation of a matrix X := U X U^dag
   interface makeSimiliarityTrans
-    module procedure U_cmplx
-    module procedure U_real
+  #:for NAME, _ in FLAVOURS
+    module procedure U_${NAME}$
+  #:endfor
   end interface makeSimiliarityTrans
+
+  !> Evaluate a commutator between matrices
+  interface commutator
+  #:for NAME, _ in FLAVOURS
+    module procedure commute${NAME}$
+  #:endfor
+  end interface commutator
 
 contains
 
+#:for NAME, VAR in FLAVOURS
 
-  !> unitary transformation of a matrix X' = U X U^T*
-  subroutine U_cmplx(xx, uu)
+  !> Unitary transformation of a matrix matrix X := U X U^dag or X := U^dag X U for sides L or R
+  !> respectively
+  subroutine U_${NAME}$(xx, uu, side)
 
-    !> matrix in original basis, U X U^T* on return.
-    complex(dp), intent(inout) :: xx(:,:)
-
-    !> unitary matrix
-    complex(dp), intent(in) :: uu(:,:)
-
-    complex(dp) :: work(size(xx,dim=1), size(xx,dim=2))
-
-    @:ASSERT(all(shape(xx) == shape(uu)))
-    @:ASSERT(size(xx, dim=1) == size(xx, dim=2))
-
-    work(:,:) = matmul(xx, transpose(conjg(uu)))
-    xx(:,:) = matmul(uu, work)
-
-  end subroutine U_cmplx
-
-
-  !> unitary transformation of a matrix X' = U X U^T*
-  subroutine U_real(xx, uu)
-
-    !> matrix in original basis, U X U^T on return.
-    real(dp), intent(inout) :: xx(:,:)
+    !> matrix in original basis, overwritten on return.
+    ${VAR}$(dp), intent(inout) :: xx(:,:)
 
     !> unitary matrix
-    real(dp), intent(in) :: uu(:,:)
+    ${VAR}$(dp), intent(in) :: uu(:,:)
 
-    real(dp) :: work(size(xx,dim=1),size(xx,dim=2))
+    !> which transform order to use, i.e. to which side of the matrix the original unitary is
+    !> applied
+    character(1), intent(in), optional :: side
 
-    @:ASSERT(all(shape(xx) == shape(uu)))
-    @:ASSERT(size(xx, dim=1) == size(xx, dim=2))
+    ${VAR}$(dp) :: work(size(xx,dim=1), size(xx,dim=2))
+    character(1) :: iSide
 
-    work = matmul(xx, transpose(uu))
-    xx = matmul(uu, work)
+  #:if VAR == 'real'
+    character(1), parameter :: op = 'T'
+  #:else
+    character(1), parameter :: op = 'C'
+  #:endif
 
-  end subroutine U_real
+    if (present(side)) then
+      iSide(:) = side
+    else
+      iSide(:) = 'L'
+    end if
+
+    select case(iSide)
+
+    case ('L', 'l')
+
+      call gemm(work, xx, uu, transB = op)
+      call gemm(xx, uu, work)
+
+    case('R', 'r')
+
+      call gemm(work, xx, uu)
+      call gemm(xx, uu, work, transA = op)
+
+    case default
+
+      call error("Unknown side in U_${NAME}$ : "//trim(iSide))
+
+    end select
+
+  end subroutine U_${NAME}$
+
+
+  !> Evaluate the commutator [A,B] for ${VAR}$ matrices
+  subroutine commute${NAME}$(C, A, B)
+
+    !> Resulting matrix
+    ${VAR}$(dp), intent(out) :: C(:,:)
+
+    !> First matrix
+    ${VAR}$(dp), intent(in) :: A(:,:)
+
+    !> Second matrix
+    ${VAR}$(dp), intent(in) :: B(:,:)
+
+   #:if VAR == 'real'
+    !> value of +1
+    real(dp), parameter :: one = 1.0_dp
+
+    !> value of -1
+    real(dp), parameter :: minusOne = -1.0_dp
+  #:else
+    !> value of +1
+    complex(dp), parameter :: one = (1.0_dp,0.0_dp)
+
+    !> value of -1
+    complex(dp), parameter :: minusOne = (-1.0_dp, 0.0_dp)
+  #:endif
+
+    !C = matmul(A,B) - matmul(B,A)
+    call gemm(C, A, B)
+    call gemm(C, B, A, alpha = minusOne, beta = one)
+
+  end subroutine commute${NAME}$
+#:endfor
 
 end module dftbp_qm
