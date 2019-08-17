@@ -72,8 +72,6 @@ module dftbp_blasroutines
 
   !> Interface to GEMM routines evaluates C := alpha*op( A )*op( B ) + beta*C, where op( X ) is one
   !> of op( X ) = X or op( X ) = X'
-
-  !> Wrapper for the level 3 blas routine
   interface gemm
     module procedure gemm_real
     module procedure gemm_dble
