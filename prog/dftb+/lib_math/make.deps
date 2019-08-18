@@ -86,10 +86,17 @@ lapackroutines.o = lapackroutines.o $(_mod_dftbp_assert) $(common.fypp) $(_mod_d
 _mod_dftbp_lapackroutines: lapackroutines.o
 _mod_dftbp_lapackroutines = $(lapackroutines.o)
 
+#:if WITH_SCALAPACK
+qm.o: _mod_dftbp_assert common.fypp _mod_dftbp_blasroutines _mod_dftbp_accuracy _mod_dftbp_message _mod_dftbp_mpifx _mod_dftbp_scalapackfx
+qm.o = qm.o $(_mod_dftbp_assert) $(common.fypp) $(_mod_dftbp_blasroutines) $(_mod_dftbp_accuracy) $(_mod_dftbp_message) $(_mod_dftbp_mpifx) $(_mod_dftbp_scalapackfx)
+_mod_dftbp_qm: qm.o
+_mod_dftbp_qm = $(qm.o)
+#:else
 qm.o: _mod_dftbp_assert common.fypp _mod_dftbp_blasroutines _mod_dftbp_accuracy _mod_dftbp_message
 qm.o = qm.o $(_mod_dftbp_assert) $(common.fypp) $(_mod_dftbp_blasroutines) $(_mod_dftbp_accuracy) $(_mod_dftbp_message)
 _mod_dftbp_qm: qm.o
 _mod_dftbp_qm = $(qm.o)
+#:endif
 
 #:if WITH_MPI
 randomgenpool.o: _mod_dftbp_environment _mod_dftbp_ranlux common.fypp _mod_dftbp_accuracy _mod_dftbp_assert _mod_dftbp_mpifx

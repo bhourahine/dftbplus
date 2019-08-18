@@ -13,10 +13,17 @@ module dftbp_qm
   use dftbp_accuracy, only : dp, rsp
   use dftbp_blasroutines, only : gemm
   use dftbp_message, only : error
+#:if WITH_SCALAPACK
+  use dftbp_mpifx
+  use dftbp_scalapackfx
+#:endif
   implicit none
 
   private
-  public :: makeSimiliarityTrans, commutator
+  public :: makeSimiliarityTrans, commutator, nonOrthogCommutator
+#!:if WITH_SCALAPACK
+#!  public :: makeSimiliarityTrans_pblas
+#!:endif
 
 #:set FLAVOURS = [('Real', 'real'), ('Cmplx', 'complex')]
 
@@ -33,6 +40,14 @@ module dftbp_qm
     module procedure commute${NAME}$
   #:endfor
   end interface commutator
+
+  !> Evaluate a non-orthogonal commutator between matrices
+  interface nonOrthogCommutator
+  #:for NAME, _ in FLAVOURS
+    module procedure commuteFPS${NAME}$
+  #:endfor
+  end interface nonOrthogCommutator
+
 
 contains
 
@@ -119,6 +134,29 @@ contains
     call gemm(C, B, A, alpha = minusOne, beta = one)
 
   end subroutine commute${NAME}$
+
+
+  !> Evaluate the Pulay commutator FPS-SPF for ${VAR}$ matrices, being a direct error measure for
+  !> self-consistency with idempotent density matrices
+  subroutine commuteFPS${NAME}$(e, F, P, S)
+
+    !> Resulting matrix
+    ${VAR}$(dp), intent(out) :: e(:,:)
+
+    !> Hamiltonian (Fock) matrix
+    ${VAR}$(dp), intent(in) :: F(:,:)
+
+    !> Density matrix
+    ${VAR}$(dp), intent(in) :: P(:,:)
+
+    !> Overlap matrix
+    ${VAR}$(dp), intent(in) :: S(:,:)
+
+    ! should re-write as blas operations and use symmetry of all matrices
+    e(:,:) = matmul(F,matmul(P,S)) - matmul(S,matmul(P,F))
+
+  end subroutine commuteFPS${NAME}$
+
 #:endfor
 
 end module dftbp_qm
