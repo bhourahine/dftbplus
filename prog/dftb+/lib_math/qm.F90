@@ -27,21 +27,22 @@ module dftbp_qm
 
 #:set FLAVOURS = [('Real', 'real'), ('Cmplx', 'complex')]
 
-  !> perform a similarity (or unitary) transformation of a matrix X := U X U^dag
+  !> perform a similarity (or unitary) transformation of a matrix X := U X U^dag, where U and U^dag
+  !> can be interchanged if neccessary
   interface makeSimiliarityTrans
   #:for NAME, _ in FLAVOURS
     module procedure U_${NAME}$
   #:endfor
   end interface makeSimiliarityTrans
 
-  !> Evaluate a commutator between matrices
+  !> Evaluate a commutator between matrices [A,B]
   interface commutator
   #:for NAME, _ in FLAVOURS
     module procedure commute${NAME}$
   #:endfor
   end interface commutator
 
-  !> Evaluate a non-orthogonal commutator between matrices
+  !> Evaluate a non-orthogonal commutator between matrices [FP,S]
   interface nonOrthogCommutator
   #:for NAME, _ in FLAVOURS
     module procedure commuteFPS${NAME}$
@@ -115,7 +116,7 @@ contains
     !> Second matrix
     ${VAR}$(dp), intent(in) :: B(:,:)
 
-   #:if VAR == 'real'
+  #:if VAR == 'real'
     !> value of +1
     real(dp), parameter :: one = 1.0_dp
 
@@ -137,7 +138,7 @@ contains
 
 
   !> Evaluate the Pulay commutator FPS-SPF for ${VAR}$ matrices, being a direct error measure for
-  !> self-consistency with idempotent density matrices
+  !> self-consistency with idempotent density matrices, or if S^-1 is passed the time derivative
   subroutine commuteFPS${NAME}$(e, F, P, S)
 
     !> Resulting matrix
@@ -152,8 +153,28 @@ contains
     !> Overlap matrix
     ${VAR}$(dp), intent(in) :: S(:,:)
 
-    ! should re-write as blas operations and use symmetry of all matrices
-    e(:,:) = matmul(F,matmul(P,S)) - matmul(S,matmul(P,F))
+    ${VAR}$(dp), allocatable :: work(:,:)
+
+  #:if VAR == 'real'
+    character(1), parameter :: op = 'T'
+    real(dp), parameter :: one = 1.0_dp
+    real(dp), parameter :: zero = 0.0_dp
+    real(dp), parameter :: minusOne = -1.0_dp
+  #:else
+    character(1), parameter :: op = 'C'
+    complex(dp), parameter :: one = (1.0_dp,0.0_dp)
+    complex(dp), parameter :: zero = (0.0_dp,0.0_dp)
+    complex(dp), parameter :: minusOne = (-1.0_dp, 0.0_dp)
+  #:endif
+
+    allocate(work(size(s,dim=1), size(s,dim=1)))
+
+    e(:,:) = zero
+    call gemm(work, S, F)
+    call gemm(e, work, P)
+    call gemm(e, P, work, alpha = minusOne, beta = one, transB = op)
+
+    ! e(:,:) = matmul(F,matmul(P,S)) - matmul(S,matmul(P,F))
 
   end subroutine commuteFPS${NAME}$
 
