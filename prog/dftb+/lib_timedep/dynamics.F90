@@ -770,7 +770,7 @@ contains
     complex(dp), allocatable :: Eiginv(:,:,:), EiginvAdj(:,:,:)
     real(dp) :: qq(orb%mOrb, this%nAtom, this%nSpin), deltaQ(this%nAtom,this%nSpin)
     real(dp) :: dipole(3,this%nSpin), chargePerShell(orb%mShell,this%nAtom,this%nSpin)
-    real(dp), allocatable :: rhoPrim(:,:), ham0(:), ErhoPrim(:)
+    real(dp), allocatable :: rhoPrim(:,:), ham0(:), ErhoPrim(:), iRhoPrim(:,:), iERhoPrim(:)
     real(dp) :: time, startTime, timeElec
     integer :: dipoleDat, qDat, energyDat, populDat(2), forceDat, coorDat, ePBondDat
     integer ::  iStep, iSpin, iKS
@@ -785,6 +785,7 @@ contains
     real(dp) :: cellVol, recVecs(3,3), recVecs2p(3,3)
     character(4) :: dumpIdx
     logical :: tProbeFrameWrite
+    real(dp), allocatable :: Jint(:)
 
     call env%globalTimer%startTimer(globalTimers%elecDynInit)
 
@@ -797,7 +798,7 @@ contains
       call readRestart(rho, rhoOld, Ssqr, coord, this%movedVelo, startTime)
       call updateH0S(this, Ssqr, Sinv, coord, orb, neighbourList, nNeighbourSK, iSquare,&
           & iSparseStart, img2CentCell, skHamCont, skOverCont, ham, ham0, over, env, rhoPrim,&
-          & ErhoPrim, coordAll)
+          & ErhoPrim, coordAll, iRhoPrim, iERhoPrim)
       if (this%tIons) then
         this%initialVelocities(:,:) = this%movedVelo
         this%ReadMDVelocities = .true.
@@ -807,7 +808,7 @@ contains
         coord(:,:) = this%initCoord
         call updateH0S(this, Ssqr, Sinv, coord, orb, neighbourList, nNeighbourSK, iSquare,&
             & iSparseStart, img2CentCell, skHamCont, skOverCont, ham, ham0, over, env, rhoPrim,&
-            & ErhoPrim, coordAll)
+            & ErhoPrim, coordAll, iRhoPrim, iERhoPrim)
         this%initialVelocities(:,:) = this%movedVelo
         this%ReadMDVelocities = .true.
       end if
@@ -819,7 +820,12 @@ contains
     call initializeTDVariables(this, rho, H1, Ssqr, Sinv, H0, ham0, over, ham, eigvecsReal,&
         & filling, orb, rhoPrim, potential, neighbourList%iNeighbour, nNeighbourSK, iSquare,&
         & iSparseStart, img2CentCell, Eiginv, EiginvAdj, energy, ErhoPrim, skOverCont, qBlock, UJ,&
-        & onSiteElements, eigvecsCplx)
+        & onSiteElements, eigvecsCplx, iRhoPrim, iERhoPrim)
+
+    if (allocated(iRhoPrim)) then
+      allocate(Jint(this%nAtom))
+      Jint(:) = 0.0_dp
+    end if
 
     call this%sccCalc%updateCoords(env, coordAll, this%speciesAll, neighbourList)
     if (this%tDispersion) then
@@ -908,14 +914,15 @@ contains
 
      if (.not. this%tRestart .or. (iStep > 0) .or. this%tProbe) then
        call writeTDOutputs(this, dipoleDat, qDat, energyDat, forceDat, coorDat, time,&
-            & energy, energyKin, dipole, deltaQ, coord, totalForce, iStep, ePerBond, ePBondDat)
+           & energy, energyKin, dipole, deltaQ, coord, totalForce, iStep, ePerBond, ePBondDat,&
+           & Jint)
      end if
 
      if (this%tIons) then
        coord(:,:) = coordNew
        call updateH0S(this, Ssqr, Sinv, coord, orb, neighbourList, nNeighbourSK, iSquare,&
             & iSparseStart, img2CentCell, skHamCont, skOverCont, ham, ham0, over, env, rhoPrim,&
-            & ErhoPrim, coordAll)
+            & ErhoPrim, coordAll, iRhoPrim, iERhoPrim)
      end if
 
      tProbeFrameWrite = this%tPump .and. (iStep >= this%PpIni) .and. (iStep <= this%PpEnd)&
@@ -999,7 +1006,13 @@ contains
         timeElec  = loopTime%getWallClockTime()
         write(stdOut, "(A,2x,I6,2(2x,A,F10.6))") 'Step ', iStep, 'elapsed loop time: ',&
              & timeElec, 'average time per loop ', timeElec / (iStep + 1)
-     end if
+      end if
+
+      if (allocated(iRhoPrim)) then
+        call getCurrents(this, Jint, rho, ham, over, H1, Sinv, this%speciesAll, coord, orb,&
+            & neighbourList, nNeighbourSK, iSquare, iSparseStart, img2CentCell, iRhoPrim, iERhoPrim)
+      end if
+
     end do
 
     write(stdOut, "(A)") 'Dynamics finished OK!'
@@ -1639,7 +1652,7 @@ contains
   subroutine initializeTDVariables(this, rho, H1, Ssqr, Sinv, H0, ham0, over, ham, eigvecsReal,&
        & filling, orb, rhoPrim, potential, iNeighbour, nNeighbourSK, iSquare, iSparseStart,&
        & img2CentCell, Eiginv, EiginvAdj, energy, ErhoPrim, skOverCont, qBlock, UJ, onSiteElements,&
-       & eigvecsCplx)
+       & eigvecsCplx, iRhoPrim, iERhoPrim)
 
     !> ElecDynamics instance
     type(TElecDynamics), intent(inout) :: this
@@ -1725,6 +1738,10 @@ contains
     !> Corrections terms for on-site elements
     real(dp), intent(in), allocatable :: onSiteElements(:,:,:,:)
 
+    real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
+
+    real(dp), intent(inout), allocatable :: iERhoPrim(:)
+
     real(dp), allocatable :: T2(:,:), T3(:,:)
     complex(dp), allocatable :: T4(:,:)
     integer :: iSpin, iOrb, iOrb2, fillingsIn, iKS, iK, ii
@@ -1738,6 +1755,10 @@ contains
     if (this%tRealHS) then
       allocate(T2(this%nOrbs,this%nOrbs))
       allocate(T3(this%nOrbs, this%nOrbs))
+
+      allocate(iRhoPrim(size(ham, dim=1), this%nSpin))
+      allocate(iErhoPrim(size(ham, dim=1)))
+
     else
       allocate(T4(this%nOrbs,this%nOrbs))
     end if
@@ -2256,8 +2277,8 @@ contains
 
 
   !> Write results to file
-  subroutine writeTDOutputs(this, dipoleDat, qDat, energyDat, forceDat, coorDat, &
-       & time, energy, energyKin, dipole, deltaQ, coord, totalForce, iStep, ePerBond, ePBondDat)
+  subroutine writeTDOutputs(this, dipoleDat, qDat, energyDat, forceDat, coorDat, time, energy,&
+      & energyKin, dipole, deltaQ, coord, totalForce, iStep, ePerBond, ePBondDat, Jint)
 
     !> ElecDynamics instance
     type(TElecDynamics), intent(in) :: this
@@ -2307,6 +2328,9 @@ contains
     !> forces (3, nAtom)
     real(dp), intent(in) :: totalForce(:,:)
 
+    !> time integral of currents
+    real(dp), intent(in), allocatable :: Jint(:)
+
     real(dp) :: auxVeloc(3, this%nAtom)
     integer :: iAtom, iAtom2, iSpin, iDir
 
@@ -2320,11 +2344,18 @@ contains
             & energy%Espin, energy%Eext, energy%Erep, energyKin, energy%eDisp
 
        if (mod(iStep, this%writeFreq) == 0) then
-          write(qDat, "(2X,2F25.15)", advance="no") time * au__fs, -sum(deltaQ)
-          do iAtom = 1, this%nAtom
-             write(qDat, "(F25.15)", advance="no")-sum(deltaQ(iAtom,:))
-          end do
-          write(qDat,*)
+         write(qDat, "(2X,2F25.15)", advance="no") time * au__fs, -sum(deltaQ)
+         write(qDat,*)
+         do iAtom = 1, this%nAtom
+           write(qDat, "(F25.15)", advance="no")-sum(deltaQ(iAtom,:))
+         end do
+         write(qDat,*)
+         if (allocated(Jint)) then
+           do iAtom = 1, this%nAtom
+             write(qDat, "(F25.15)", advance="no")Jint(iAtom)
+           end do
+         end if
+         write(qDat,*)
        end if
 
        if (this%tIons .and. (mod(iStep,this%writeFreq) == 0)) then
@@ -2363,10 +2394,10 @@ contains
     type(TElecDynamics), intent(in) :: this
 
     !> Inverse of eigenvectors matrix (for populations)
-    complex(dp), intent(out), allocatable :: Eiginv(:,:,:)
+    complex(dp), intent(out) :: Eiginv(:,:,:)
 
     !> Adjoint of the inverse of eigenvectors matrix (for populations)
-    complex(dp), intent(inout), allocatable :: EiginvAdj(:,:,:)
+    complex(dp), intent(out) :: EiginvAdj(:,:,:)
 
     !> Eigenvectors
     real(dp), intent(in) :: eigvecsReal(:,:,:)
@@ -2573,7 +2604,7 @@ contains
   !> Calculates nonscc hamiltonian and overlap for new geometry and reallocates sparse arrays
   subroutine updateH0S(this, Ssqr, Sinv, coord, orb, neighbourList, nNeighbourSK, iSquare,&
        & iSparseStart, img2CentCell, skHamCont, skOverCont, ham, ham0, over, env, rhoPrim,&
-       & ErhoPrim, coordAll)
+       & ErhoPrim, coordAll, iRhoPrim, iErhoPrim)
 
     !> ElecDynamics instance
     type(TElecDynamics), intent(inout), target :: this
@@ -2595,9 +2626,6 @@ contains
 
     !> atomic coordinates
     real(dp), allocatable, intent(inout) :: coord(:,:)
-
-    !> Coords of the atoms (3, nAllAtom)
-    real(dp), allocatable, intent(inout) :: coordAll(:,:)
 
     !> ADT for neighbour parameters
     type(TNeighbourList), intent(inout) :: neighbourList
@@ -2632,6 +2660,15 @@ contains
     !> Energy weighted density matrix
     real(dp), allocatable, intent(inout) :: ErhoPrim(:)
 
+    !> Coords of the atoms (3, nAllAtom)
+    real(dp), allocatable, intent(inout) :: coordAll(:,:)
+
+    !> imaginary part of sparse density matrix
+    real(dp), allocatable, intent(inout) :: iRhoPrim(:,:)
+
+    !> imaginary part of energy weighted density matrix
+    real(dp), allocatable, intent(inout) :: iERhoPrim(:)
+
     real(dp) :: Sreal(this%nOrbs,this%nOrbs), SinvReal(this%nOrbs,this%nOrbs)
     real(dp) :: coord0Fold(3,this%nAtom)
     integer :: nAllAtom, iSpin, sparseSize, iOrb, iKS
@@ -2654,7 +2691,7 @@ contains
     if (.not. allocated(rhoPrim)) then
        allocate(rhoPrim(this%nSparse, this%nSpin))
     end if
-    call reallocateTDSparseArrays(this, ham, over, ham0, rhoPrim, ErhoPrim)
+    call reallocateTDSparseArrays(this, ham, over, ham0, rhoPrim, ErhoPrim, iRhoPrim, iERhoPrim)
 
     call this%sccCalc%updateCoords(env, coordAll, this%speciesAll, neighbourList)
 
@@ -3020,7 +3057,7 @@ contains
 
 
   !> Reallocates sparse arrays after change of coordinates
-  subroutine reallocateTDSparseArrays(this, ham, over, ham0, rhoPrim, ErhoPrim)
+  subroutine reallocateTDSparseArrays(this, ham, over, ham0, rhoPrim, ErhoPrim, iRhoPrim, iERhoPrim)
 
     !> ElecDynamics instance
     type(TElecDynamics), intent(in), target :: this
@@ -3040,6 +3077,13 @@ contains
     !> Energy weighted density matrix
     real(dp), allocatable, intent(inout) :: ErhoPrim(:)
 
+    !> imaginary part of sparse density matrix
+    real(dp), allocatable, intent(inout) :: iRhoPrim(:,:)
+
+    !> imaginary part of energy weighted density matrix
+    real(dp), allocatable, intent(inout) :: iERhoPrim(:)
+
+
     deallocate(ham)
     deallocate(over)
     deallocate(ham0)
@@ -3054,6 +3098,130 @@ contains
        allocate(ErhoPrim(this%nSparse))
     end if
 
+    if (allocated(iRhoPrim)) then
+      deallocate(iRhoPrim)
+      allocate(iRhoPrim(this%nSparse, this%nSpin))
+    end if
+    if (allocated(iERhoPrim)) then
+      deallocate(iERhoPrim)
+      allocate(iERhoPrim(this%nSparse))
+    end if
+
   end subroutine reallocateTDSparseArrays
+
+
+  !> Calculate the current flow at each atom
+  subroutine getCurrents(this, Jint, rho, ham, over, H1, Sinv, speciesAll, coord, orb,&
+      & neighbourList, nNeighbourSK, iSquare, iSparseStart, img2CentCell, iRhoPrim, iERhoPrim)
+
+    !> ElecDynamics instance
+    type(TElecDynamics), intent(in), target :: this
+
+    real(dp), intent(inout) :: Jint(:)
+
+    !> Density Matrix
+    complex(dp), intent(in) :: rho(:,:,:)
+
+    !> scc hamitonian (sparse)
+    real(dp), allocatable, intent(inout) :: ham(:,:)
+
+    !> overlap (sparse)
+    real(dp), allocatable, intent(inout) :: over(:)
+
+    !> Square hamiltonian
+    complex(dp), intent(in) :: H1(:,:,:)
+
+    !> Square inverse overlap
+    complex(dp), intent(in) :: Sinv(:,:,:)
+
+    !> species of all atoms in the system
+    integer, intent(in) :: speciesAll(:)
+
+    !> central atomic coordinates
+    real(dp), allocatable, intent(inout) :: coord(:,:)
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> list of neighbours for each atom
+    type(TNeighbourList), intent(inout) :: neighbourList
+
+    !> Number of neighbours for each of the atoms
+    integer, intent(in) :: nNeighbourSK(:)
+
+    !> Index array for start of atomic block in dense matrices
+    integer, intent(in) :: iSquare(:)
+
+    !> index array for location of atomic blocks in large sparse arrays
+    integer, intent(in) :: iSparseStart(0:,:)
+
+    !> image atoms to their equivalent in the central cell
+    integer, intent(in) :: img2CentCell(:)
+
+    real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
+
+    real(dp), intent(inout), allocatable :: iERhoPrim(:)
+
+    integer :: iSpin, nSparse
+    real(dp), allocatable :: rhoPrim(:,:), ERhoPrim(:), J(:), Otmp(:,:)
+    real(dp), allocatable :: T1(:,:), T2(:,:)
+    integer :: iNeigh, iAt1, iAt2, iAt2f, nOrb1, nOrb2, iOrig
+    real(dp) :: Jtmp
+
+    nSparse = size(iRhoPrim, dim=1)
+    allocate(rhoPrim(nSparse, this%nSpin))
+    allocate(eRhoPrim(nSparse))
+    allocate(T1(this%nOrbs, this%nOrbs))
+    allocate(T2(this%nOrbs, this%nOrbs))
+    allocate(Otmp(this%nOrbs, this%nOrbs))
+
+    call unpackHS(Otmp, over, neighbourList%iNeighbour, nNeighbourSK, iSquare, iSparseStart,&
+        & img2CentCell)
+    call blockSymmetrizeHS(Otmp, iSquare)
+
+    allocate(J(this%nAtom))
+
+    J = 0.0_dp
+
+
+    iRhoPrim(:,:) = 0.0_dp
+    iERhoPrim(:) = 0.0_dp
+    do iSpin = 1, this%nSpin
+
+      call gemm(T1, aimag(rho(:,:,iSpin)), real(H1(:,:,iSpin)))
+      call her2k(T2, real(Sinv(:,:,iSpin), dp), T1, 0.5_dp)
+
+      call packHS(irhoPrim(:,iSpin), aimag(rho(:,:,iSpin)), neighbourList%iNeighbour,&
+          & nNeighbourSK, orb%mOrb, iSquare, iSparseStart, img2CentCell)
+      call packHS(iErhoPrim, T2, neighbourList%iNeighbour, nNeighbourSK, orb%mOrb,&
+          & iSquare, iSparseStart, img2CentCell)
+
+    end do
+
+!    write(*,*)'First J'
+!    write(*,*)J
+!    write(*,*)
+!    J = 0.0_dp
+
+    do iAt1 = 1, this%nAtom
+      nOrb1 = iSquare(iAt1+1) - iSquare(iAt1)
+      do iNeigh = 1, nNeighbourSK(iAt1)
+        iOrig = iSparseStart(iNeigh,iAt1) + 1
+        iAt2 = neighbourList%iNeighbour(iNeigh, iAt1)
+        iAt2f = img2CentCell(iAt2)
+        nOrb2 = iSquare(iAt2f+1) - iSquare(iAt2f)
+        jTmp = sum(ham(iOrig:iOrig+nOrb1*nOrb2-1,:)*iRhoPrim(iOrig:iOrig+nOrb1*nOrb2-1,:))&
+            & - sum(over(iOrig:iOrig+nOrb1*nOrb2-1)*iErhoPrim(iOrig:iOrig+nOrb1*nOrb2-1))
+        J(iAt1) = J(iAt1) + jTmp
+        J(iAt2f) = J(iAt2f) - jTmp
+      end do
+    end do
+!    write(*,*)'Second J'
+!    write(*,*)J
+!    write(*,*)
+
+    Jint(:) = Jint + J * this%dt
+
+  end subroutine getCurrents
 
 end module dftbp_timeprop
