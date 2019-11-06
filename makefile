@@ -1,6 +1,6 @@
 #------------------------------------------------------------------------------#
 #  DFTB+: general package for performing fast atomistic simulations            #
-#  Copyright (C) 2018  DFTB+ developers group                                  #
+#  Copyright (C) 2006 - 2019  DFTB+ developers group                           #
 #                                                                              #
 #  See the LICENSE file for terms of usage and distribution.                   #
 #------------------------------------------------------------------------------#
@@ -13,32 +13,23 @@ _default: default
 
 include make.config
 
-.PHONY: default misc all
-ifeq ($(strip $(WITH_TRANSPORT)),1)
-else
-.PHONY: api
-endif
+.PHONY: default misc all api
 
-default: dftb+ modes waveplot setupgeom
-ifeq ($(strip $(BUILD_API)),1)
+default: dftb+ modes waveplot
 ifeq ($(strip $(WITH_TRANSPORT)),1)
-else
-   default: api
-endif
+  default: setupgeom transporttools
 endif
 misc: misc_skderivs misc_slakovalue
-api: api_mm
 all: default misc
-ifeq ($(strip $(BUILD_API)),1)
-ifeq ($(strip $(WITH_TRANSPORT)),1)
-else
-all: api
-endif
-endif
+api: api_mm
 
-.PHONY: install install_misc install_all
+.PHONY: install install_misc install_all install_api
 install: install_dftb+ install_modes install_waveplot install_dptools
-install_misc: install_misc_skderivs install_misc_slakovalue
+ifeq ($(strip $(WITH_TRANSPORT)),1)
+  install: install_setupgeom install_transporttools
+endif
+install_misc: install_misc_skderivs install_misc_slakovalue install_tools_misc
+install_all: install install_misc
 install_api: install_api_mm
 
 .PHONY: test test_api
@@ -74,8 +65,8 @@ update_release:
         || $(ROOT)/utils/build/update_release $(BUILDDIR)/RELEASE \
         || echo "(UNKNOWN RELEASE)" > $(BUILDDIR)/RELEASE
 
-.PHONY: dftb+ modes waveplot setupgeom
-dftb+ modes waveplot setupgeom:
+.PHONY: dftb+ modes waveplot setupgeom transporttools
+dftb+ modes waveplot setupgeom transporttools:
 	mkdir -p $(BUILDDIR)/prog/$@
 	$(MAKE) -C $(BUILDDIR)/prog/$@ -f $(ROOT)/prog/$@/make.build \
 	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR)
@@ -94,11 +85,9 @@ ifeq ($(strip $(WITH_MPI)),1)
   DFTBPLUS_DEPS += external_mpifx external_scalapackfx
 endif
 ifeq ($(strip $(WITH_TRANSPORT)),1)
-  DFTBPLUS_DEPS += external_libnegf external_poisson
-  external_poisson: external_libnegf
+  DFTBPLUS_DEPS += external_libnegf external_mudpack
   ifeq ($(strip $(WITH_MPI)),1)
     external_libnegf: external_mpifx
-    external_poisson: external_mpifx
   endif
 endif
 dftb+: $(DFTBPLUS_DEPS)
@@ -114,14 +103,14 @@ misc_skderivs misc_slakovalue:
 	    -f $(ROOT)/prog/misc/$(subst misc_,,$@)/make.build \
 	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR)
 
-misc_skderivs: external_xmlf90
+misc_skderivs misc_slakovalue: external_xmlf90
 
 
 EXTERNAL_NAME = $(subst external_,,$@)
 
 EXTERNALS = external_xmlf90 external_fsockets external_dftd3	\
     external_mpifx external_scalapackfx external_magmahelper	\
-    external_poisson external_libnegf
+    external_mudpack external_libnegf
 
 .PHONY: $(EXTERNALS)
 $(EXTERNALS):
@@ -142,7 +131,7 @@ endif
 .PHONY: api_lib_mm
 api_lib_mm:
 	mkdir -p $(BUILDDIR)/api/mm
-	$(MAKE) -C $(BUILDDIR)/api/mm -f $(ROOT)/api/mm/make.build \
+	$(MAKE) -C $(BUILDDIR)/api/mm -f $(ROOT)/prog/dftb+/api/mm/make.build \
 	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR)
 
 api_lib_mm: $(DFTBPLUS_DEPS)
@@ -189,8 +178,8 @@ test_api_mm: api_mm
 # Install targets
 ################################################################################
 
-.PHONY: install_dftb+ install_modes install_waveplot
-install_dftb+ install_modes install_waveplot:
+.PHONY: install_dftb+ install_modes install_waveplot install_setupgeom install_transporttools
+install_dftb+ install_modes install_waveplot install_setupgeom install_transporttools:
 	$(MAKE) -C $(BUILDDIR)/prog/$(subst install_,,$@) \
 	    -f $(ROOT)/prog/$(subst install_,,$@)/make.build \
 	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR) install
@@ -198,7 +187,8 @@ install_dftb+ install_modes install_waveplot:
 install_dftb+: dftb+
 install_modes: modes
 install_waveplot: waveplot
-
+install_setupgeom: setupgeom
+install_transporttools: transporttools
 
 .PHONY: install_misc_skderivs install_misc_slakovalue
 install_misc_skderivs install_misc_slakovalue:
@@ -207,11 +197,17 @@ install_misc_skderivs install_misc_slakovalue:
 	    ROOT=$(ROOT) BUILDROOT=$(BUILDDIR) install
 
 
-PYTHON := python
+PYTHON := python3
 .PHONY: install_dptools
 install_dptools:
 	cd $(ROOT)/tools/dptools \
             && $(PYTHON) setup.py install --prefix $(INSTALLDIR)
+
+
+.PHONY: install_tools_misc
+install_tools_misc:
+	cp $(ROOT)/tools/misc/cubemanip $(INSTALLDIR)/bin
+	cp $(ROOT)/tools/misc/plotxy $(INSTALLDIR)/bin
 
 
 .PHONY: install_api_mm

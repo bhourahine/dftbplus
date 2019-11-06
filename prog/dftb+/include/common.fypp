@@ -1,10 +1,9 @@
 #!-------------------------------------------------------------------------------------------------!
 #!  DFTB+: general package for performing fast atomistic simulations                               !
-#!  Copyright (C) 2018  DFTB+ developers group                                                     !
+#!  Copyright (C) 2006 - 2019  DFTB+ developers group                                              !
 #!                                                                                                 !
 #!  See the LICENSE file for terms of usage and distribution.                                      !
 #!-------------------------------------------------------------------------------------------------!
-#!
 #:mute
 #:if not defined('_COMMON_FYPP_')
 #:set _COMMON_FYPP_
@@ -17,10 +16,10 @@
   #:set DEBUG = 0
 #:endif
 
-#:set WITH_C = defined('CC')
 #:set WITH_ASSERT = defined('WITH_ASSERT') or DEBUG > 0
 #:set WITH_GPU = defined('WITH_GPU')
 #:set WITH_MPI = defined('WITH_MPI')
+#:set WITH_OMP = defined('WITH_OMP')
 #:set WITH_ELSI = defined('WITH_ELSI')
 #:set WITH_PEXSI = defined('WITH_PEXSI') and WITH_ELSI
 #:set WITH_SCALAPACK = defined('WITH_SCALAPACK')
@@ -30,7 +29,6 @@
 #:set EXP_TRAP = defined('EXP_TRAP')
 #:set INTERNAL_ERFC = defined('INTERNAL_ERFC')
 #:set WITH_TRANSPORT = defined('WITH_TRANSPORT')
-#:set WITH_POISSON = defined('WITH_POISSON')
 #:set EMULATE_F08_MATH = defined('EMULATE_F08_MATH')
 
 

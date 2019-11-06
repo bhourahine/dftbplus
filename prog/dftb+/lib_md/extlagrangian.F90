@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,7 +8,7 @@
 #:include 'common.fypp'
 
 !> Extended Lagrangian dynamics
-module dftbp_extlagrangian_module
+module dftbp_extlagrangian
   use dftbp_assert
   use dftbp_accuracy, only : dp
   use dftbp_message
@@ -341,4 +341,4 @@ contains
 
   end subroutine updatePhaseAndSteps
 
-end module dftbp_extlagrangian_module
+end module dftbp_extlagrangian

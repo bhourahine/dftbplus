@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -13,7 +13,7 @@ module dftbp_parser
   use dftbp_assert
   use dftbp_accuracy
   use dftbp_constants
-  use dftbp_inputdata_module
+  use dftbp_inputdata
   use dftbp_typegeometryhsd
   use dftbp_hsdparser, only : dumpHSD, dumpHSDAsXML, getNodeHSDName, parseHSD
   use dftbp_hsdutils
@@ -42,6 +42,7 @@ module dftbp_parser
   use dftbp_forcetypes, only : forceTypes
   use dftbp_mixer, only : mixerTypes
   use dftbp_geoopt, only : geoOptTypes
+  use dftbp_halogenx, only : halogenXSpecies1, halogenXSpecies2
 #:if WITH_SOCKETS
   use dftbp_ipisocket, only : IPI_PROTOCOLS
 #:endif
@@ -64,7 +65,7 @@ module dftbp_parser
   character(len=*), parameter :: rootTag = "dftbplusinput"
 
   !> Version of the current parser
-  integer, parameter :: parserVersion = 7
+  integer, parameter :: parserVersion = 8
 
 
   !> Version of the oldest parser for which compatibility is still maintained
@@ -145,7 +146,7 @@ contains
       input%transpar%idxdevice(1) = 1
       input%transpar%idxdevice(2) = input%geom%nAtom
     end if
-    
+
     ! electronic Hamiltonian
     call getChildValue(root, "Hamiltonian", hamNode)
 
@@ -371,8 +372,8 @@ contains
       end if
       call getChildValue(node, "MovedAtoms", buffer2, trim(atomsRange), child=child, &
           &multiple=.true.)
-      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, &
-          &child, ctrl%indMovedAtom)
+      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, child,&
+          & ctrl%indMovedAtom)
 
       ctrl%nrMoved = size(ctrl%indMovedAtom)
       ctrl%tCoordOpt = (ctrl%nrMoved /= 0)
@@ -427,8 +428,8 @@ contains
       end if
       call getChildValue(node, "MovedAtoms", buffer2, trim(atomsRange), child=child, &
           &multiple=.true.)
-      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, &
-          &child, ctrl%indMovedAtom)
+      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, child,&
+          & ctrl%indMovedAtom)
 
       ctrl%nrMoved = size(ctrl%indMovedAtom)
       ctrl%tCoordOpt = (ctrl%nrMoved /= 0)
@@ -482,8 +483,8 @@ contains
       end if
       call getChildValue(node, "MovedAtoms", buffer2, trim(atomsRange), child=child, &
           &multiple=.true.)
-      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, &
-          &child, ctrl%indMovedAtom)
+      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, child,&
+          & ctrl%indMovedAtom)
 
       ctrl%nrMoved = size(ctrl%indMovedAtom)
       ctrl%tCoordOpt = (ctrl%nrMoved /= 0)
@@ -532,8 +533,8 @@ contains
       end if
       call getChildValue(node, "MovedAtoms", buffer2, trim(atomsRange), child=child, &
           &multiple=.true.)
-      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, &
-          &child, ctrl%indMovedAtom)
+      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, child,&
+          & ctrl%indMovedAtom)
 
       ctrl%nrMoved = size(ctrl%indMovedAtom)
       ctrl%tCoordOpt = (ctrl%nrMoved /= 0)
@@ -572,8 +573,8 @@ contains
       ctrl%tForces = .true.
       call getChildValue(node, "Atoms", buffer2, trim(atomsRange), child=child, &
           &multiple=.true.)
-      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, &
-          &child, ctrl%indMovedAtom)
+      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, child,&
+          & ctrl%indMovedAtom)
       ctrl%nrMoved = size(ctrl%indMovedAtom)
       if (ctrl%nrMoved == 0) then
         call error("No atoms specified for derivatives calculation.")
@@ -592,8 +593,8 @@ contains
       call getChildValue(node, "MDRestartFrequency", ctrl%restartFreq, 1)
       call getChildValue(node, "MovedAtoms", buffer2, trim(atomsRange), child=child, &
           &multiple=.true.)
-      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species,&
-          &child, ctrl%indMovedAtom)
+      call convAtomRangeToInt(char(buffer2), geom%speciesNames, geom%species, child,&
+          & ctrl%indMovedAtom)
       ctrl%nrMoved = size(ctrl%indMovedAtom)
       if (ctrl%nrMoved == 0) then
         call error("No atoms specified for molecular dynamics.")
@@ -1774,7 +1775,7 @@ contains
     end if
 
     ! Electronic solver
-    call getChildValue(node, "Eigensolver", value1, "RelativelyRobust")
+    call getChildValue(node, "Solver", value1, "RelativelyRobust")
     call getNodeName(value1, buffer)
 
     select case(char(buffer))
@@ -1875,7 +1876,13 @@ contains
 
     if (any(ctrl%solver%isolver == [electronicSolverTypes%omm, electronicSolverTypes%pexsi,&
         & electronicSolverTypes%ntpoly])) then
-      call getChildValue(value1, "Sparse", ctrl%solver%elsi%elsiCsr, .false.)
+      call getChildValue(value1, "Sparse", ctrl%solver%elsi%elsiCsr, .true.)
+      if (.not.ctrl%solver%elsi%elsiCsr) then
+        if (any(ctrl%solver%isolver == [electronicSolverTypes%pexsi,electronicSolverTypes%ntpoly]))&
+            & then
+          call getChildValue(value1, "Threshold", ctrl%solver%elsi%elsi_zero_def, 1.0E-15_dp)
+        end if
+      end if
       if (ctrl%t2Component .and. ctrl%solver%elsi%elsiCsr) then
         call detailedError(value1,"Two-component hamiltonians currently cannot be used with sparse&
             & ELSI solvers")
@@ -2192,7 +2199,7 @@ contains
       end if
     case ("poisson")
       ctrl%tPoisson = .true.
-      call readPoisson(value1, poisson, geo%tPeriodic, tp%tPeriodic1D)
+      call readPoisson(value1, poisson, geo%tPeriodic, tp, geo%latVecs)
     case default
       call getNodeHSDName(value1, buffer)
       call detailedError(child, "Unknown electrostatics '" // char(buffer) // "'")
@@ -2233,6 +2240,30 @@ contains
           ctrl%thirdOrderOn(:,1) = 0.0_dp
           ctrl%thirdOrderOn(:,2) = ctrl%hubDerivs(1, geo%species)
         end if
+
+        ! Halogen correction to the DFTB3 model
+        block
+          logical :: tHalogenInteraction
+          integer :: interType, iSp1, iSp2
+
+          if (.not. geo%tPeriodic) then
+            tHalogenInteraction = .false.
+            iSp1Loop: do iSp1 = 1, geo%nSpecies
+              if (any(geo%speciesNames(iSp1) == halogenXSpecies1)) then
+                do iSp2 = 1, geo%nSpecies
+                  if (any(geo%speciesNames(iSp2) == halogenXSpecies2)) then
+                    tHalogenInteraction = .true.
+                    exit iSp1Loop
+                  end if
+                end do
+              end if
+            end do iSp1Loop
+            if (tHalogenInteraction) then
+              call getChildValue(node, "HalogenXCorr", ctrl%tHalogenX, .false.)
+            end if
+          end if
+        end block
+
       end if
     end if
 
@@ -2333,10 +2364,8 @@ contains
       end if
       do ii = 1, getLength(children)
         call getItem1(children, ii, child2)
-        call getChildValue(child2, "Atoms", buffer, child=child3, &
-            &multiple=.true.)
-        call convAtomRangeToInt(char(buffer), geo%speciesNames, &
-            &geo%species, child3, pTmpI1)
+        call getChildValue(child2, "Atoms", buffer, child=child3, multiple=.true.)
+        call convAtomRangeToInt(char(buffer), geo%speciesNames, geo%species, child3, pTmpI1)
         call getChildValue(child2, "ChargePerAtom", rTmp)
         do jj = 1, size(pTmpI1)
           iAt = pTmpI1(jj)
@@ -2395,10 +2424,8 @@ contains
       allocate(rTmp(nSpin))
       do ii = 1, getLength(children)
         call getItem1(children, ii, child2)
-        call getChildValue(child2, "Atoms", buffer, child=child3, &
-            &multiple=.true.)
-        call convAtomRangeToInt(char(buffer), geo%speciesNames, &
-            &geo%species, child3, pTmpI1)
+        call getChildValue(child2, "Atoms", buffer, child=child3, multiple=.true.)
+        call convAtomRangeToInt(char(buffer), geo%speciesNames, geo%species, child3, pTmpI1)
         call getChildValue(child2, "SpinPerAtom", rTmp)
         do jj = 1, size(pTmpI1)
           iAt = pTmpI1(jj)
@@ -3171,8 +3198,7 @@ contains
       end do
       mCutoff = 2.0_dp * maxval(rCutoffs)
       if (geo%tPeriodic) then
-        call getCellTranslations(cellVec, rCellVec, geo%latVecs, &
-            & geo%recVecs2p, mCutoff)
+        call getCellTranslations(cellVec, rCellVec, geo%latVecs, geo%recVecs2p, mCutoff)
       else
         allocate(cellVec(3, 1))
         allocate(rCellVec(3, 1))
@@ -3602,10 +3628,8 @@ contains
         call init(ctrl%iAtInRegion)
         do iReg = 1, nReg
           call getItem1(children, iReg, child2)
-          call getChildValue(child2, "Atoms", buffer, child=child3, &
-              &multiple=.true.)
-          call convAtomRangeToInt(char(buffer), geo%speciesNames, &
-              &geo%species, child3, pTmpI1)
+          call getChildValue(child2, "Atoms", buffer, child=child3, multiple=.true.)
+          call convAtomRangeToInt(char(buffer), geo%speciesNames, geo%species, child3, pTmpI1)
           call append(ctrl%iAtInRegion, pTmpI1)
           call getChildValue(child2, "ShellResolved", &
               & ctrl%tShellResInRegion(iReg), .false., child=child3)
@@ -3714,8 +3738,7 @@ contains
     type(control), intent(inout) :: ctrl
 
     if (ctrl%tPrintEigVecs .or. ctrl%lrespini%tPrintEigVecs) then
-      call getChildValue(node, "EigenvectorsAsTxt", ctrl%tPrintEigVecsTxt, &
-          & .false.)
+      call getChildValue(node, "EigenvectorsAsText", ctrl%tPrintEigVecsTxt, .false.)
     end if
 
   end subroutine readLaterAnalysis
@@ -3864,14 +3887,11 @@ contains
     if (.not.associated(pTmp)) then
       call setChildValue(pDevice, "FirstLayerAtoms", transpar%PL)
     end if
-    
+
     call getChildren(root, "Contact", pNodeList)
     transpar%ncont = getLength(pNodeList)
-    if (transpar%ncont < 2) then
-      call detailedError(root, "At least two contacts must be defined")
-    end if
     allocate(transpar%contacts(transpar%ncont))
-      
+
     call readContacts(pNodeList, transpar%contacts, geom, char(buffer))
 
     select case (char(buffer))
@@ -3889,7 +3909,6 @@ contains
             & modifier=modif, child=field)
         call convertByMul(char(modif),lengthUnits,field,lateralContactSeparation)
       end if
-      transpar%tPeriodic1D = .not. geom%tPeriodic
 
       call reduceGeometry(transpar%contacts(contact)%lattice, transpar%contacts(contact)%idxrange,&
           & lateralContactSeparation, geom)
@@ -3930,7 +3949,7 @@ contains
     real(dp) :: contUnitVec(3), dots(3), newLatVecs(3, 3), newOrigin(3)
     real(dp) :: minProj, maxProj
     logical :: mask(3)
-    integer :: ind, ii
+    integer :: ind, indPrev, indNext, ii
 
     if (geom%tPeriodic) then
       contUnitVec = contactVec / sqrt(sum(contactVec**2, dim=1))
@@ -3955,19 +3974,22 @@ contains
       do while (.not. mask(ind))
         ind = ind + 1
       end do
-      newLatVecs(modulo(ind+1,3)+1, 2) = -newLatVecs(ind,1)
-      newLatVecs(ind,2) = 0.0_dp !newLatVecs(modulo(ind+1,3)+1, 1)
-      newLatVecs(modulo(ind-1,3)+1, 2) = 0.0_dp
+      ! Note: ind is one-based, substract 1 before modulo and add 1 after.
+      indNext = modulo(ind + 1 - 1, 3) + 1
+      indPrev = modulo(ind - 1 - 1, 3) + 1
+      newLatVecs(indNext, 2) = -newLatVecs(ind, 1)
+      newLatVecs(ind, 2) = newLatVecs(indNext, 1)
+      newLatVecs(indPrev, 2) = 0.0_dp
       newLatVecs(:,3) = cross3(newLatVecs(:,1), newLatVecs(:,2))
       newLatVecs(:,2) = newLatVecs(:,2) / sqrt(sum(newLatVecs(:,2)**2))
       newLatVecs(:,3) = newLatVecs(:,3) / sqrt(sum(newLatVecs(:,3)**2))
-      newOrigin = 0.0_dp
+      newOrigin(:) = 0.0_dp
     end if
     call reduce(geom, contactRange(1), contactRange(2))
     if (.not. geom%tPeriodic) then
       do ii = 2, 3
-        minProj = 0_dp !minval(matmul(newLatVecs(:,ii), geom%coords))
-        maxProj = 0_dp !maxval(matmul(newLatVecs(:,ii), geom%coords))
+        minProj = minval(matmul(newLatVecs(:,ii), geom%coords))
+        maxProj = maxval(matmul(newLatVecs(:,ii), geom%coords))
         newLatVecs(:,ii) = ((maxProj - minProj) + lateralContactSeparation) * newLatVecs(:,ii)
       end do
     end if
@@ -4170,7 +4192,7 @@ contains
 
 
   !> Read in Poisson related data
-  subroutine readPoisson(pNode, poisson, tPeriodic, tPeriodic1D)
+  subroutine readPoisson(pNode, poisson, tPeriodic, transpar, latVecs)
 
     !> Input tree
     type(fnode), pointer :: pNode
@@ -4178,11 +4200,14 @@ contains
     !> data type for Poisson solver settings
     type(TPoissonInfo), intent(inout) :: poisson
 
-    !> Is this a periodic structure
+    !> Is this a periodic calculation
     logical, intent(in) :: tPeriodic
 
-    !> Is this a wire-like structure
-    logical, intent(in) :: tPeriodic1D
+    !> Lattice vectors if periodic
+    real(dp), allocatable, intent(in) :: latVecs(:,:)
+
+    !> Parameters of the transport calculation
+    type(TTransPar), intent(inout) :: transpar
 
     type(fnode), pointer :: pTmp, pTmp2, pChild, field
     type(string) :: buffer, modif
@@ -4192,35 +4217,44 @@ contains
     logical :: needsPoissonBox
 
     poisson%defined = .true.
-    needsPoissonBox = (.not. tPeriodic) .or. tPeriodic1D
+    needsPoissonBox = (.not. tPeriodic) .or. transpar%tPeriodic1D .or. (transpar%nCont == 1)
+
     if (needsPoissonBox) then
-      call getChildValue(pNode, "PoissonBox", poisson%poissBox, &
-          & modifier=modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          & poisson%poissBox)
+      if (transpar%nCont == 1 .and. .not. transpar%tPeriodic1D) then
+        poisson%poissBox(:) = 0.0_dp
+        do ii = 1, 3
+          if (ii == transpar%contacts(1)%dir) then
+            call getChildValue(pNode, "PoissonThickness", poisson%poissBox(ii), modifier=modif,&
+                & child=field)
+            call convertByMul(char(modif), lengthUnits, field, poisson%poissBox)
+          else
+            poisson%poissBox(ii) = sqrt(sum(latVecs(:,ii)**2))
+          end if
+        end do
+      else
+        call getChildValue(pNode, "PoissonBox", poisson%poissBox, modifier=modif, child=field)
+        call convertByMul(char(modif), lengthUnits, field, poisson%poissBox)
+      end if
     end if
+
     poisson%foundBox = needsPoissonBox
-    call getChildValue(pNode, "MinimalGrid", poisson%poissGrid, &
-        & [ 0.3_dp, 0.3_dp, 0.3_dp ], modifier=modif, child=field)
-    call convertByMul(char(modif), lengthUnits, field, &
-        & poisson%poissGrid)
+    call getChildValue(pNode, "MinimalGrid", poisson%poissGrid, [ 0.3_dp, 0.3_dp, 0.3_dp ],&
+        & modifier=modif, child=field)
+    call convertByMul(char(modif), lengthUnits, field, poisson%poissGrid)
     call getChildValue(pNode, "NumericalNorm", poisson%numericNorm, .false.)
-    call getChild(pNode, "AtomDensityCutoff", pTmp, requested=.false., &
-        & modifier=modif)
+    call getChild(pNode, "AtomDensityCutoff", pTmp, requested=.false., modifier=modif)
     call getChild(pNode, "AtomDensityTolerance", pTmp2, requested=.false.)
     if (associated(pTmp) .and. associated(pTmp2)) then
-      call detailedError(pNode, "Either one of the tags AtomDensityCutoff or&
-          & AtomDensityTolerance can be specified.")
+      call detailedError(pNode, "Either one of the tags AtomDensityCutoff or AtomDensityTolerance&
+          & can be specified.")
     else if (associated(pTmp)) then
-      call getChildValue(pTmp, "", poisson%maxRadAtomDens, default=14.0_dp, &
-          &  modifier=modif)
+      call getChildValue(pTmp, "", poisson%maxRadAtomDens, default=14.0_dp, modifier=modif)
       call convertByMul(char(modif), lengthUnits, pTmp, poisson%maxRadAtomDens)
       if (poisson%maxRadAtomDens <= 0.0_dp) then
         call detailedError(pTmp2, "Atom density cutoff must be > 0")
       end if
     else
-      call getChildValue(pNode, "AtomDensityTolerance", denstol, 1e-6_dp, &
-          & child=pTmp2)
+      call getChildValue(pNode, "AtomDensityTolerance", denstol, 1e-6_dp, child=pTmp2)
       if (denstol <= 0.0_dp) then
         call detailedError(pTmp2, "Atom density tolerance must be > 0")
       end if
@@ -4228,34 +4262,25 @@ contains
       poisson%maxRadAtomDens = -denstol
     end if
 
-    call getChildValue(pNode, "CutoffCheck", poisson%cutoffcheck,&
-        & .true.)
+    call getChildValue(pNode, "CutoffCheck", poisson%cutoffcheck, .true.)
     call getChildValue(pNode, "Verbosity", poisson%verbose, 51)
-    call getChildValue(pNode, "SavePotential", poisson%savePotential,&
-        & .false.)
-    call getChildValue(pNode, "PoissonAccuracy", poisson%poissAcc,&
-        & 1.0e-6_dp)
-    call getChildValue(pNode, "BuildBulkPotential", poisson%bulkBC,&
-        & .true.)
-    call getChildValue(pNode, "ReadOldBulkPotential", &
-        & poisson%readBulkPot, .false.)
-    call getChildValue(pNode, "RecomputeAfterDensity",&
-        & poisson%solvetwice, .false.)
-    call getChildValue(pNode, "MaxPoissonIterations",&
-        & poisson%maxPoissIter, 60)
+    call getChildValue(pNode, "SavePotential", poisson%savePotential, .false.)
+    call getChildValue(pNode, "PoissonAccuracy", poisson%poissAcc, 1.0e-6_dp)
+    call getChildValue(pNode, "BuildBulkPotential", poisson%bulkBC, .true.)
+    call getChildValue(pNode, "ReadOldBulkPotential", poisson%readBulkPot, .false.)
+    call getChildValue(pNode, "RecomputeAfterDensity", poisson%solvetwice, .false.)
+    call getChildValue(pNode, "MaxPoissonIterations", poisson%maxPoissIter, 60)
 
-    call getChild(pNode, "OverrideDefaultBC", pTmp, requested=.false.)
     poisson%overrideBC(:) = 0
+    call getChild(pNode, "OverrideDefaultBC", pTmp, requested=.false.)
     if (associated(pTmp)) then
-      call getPoissonBoundaryConditionOverrides(pTmp, [ 1, 2 ], &
-          & poisson%overrideBC)
+      call getPoissonBoundaryConditionOverrides(pTmp, [ 1, 2 ], poisson%overrideBC)
     end if
 
     call getChildValue(pNode, "OverrideBulkBC", pTmp, "none")
     poisson%overrBulkBC(:) = -1
     if (associated(pNode)) then
-      call getPoissonBoundaryConditionOverrides(pTmp, [ 0, 1, 2 ], &
-          & poisson%overrBulkBC)
+      call getPoissonBoundaryConditionOverrides(pTmp, [ 0, 1, 2 ], poisson%overrBulkBC)
     end if
 
     call getChildValue(pNode, "BoundaryRegion", pTmp, "global")
@@ -4265,23 +4290,21 @@ contains
       poisson%localBCType = "G"
     case ("square")
       poisson%localBCType = "S"
-      call getChildValue(pTmp, "BufferLength", poisson%bufferLocBC, &
-          &9.0_dp, modifier=modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          & poisson%bufferLocBC)
+      call getChildValue(pTmp, "BufferLength", poisson%bufferLocBC, 9.0_dp, modifier=modif,&
+          & child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%bufferLocBC)
     case ("circle")
       poisson%localBCType = "C"
-      call getChildValue(pTmp, "BufferLength", poisson%bufferLocBC, &
-          &9.0_dp, modifier=modif, child=field)
+      call getChildValue(pTmp, "BufferLength", poisson%bufferLocBC, 9.0_dp, modifier=modif,&
+          & child=field)
       call convertByMul(char(modif), lengthUnits, field, poisson%bufferLocBC)
     case default
       call getNodeHSDName(pTmp, buffer)
-      call detailedError(pTmp, "Invalid boundary region type '" &
-          &// char(buffer) // "'")
+      call detailedError(pTmp, "Invalid boundary region type '" // char(buffer) // "'")
     end select
 
-    call getChildValue(pNode, "BoxExtension", poisson%bufferBox, &
-         &0.0_dp, modifier=modif, child=field)
+    call getChildValue(pNode, "BoxExtension", poisson%bufferBox, 0.0_dp, modifier=modif,&
+        & child=field)
     call convertByMul(char(modif), lengthUnits, field, poisson%bufferBox)
     if (poisson%bufferBox.lt.0.0_dp) then
       call detailedError(pNode, "BoxExtension must be a positive number")
@@ -4296,56 +4319,46 @@ contains
       poisson%gateType = "N"
     case ("planar")
       poisson%gateType = "P"
-      call getChildValue(pTmp2, "GateLength", poisson%gateLength_l,&
-          & 0.0_dp, modifier= modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          &poisson%gateLength_l)
+      call getChildValue(pTmp2, "GateLength", poisson%gateLength_l, 0.0_dp, modifier= modif,&
+          & child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%gateLength_l)
 
       gatelength_l = poisson%gateLength_l !avoids a warning on intents
-      call getChildValue(pTmp2, "GateLength_l", poisson%gateLength_l, &
-          & gateLength_l, modifier=modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          &poisson%gateLength_l)
+      call getChildValue(pTmp2, "GateLength_l", poisson%gateLength_l, gateLength_l, modifier=modif,&
+          & child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%gateLength_l)
 
-      call getChildValue(pTmp2, "GateLength_t", poisson%gateLength_t, &
-          &poisson%gateLength_l, modifier=modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          &poisson%gateLength_t)
+      call getChildValue(pTmp2, "GateLength_t", poisson%gateLength_t, poisson%gateLength_l,&
+          & modifier=modif, child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%gateLength_t)
 
-      call getChildValue(pTmp2, "GateDistance", poisson%gateRad, &
-          &0.0_dp, modifier=modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          &poisson%gateRad)
+      call getChildValue(pTmp2, "GateDistance", poisson%gateRad, 0.0_dp, modifier=modif,&
+          & child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%gateRad)
 
-      call getChildValue(pTmp2, "GatePotential", poisson%gatepot, &
-          &0.0_dp, modifier=modif, child=field)
-      call convertByMul(char(modif), energyUnits, field, &
-          &poisson%gatepot)
+      call getChildValue(pTmp2, "GatePotential", poisson%gatepot, 0.0_dp, modifier=modif,&
+          & child=field)
+      call convertByMul(char(modif), energyUnits, field, poisson%gatepot)
 
       !call getChildValue(pTmp2, "GateDirection", poisson%gatedir, 2)
       poisson%gatedir = 2
 
     case ("cylindrical")
       poisson%gateType = "C"
-      call getChildValue(pTmp2, "GateLength",poisson%gateLength_l,&
-          & 0.0_dp, modifier= modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          &poisson%gateLength_l)
+      call getChildValue(pTmp2, "GateLength",poisson%gateLength_l, 0.0_dp, modifier= modif,&
+          & child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%gateLength_l)
 
-      call getChildValue(pTmp2, "GateRadius", poisson%gateRad, &
-          &0.0_dp, modifier=modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          &poisson%gateRad)
+      call getChildValue(pTmp2, "GateRadius", poisson%gateRad, 0.0_dp, modifier=modif, child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%gateRad)
 
-      call getChildValue(pTmp2, "GatePotential", poisson%gatepot, &
-          &0.0_dp, modifier=modif, child=field)
-      call convertByMul(char(modif), lengthUnits, field, &
-          &poisson%gatepot)
+      call getChildValue(pTmp2, "GatePotential", poisson%gatepot, 0.0_dp, modifier=modif,&
+          & child=field)
+      call convertByMul(char(modif), lengthUnits, field, poisson%gatepot)
 
     case default
       call getNodeHSDName(pTmp2, buffer)
-      call detailedError(pTmp2, "Invalid gate type '" &
-          &// char(buffer) // "'")
+      call detailedError(pTmp2, "Invalid gate type '" // char(buffer) // "'")
 
     end select
 
@@ -4751,10 +4764,8 @@ contains
       call getChildren(child2, "AtomList", children)
       do ii = 1, getLength(children)
         call getItem1(children, ii, child3)
-        call getChildValue(child3, "Atoms", buffer, child=child4, &
-            &multiple=.true.)
-        call convAtomRangeToInt(char(buffer), geom%speciesNames, &
-            &geom%species, child4, tmpI1)
+        call getChildValue(child3, "Atoms", buffer, child=child4, multiple=.true.)
+        call convAtomRangeToInt(char(buffer), geom%speciesNames, geom%species, child4, tmpI1)
         call getChildValue(child3, "Value", rTmp, child=field, modifier=modif2)
         ! If not defined, use common unit modifier defined after Coupling
         if (len(modif2)==0) then
@@ -4921,10 +4932,8 @@ contains
       call convertByMul(char(modif), energyUnits, field, &
           &tundos%broadeningDelta)
 
-      call getChildren(root, "Region", pNodeList)
-      call readPDOSRegions(pNodeList, geo, iAtInRegion, tShellResInRegion, &
-          & regionLabelPrefixes)
-      call destroyNodeList(pNodeList)
+      call readPDOSRegions(root, geo, transpar%idxdevice, iAtInRegion, &
+          & tShellResInRegion, regionLabelPrefixes)
       call transformPdosRegionInfo(iAtInRegion, tShellResInRegion, &
           & regionLabelPrefixes, orb, geo%species, tundos%dosOrbitals, &
           & tundos%dosLabels)
@@ -5128,13 +5137,16 @@ contains
 
 
   !> Read the names of regions to calculate PDOS for
-  subroutine readPDOSRegions(children, geo, iAtInregion, tShellResInRegion, regionLabels)
+  subroutine readPDOSRegions(node, geo, idxdevice, iAtInregion, tShellResInRegion, regionLabels)
 
-    !> Nodes in the tree for the various regions
-    type(fnodeList), pointer :: children
+    !> Node to be parsed
+    type(fnode), pointer, intent(in) :: node
 
     !> Geometry of the system
     type(TGeometry), intent(in) :: geo
+
+    !> Is the region to be projected by shell
+    integer, intent(in) :: idxdevice(2)
 
     !> Atoms in a given region
     type(WrappedInt1), allocatable, intent(out) :: iAtInRegion(:)
@@ -5147,33 +5159,47 @@ contains
 
     integer :: nReg, iReg
     integer, allocatable :: tmpI1(:)
+    type(fnodeList), pointer :: children
     type(fnode), pointer :: child, child2
     type(string) :: buffer
     character(lc) :: strTmp
 
+    call getChildren(node, "Region", children)
     nReg = getLength(children)
+
+    if (nReg == 0) then
+      write(strTmp,"(I0, ':', I0)") idxdevice(1), idxdevice(2)
+      call setChild(node, "Region", child)
+      call setChildValue(child, "Atoms", trim(strTmp))
+      call setChildValue(child, "Label", "localDOS")
+      call getChildren(node, "Region", children)
+      nReg = getLength(children)
+    end if
+
     allocate(tShellResInRegion(nReg))
     allocate(regionLabels(nReg))
     allocate(iAtInRegion(nReg))
     do iReg = 1, nReg
       call getItem1(children, iReg, child)
-      call getChildValue(child, "Atoms", buffer, child=child2, &
-          & multiple=.true.)
-      call convAtomRangeToInt(char(buffer), geo%speciesNames, &
-          & geo%species, child2, tmpI1)
+      call getChildValue(child, "Atoms", buffer, child=child2, multiple=.true.)
+      call convAtomRangeToInt(char(buffer), geo%speciesNames, geo%species, child2, tmpI1,&
+          & iShift=idxdevice(1)-1, maxRange=(idxdevice(2)-idxdevice(1)+1))
+      if (any(tmpI1<idxdevice(1)) .or. any(tmpI1>idxdevice(2))) then
+        call error("Atoms in PDOS regions must be within the device range")
+      end if
       iAtInRegion(iReg)%data = tmpI1
-      call getChildValue(child, "ShellResolved", &
-          & tShellResInRegion(iReg), .false., child=child2)
+      call getChildValue(child, "ShellResolved", tShellResInRegion(iReg), .false., child=child2)
       if (tShellResInRegion(iReg)) then
         if (.not. all(geo%species(tmpI1) == geo%species(tmpI1(1)))) then
-          call detailedError(child2, "Shell resolved PDOS can only summed up &
-              & over atoms of the same type")
+          call detailedError(child2, "Shell resolved PDOS can only summed up over atoms of the same&
+              & type")
         end if
       end if
       write(strTmp, "('region',I0)") iReg
       call getChildValue(child, "Label", buffer, trim(strTmp))
       regionLabels(iReg) = unquote(char(buffer))
     end do
+    call destroyNodeList(children)
 
   end subroutine readPDOSRegions
 
@@ -5283,8 +5309,8 @@ contains
     do iCustomOcc = 1, nCustomOcc
       call getItem1(nodes, iCustomOcc, node)
       call getChildValue(node, "Atoms", buffer, child=child, multiple=.true.)
-      call convAtomRangeToInt(char(buffer), geo%speciesNames, &
-          & geo%species, child, iAtInRegion(iCustomOcc)%data)
+      call convAtomRangeToInt(char(buffer), geo%speciesNames, geo%species, child,&
+          & iAtInRegion(iCustomOcc)%data)
       if (any(atomOverriden(iAtInRegion(iCustomOcc)%data))) then
         call detailedError(child, "Atom region contains atom(s) which have&
             & already been overriden")
@@ -5557,12 +5583,8 @@ contains
     real :: x
     integer :: err
 
-    print*,string
-
     read(string,*,iostat=err) x
     is = (err == 0)
-    print*, x, err, is
-
   end function is_numeric
 
 
@@ -5581,19 +5603,19 @@ contains
 
     case ("none")
       continue
-      
+
     case ("lc")
       allocate(input)
       call getChildValue(value1, "Screening", value2, "Thresholded", child=child2)
       call getNodeName(value2, buffer)
       select case(char(buffer))
       case ("neighbourbased")
-        input%rangeSepAlg = "nb"
+        input%rangeSepAlg = rangeSepTypes%neighbour
         call getChildValue(value2, "CutoffReduction", input%cutoffRed, 0.0_dp,&
             & modifier=modifier, child=child3)
         call convertByMul(char(modifier), lengthUnits, child3, input%cutoffRed)
       case ("thresholded")
-        input%rangeSepAlg = "tr"
+        input%rangeSepAlg = rangeSepTypes%threshold
         call getChildValue(value2, "Threshold", input%screeningThreshold, 1e-6_dp)
         call getChildValue(value2, "CutoffReduction", input%cutoffRed, 0.0_dp,&
             & modifier=modifier, child=child3)

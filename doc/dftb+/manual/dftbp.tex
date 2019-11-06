@@ -979,7 +979,7 @@ following properties:
   \kw{ShellResolvedSpin} &l& ShellResolvedSCC = No & No & \\
   \kw{SpinOrbit} &m& SpinPolarisation $\neq$ Colinear\{\}~ & \cb &
   \pref{sec:dftbp.SpinOrbit} \\
-  \kw{Eigensolver} &m& & RelativelyRobust\cb  & \pref{sec:dftbp.Eigensolver} \\
+  \kw{Solver} &m& & RelativelyRobust\cb  & \pref{sec:dftbp.Solver} \\
   \kw{Filling} &m&  & Fermi\cb & \pref{sec:dftbp.Filling} \\
   \kw{SlaterKosterFiles} &p|m&  & - & \pref{sec:dftbp.SlaterKosterFiles} \\
   \kw{OldSKInterpolation} & l & & No & \\
@@ -993,6 +993,7 @@ following properties:
   \kw{ElectricField} & p & SCC = Yes & \cb & \pref{sec:dftbp.ElectricField} \\
   \kw{Dispersion} & m & & \cb & \pref{sec:dftbp.Dispersion} \\
   \kw{HCorrection} & m & SCC = Yes & None \{\} & \pref{sec:dftbp.hcorr}\\
+  \kw{HalogenXCorr} & l & ThirdOrder(Full) = Yes, DftD3 & No & \pref{sec:dftbp.xcorr}\\
   \kw{ThirdOrder} & l & SCC = Yes & No & \\
   \kw{ThirdOrderFull} & l & SCC = Yes & No & \pref{sec:dftbp.DFTB3}\\
   \kw{RangeSeparated} & p &  & \is{None} & \pref{sec:dftbp.RangeSep} \\
@@ -1136,8 +1137,8 @@ following properties:
 \item[\is{SpinOrbit}] Specifies if the system includes Russel-Saunders
   coupling. See p.~\pref{sec:dftbp.SpinOrbit}
 
-\item[\is{Eigensolver}] Specifies which eigensolver to use for
-  diagonalising the Hamiltonian. See p.~\pref{sec:dftbp.Eigensolver}.
+\item[\is{Solver}] Specifies which solver (eigensolver, Green's function, etc.)
+  to use with the hamiltonian. See p.~\pref{sec:dftbp.Solver}.
 
 \item[\is{Filling}] Method for occupying the one electron levels with
   electrons. See p.~\pref{sec:dftbp.Filling}.
@@ -1747,11 +1748,11 @@ the single particle density matrix. The default value of this option is
 \is{Yes}, also giving extra information regarding atomic orbital moments in the
 detailed output.
 
-\subsection{Eigensolver}
-\label{sec:dftbp.Eigensolver}
+\subsection{Solver}
+\label{sec:dftbp.Solver}
 
-Currently the following LAPACK~3.0~\cite{lapack3} eigensolver methods
-are always available:
+Currently the following LAPACK~3.0~\cite{lapack3} eigensolver methods are always
+available:
 \begin{itemize}
 \item \iscb{QR}\\ (QR decomposition based solver)
 \item \iscb{DivideAndConquer}\\ (this requires about twice the memory of the
@@ -1766,10 +1767,11 @@ None of these solvers need any parameters or properties to be specified.
 
 Example:\invparskip
 \begin{verbatim}
-  Eigensolver = DivideAndConquer {}
+  Solver = DivideAndConquer {}
 \end{verbatim}
 
-For ScaLAPACK enabled compilation, all three solvers are also available.
+For ScaLAPACK enabled compilation, all three solvers are also available for MPI
+parallel use.
 
 If {\dftbp} is compiled with the ELSI library also included~\cite{YU2018267},
 the additional \kw{ELPA}, \kw{OMM}, \kw{PEXSI} and \kw{NTPoly} solvers also
@@ -1783,12 +1785,12 @@ variable.)
 
 \subsubsection{ELPA}
 
-This is avalable with either single or two stage solution methods (the second of
-these is claimed to be more efficiently parallel for large problems).
+This is available with either single or two stage solution methods (the second
+of these should be more efficiently parallel for large problems).
 
 Example:\invparskip
 \begin{verbatim}
-  Eigensolver = ELPA {
+  Solver = ELPA {
     Mode = 2
   }
 \end{verbatim}
@@ -1839,6 +1841,7 @@ general systems.
   \kw{SymbolicFactorProcs} & i & & 1  & \\
   \kw{SpectralRadius} & r & & 10 & \\
   \kw{Sparse} & l& & No & \\
+  \kw{Threshold} & l& Sparse = No & 1E-15 & \\
 \end{ptable}
 \begin{description}
 \item[\is{Poles}] number of poles for the complex plane calculation.
@@ -1849,6 +1852,9 @@ general systems.
 \item[\is{SpectralRadius}]\modif{\modtype{Energy}} extension of the complex
   contour.
 \item[\is{Sparse}] Whether the code should use the sparse ELSI matrix interface.
+\item[\is{Threshold}] Sets the threshold to convert dense matrices to the
+  internal sparse representation that ELSI uses. This may be useful in the case
+  of matrix factorisation issues inside the solver.
 \end{description}
 
 \subsubsection{NTPoly}
@@ -1859,13 +1865,13 @@ solver does not make band structure information available, but can be linear
 scaling in both time and memory depending on settings and system. Currently the
 solver does not support spin polarisation or k-points.
 
-This solver has four options:
-
+This solver has several options:
 \begin{ptable}
   \kw{PurificationMethod} & i& & 2 & \\
   \kw{Tolerance} & r& & 1E-5 & \\
   \kw{Truncation} & r& & 1E-10 & \\
   \kw{Sparse} & l& & No & \\
+  \kw{Threshold} & l& Sparse = No & 1E-15 & \\
 \end{ptable}
 \begin{description}
 \item[\is{PurificationMethod}] Allowed choices are 0 for canonical purification,
@@ -1877,6 +1883,8 @@ This solver has four options:
 \item[\is{Truncation}] Tolerance below which matrix elements in the density
   matrix are dropped to enforce sparsity.
 \item[\is{Sparse}] Whether the code should use the sparse matrix ELSI interface.
+\item[\is{Threshold}] Sets the threshold to convert dense matrices to the
+  internal sparse representation that NTPoly uses.
 \end{description}
 
 The default choices of \is{Tolerance} and \is{Truncation} lead to an accurate,
@@ -2649,6 +2657,15 @@ Hamiltonian = DFTB {
 \end{verbatim}
 \end{description}
 
+\subsection{Halogen corrections}
+\label{sec:dftbp.xcorr}
+
+The \kw{HalogenXCorr} keyword includes the halogen correction of
+Ref.~\cite{kubillus-jctc-11-332}. This is fitted for the DFTB3-D3 model and the
+{\tt 3ob-3-1} parameter set. The correction is only relevant for systems
+including interactions between \{O,N\}--\{Cl,Br,I\} pairs of atoms.
+
+
 \subsection{Hydrogen corrections}
 \label{sec:dftbp.hcorr}
 
@@ -3011,9 +3028,9 @@ This block collects some global options for the run.
   p.~\pref{sec:dftbp.results}.
 
 \item[\is{WriteDetailedOut}] Controls the creation of the file
-  \verb|detailed.out|. Since this contains the detailed information
-  about the last step of your run, you shouldn't turn it off without
-  good reasons.
+  \verb|detailed.out| (see p.~\pref{sec:dftbp.detailedout}). Since this contains
+  the detailed information about the last step of your run, you shouldn't turn
+  it off without good reasons.
 
 \item[\is{RestartFrequency}] Specifies the interval at which charge
   restart information should be written to disc for static SCC
@@ -3107,7 +3124,7 @@ calculation and/or calculate properties.
   \kw{ProjectStates} & m & & \cb & \\
   \kw{Localise} & m & & \cb & \\
   \kwl{WriteEigenvectors}{kw:dftbp.WriteEigenvectors} & l & & No & \\
-  \kw{EigenvectorsAsTxt} & l & WriteEigenvectors = Yes & No & \\
+  \kw{EigenvectorsAsText} & l & WriteEigenvectors = Yes & No & \\
   \kw{WriteBandOut} & l & & Yes & \\
   \kw{CalculateForces} & l & & No & \\
   \kw{ElectrostaticPotential} & m & SCC = Yes & \cb & \pref{sec:dftbp.ESP} \\
@@ -3228,7 +3245,7 @@ method which {\em may} have better scaling properties.
   \verb|eigenvec.bin|. For a description of the file format see
   p.~\pref{sec:dftbp.eigenvec}.
 
-\item[\is{EigenvectorsAsTxt}] If eigenvectors are being written, specifies if a
+\item[\is{EigenvectorsAsText}] If eigenvectors are being written, specifies if a
   text version of the data should be printed in \verb|eigenvec.out|. For a
   description of the file format see p.~\pref{sec:dftbp.eigenvec}.
 
@@ -3528,6 +3545,70 @@ This chapter contains the description of some of the output files of
 indicated otherwise, numbers in the output files are given in atomic
 units (with Hartree as the energy unit).
 
+\section{band.out}
+\label{sec:dftbp.bandout}
+\index{band.out}
+
+This contains the band energies and occupation of levels in electron volts and
+electron charge units as columns one and two. The file is printed if
+\is{WriteBandOut} = \is{Yes} (see section \ref{sec:dftbp.Analysis}). Blocks of
+numerical results start with a line which labels the k-point and spin channel
+for the energies.
+
+See the \dptools{} package for utilities for converting the data in this file
+into band-structures and density of states information suitable for plotting.
+
+\section{detailed.out}
+\label{sec:dftbp.detailedout}
+\index{detailed.out}
+
+This file contains details of the total energy and its components, as well as
+optional information on forces, atomic charges and other properties. It is
+intended for quick viewing, while values given to more significant figures are
+available in results.tag.
+
+Some of the information available in the file will also depend on the method
+being used in the calculation. For example, not all electronic solvers make the
+ground state electronic entropy available, hence only the internal energy would
+be quoted. Similarly, while the free energy of the system which when
+differentiated by atomic coordinates or boundary conditions gives the forces or
+stresses (printed as \textit{Force related energy}) this is not currently
+available for some types of non-equilibrium transport calculations.
+
+Some of the common energy results printed in this file are:\\
+
+\begin{center}
+  \begin{tabular}{|l|p{5.5cm}|}
+    \hline
+    TS& Product of the electron entropy and temperature\\
+    Total Electronic energy& The non-SCC energy plus other contributions to the
+    electronic energy (SCC, spin, $\ldots$)\\
+    Repulsive energy& The pairwise contribution to the total energy\\
+    Total energy& Sum of electronic energy\\
+    Extrapolated to 0& Estimated zero temperature energy if at finite
+    temperatures\\
+    Total Mermin free energy& $U - T S$, relevant free energy at finite
+    temperatures\\
+    Force related energy& Free energy relevant to forces in the system\\
+    Gibbs free energy& Energy corrected by $- p V$, i.e. the pressure and volume\\
+    MD Kinetic Energy& Kinetic energy of atoms in molecular dynamics\\
+    Total MD Energy& Sum of finite temperature electronic, repulsive and atomic
+    kinetic energies\\
+    \hline
+  \end{tabular}
+\end{center}
+
+Where available the Fermi level $\mu$ (i.e. the chemical potential of the
+electrons in the system) is also printed. For systems with an externally fixed
+Fermi level (i.e. where the total charge can change), this contribution is
+included in the Force related energy: $$\Delta E = + q_\mathrm{total} \mu,$$ but
+for calculations with fixed numbers of electrons it is not included in this
+energy. \textbf{Note:} The total energy reference may not match your required
+case in some situations, for example a shift with respect to the average
+electrostatic potential (in periodic cases) or whether the chemical potential
+should be with respect to the valence band maximum may be needed (see for
+example the discussion in Ref.~\cite{Lany_2009}).
+
 \section{results.tag}
 \label{sec:dftbp.results}
 \index{results.tag}
@@ -3672,7 +3753,7 @@ are printed in this order, followed by the data for a second channel if spin
 polarised.
 
 The files are produced if requested by setting \is{WriteEigenvectors} =
-\is{Yes}, with \is{EigenvectorsAsTxt} being also required to produce the plain
+\is{Yes}, with \is{EigenvectorsAsText} being also required to produce the plain
 text file (see section~\ref{kw:dftbp.WriteEigenvectors} for details).
 
 \section{charges.bin / charges.dat}

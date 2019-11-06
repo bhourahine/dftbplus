@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -2313,7 +2313,7 @@ contains
       & qInput, qOutput, eigen, filling, orb, species, tDFTBU, tImHam, tPrintMulliken, orbitalL,&
       & qBlockOut, Ef, Eband, TS, E0, pressure, cellVol, tAtomicEnergy, tDispersion, tEField,&
       & tPeriodic, nSpin, tSpin, tSpinOrbit, tScc, tOnSite, tNegf,  invLatVec, kPoints,&
-      & iAtInCentralRegion, electronicSolver, tDefinedFreeE)
+      & iAtInCentralRegion, electronicSolver, tDefinedFreeE, tHalogenX)
 
     !> File ID
     integer, intent(in) :: fd
@@ -2458,6 +2458,9 @@ contains
 
     !> Is the free energy correctly defined
     logical, intent(in) :: tDefinedFreeE
+
+    !> Is there a halogen bond correction present?
+    logical, intent(in) :: tHalogenX
 
     real(dp), allocatable :: qInputUpDown(:,:,:), qOutputUpDown(:,:,:), qBlockOutUpDown(:,:,:,:)
     real(dp) :: angularMomentum(3)
@@ -2741,8 +2744,9 @@ contains
       if (.not. tNegf) then
         ! set in the input and for multiple contact Ef values not meaningful anyway
         write(fd, format2U) 'Fermi level', Ef(iSpin), "H", Hartree__eV * Ef(iSpin), 'eV'
+        ! not current available from the Green's function solver
+        write(fd, format2U) 'Band energy', Eband(iSpin), "H", Hartree__eV * Eband(iSpin), 'eV'
       end if
-      write(fd, format2U) 'Band energy', Eband(iSpin), "H", Hartree__eV * Eband(iSpin), 'eV'
       if (any(electronicSolver%iSolver == [electronicSolverTypes%qr,&
           & electronicSolverTypes%divideandconquer, electronicSolverTypes%relativelyrobust,&
           & electronicSolverTypes%elpa])) then
@@ -2757,9 +2761,14 @@ contains
               & sum(qInputUpDown(:, iAtInCentralRegion(:), iSpin)),&
               & sum(qOutputUpDown(:, iAtInCentralRegion(:), iSpin))
         else
-          write(fd, "(3A, 2F18.10)") 'Input / Output electrons (', quaternionName(iSpin), '):',&
-              & sum(qInputUpDown(:, iAtInCentralRegion(:), iSpin)),&
-              & sum(qOutputUpDown(:, iAtInCentralRegion(:), iSpin))
+          if (tSCC) then
+            write(fd, "(3A, 2F18.10)") 'Input / Output electrons (', quaternionName(iSpin), '):',&
+                & sum(qInputUpDown(:, iAtInCentralRegion(:), iSpin)),&
+                & sum(qOutputUpDown(:, iAtInCentralRegion(:), iSpin))
+          else
+            write(fd, "(3A, F18.10)") 'Output electrons (', quaternionName(iSpin), '):',&
+                & sum(qOutputUpDown(:, iAtInCentralRegion(:), iSpin))
+          end if
         end if
       end if
       write(fd, *)
@@ -2795,6 +2804,10 @@ contains
     if (tDispersion) then
       write(fd, format2U) 'Dispersion energy', energy%eDisp, 'H',&
           & energy%eDisp * Hartree__eV, 'eV'
+    end if
+    if (tHalogenX) then
+      write(fd, format2U) 'Halogen correction energy', energy%eHalogenX, 'H',&
+          & energy%eHalogenX * Hartree__eV, 'eV'
     end if
 
     write(fd, format2U) 'Total energy', energy%Etotal, 'H', energy%Etotal * Hartree__eV, 'eV'
@@ -3567,7 +3580,7 @@ contains
     write(fdHS, *) shiftPerL
     write(fdHS, *) charges
 
-    if (allocated(blockShift)) then
+    if (allocated(blockCharges)) then
       do iSp = 1, nSpin
         do iAt = 1, nAtom
           write(fdHS, *) blockShift(:orb%nOrbAtom(iAt), :orb%nOrbAtom(iAt), iAt, iSp)

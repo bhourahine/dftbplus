@@ -15,6 +15,7 @@ rangesep/C60-nb-cutoff                 #? not WITH_MPI
 rangesep/Thymine-T1-force              #? not WITH_MPI
 rangesep/cyclopropene_nb_restart       #? not WITH_MPI
 rangesep/C240_tn                       #? not WITH_MPI
+rangesep/Thymine-T1_onsite             #? not WITH_MPI
 
 solvers/GaAs_2_ELPA2                   #? WITH_ELSI and MPI_PROCS == 8 and OMP_THREADS == 1
 solvers/Si32C32_ELPA1                  #? WITH_ELSI and MPI_PROCS <= 4 and OMP_THREADS == 1
@@ -33,12 +34,14 @@ solvers/Si32C32_OMM_kpoints            #? WITH_ELSI and MPI_PROCS % 4 == 0 and M
 solvers/Si32C32_OMM_ks                 #? WITH_ELSI and MPI_PROCS % 8 == 0 and MPI_PROCS <= 40 and OMP_THREADS == 1
 solvers/Si32C32_OMM_k_sparse           #? WITH_ELSI and MPI_PROCS % 4 == 0 and MPI_PROCS <= 20 and OMP_THREADS == 1
 solvers/Si32C32_OMM_ks_sparse          #? WITH_ELSI and MPI_PROCS % 8 == 0 and MPI_PROCS <= 40 and OMP_THREADS == 1
+solvers/Si8_LSdual                     #? WITH_ELSI and MPI_PROCS % 8 == 0 and MPI_PROCS <= 16 and OMP_THREADS == 1
 
 solvers/SiC64+V_PEXSI                  #? WITH_PEXSI and MPI_PROCS % 2 == 0 and MPI_PROCS <= 40 and OMP_THREADS == 1
 solvers/SiC64+V_spin_PEXSI             #? WITH_PEXSI and MPI_PROCS % 4 == 0 and MPI_PROCS <= 80 and OMP_THREADS == 1
 solvers/10-10Ctube_PEXSI_sparse        #? WITH_PEXSI and MPI_PROCS % 2 == 0 and MPI_PROCS <= 20 and OMP_THREADS == 1
 #!solvers/SiC64+V_spinkpts_PEXSI         #? WITH_PEXSI and MPI_PROCS % 2 == 0 and MPI_PROCS <= 40 and OMP_THREADS == 1
 #!solvers/SiC64+V_PEXSI_kpts             #? WITH_PEXSI and MPI_PROCS % 4 == 0 and MPI_PROCS <= 80 and OMP_THREADS == 1
+#!solvers/SiC64+V_spinkpts_PEXSI_sparse  #? WITH_PEXSI and MPI_PROCS % 2 == 0 and MPI_PROCS <= 40 and OMP_THREADS == 1
 
 derivatives/Si_2_Delta                 #? MPI_PROCS <= 1
 legacy/Si2_oldSKinterp                 #? MPI_PROCS <= 1
@@ -146,6 +149,13 @@ dangerous/C_SkCutoff_hard_default      #? MPI_PROCS <= 4
 dangerous/C_SkCutoff_soft_old          #? MPI_PROCS <= 4
 dangerous/C_SkCutoff_hard_old          #? MPI_PROCS <= 4
 
+halogen/3492                           #? WITH_DFTD3 and MPI_PROCS <= 1
+halogen/3499                           #? WITH_DFTD3 and MPI_PROCS <= 1
+halogen/3500                           #? WITH_DFTD3 and MPI_PROCS <= 1
+halogen/3501                           #? WITH_DFTD3 and MPI_PROCS <= 1
+halogen/3502                           #? WITH_DFTD3 and MPI_PROCS <= 1
+halogen/3518                           #? WITH_DFTD3 and MPI_PROCS <= 1
+
 timedep/cyclopentadienyl               #? WITH_ARPACK and MPI_PROCS <= 1
 timedep/C6H6-Sym                       #? WITH_ARPACK and MPI_PROCS <= 1
 timedep/C6H6-Sym_Arnoldi               #? WITH_ARPACK and MPI_PROCS <= 1
@@ -245,4 +255,7 @@ transport/SiH-cont-poiss               #? WITH_TRANSPORT and MPI_PROCS <= 4
 transport/graphene_x                   #? WITH_TRANSPORT and MPI_PROCS <= 4
 transport/graphene3T                   #? WITH_TRANSPORT and MPI_PROCS <= 4
 transport/Au-chain                     #? WITH_TRANSPORT and MPI_PROCS <= 4
+transport/SiH-chain_semiInf            #? WITH_TRANSPORT and MPI_PROCS <= 2
 transport/local-curr                   #? WITH_TRANSPORT and MPI_PROCS <= 4
+transport/polyacetylene_semiInf        #? WITH_TRANSPORT and MPI_PROCS <= 4
+transport/H-sheet_end                  #? WITH_TRANSPORT and MPI_PROCS <= 4

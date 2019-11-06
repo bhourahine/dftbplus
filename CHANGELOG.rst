@@ -11,10 +11,28 @@ Unreleased
 Added
 -----
 
+
+Changed
+-------
+
+
+Fixed
+-----
+
+- Correct update of block mulliken population for onsite correction with
+  range-separation hybrid DFTB.
+
+
+19.1 (2019-07-01)
+=================
+
+Added
+-----
+
 - Non-equilibrium Green's function transport.
 
 - Use of the ELSI library.
-  
+ 
 - Ability to perform ground state MD with excitation energies.
 
 - Caching for transition charges in excited state.
@@ -24,11 +42,14 @@ Added
 
 - Onsite corrected hamiltonian for ground state energies.
 
+- Range-separated hybrid DFTB.
+ 
 - GPU acceleration using the MAGMA library for eigensolution. WARNING: this is
   currently an experimental feature, so should be used with care.
 
-- Labelling of atomic orbital choices in output
+- Labelling of atomic orbital choices in output.
 
+- Halogen X correction.
 
 Changed
 -------
@@ -42,8 +63,9 @@ Fixed
 
 - Corrected Orbital to Shell naming conventions
 
-18.2
-====
+
+18.2 (2018-08-19)
+=================
 
 Added
 -----

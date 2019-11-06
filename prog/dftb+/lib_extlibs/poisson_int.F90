@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -202,7 +202,7 @@ contains
   #:if WITH_MPI
     call poiss_mpi_init(mpicomm)
     call poiss_mpi_split(min(poissoninfo%maxNumNodes, mpicomm%size))
-    call mpi_barrier(mpicomm, iErr)
+    call mpifx_barrier(mpicomm, iErr)
   !#:else
     !call error("The Poisson solver currently requires MPI parallelism to be enabled")
   #:endif

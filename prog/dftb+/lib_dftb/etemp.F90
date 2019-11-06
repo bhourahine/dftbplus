@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -120,10 +120,10 @@ contains
     end if
 
     ! For integer number of electrons, try middle gap for Ef
-    if (nElectrons - floor(nElectrons) < epsilon(1.0_dp)) then
+    if (abs(nElectrons - nint(nElectrons)) <= elecTol) then
       Ef = middleGap(eigenvals, kWeight, nElectrons)
       nElec = electronCount(Ef, eigenvals, kT, distrib, kWeight)
-      if (abs(nElectrons - nElec) <= elecTol) then
+      if (abs(nElectrons - nElec) <= elecTolMax) then
         call electronFill(Ebs, filling, TS, E0, Ef, eigenvals, kT, distrib, kWeight)
         return
       end if
