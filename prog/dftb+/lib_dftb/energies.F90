@@ -103,6 +103,9 @@ module dftbp_energies
     !> atom resolved DFTB+U
     real(dp), allocatable :: atomDftbu(:)
 
+    !> LC hybrid contribution
+    real(dp), allocatable :: atomLC(:)
+
     !> atom resolved external field
     real(dp), allocatable :: atomExt(:)
 
@@ -153,6 +156,7 @@ contains
     allocate(self%atomSpin(nAtom))
     allocate(self%atomLS(nAtom))
     allocate(self%atomDftbu(nAtom))
+    allocate(self%atomLC(nAtom))
     allocate(self%atomExt(nAtom))
     allocate(self%atomElec(nAtom))
     allocate(self%atomDisp(nAtom))
@@ -166,6 +170,7 @@ contains
     self%atomSpin(:) = 0.0_dp
     self%atomLS(:) = 0.0_dp
     self%atomDftbu(:) = 0.0_dp
+    self%atomLC = 0.0_dp
     self%atomExt(:) = 0.0_dp
     self%atomElec(:) = 0.0_dp
     self%atomDisp(:) = 0.0_dp

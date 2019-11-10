@@ -2763,6 +2763,9 @@ contains
 
     integer :: iKS, iSpin
 
+    if (tAtomicEnergy .and. associated(deltaRhoOutSqr)) then
+      energy%atomLC(:) = 0.0_dp
+    end if
     rhoPrim(:,:) = 0.0_dp
     do iKS = 1, parallelKS%nLocalKS
       iSpin = parallelKS%localKS(2, iKS)
@@ -2789,9 +2792,12 @@ contains
             & denseDesc%iAtomStart, iSparseStart, img2CentCell)
         call env%globalTimer%stopTimer(globalTimers%denseToSparse)
       else
-        ! Rangeseparated case: pack delta density matrix
-        call makeDensityMatrix(deltaRhoOutSqr(:,:,iSpin),&
-            & eigvecs(:,:,iKS), filling(:,iSpin))
+        ! Range separated case: pack delta density matrix
+        call makeDensityMatrix(deltaRhoOutSqr(:,:,iSpin), eigvecs(:,:,iKS), filling(:,iSpin))
+        if (tAtomicEnergy) then
+          call rangeSep%addLREnergy(env, deltaRhoOutSqr(:,:,iSpin), SSqrReal, denseDesc%iAtomStart,&
+              & energy%atomLC)
+        end if
         call env%globalTimer%startTimer(globalTimers%denseToSparse)
         call packHS(rhoPrim(:,iSpin), deltaRhoOutSqr(:,:,iSpin), neighbourlist%iNeighbour,&
             & nNeighbourSK, orb%mOrb, denseDesc%iAtomStart, iSparseStart, img2CentCell)
@@ -3439,9 +3445,9 @@ contains
     energy%Eelec = energy%EnonSCC + energy%ESCC + energy%Espin + energy%ELS + energy%Edftbu&
         & + energy%Eext + energy%e3rd + energy%eOnSite
 
-    !> Add exchange conribution for range separated calculations
+    !> Add exchange contribution for range separated calculations
     if (allocated(rangeSep)) then
-       call rangeSep%addLREnergy(energy%Eelec)
+      call rangeSep%addLREnergy(energy%Eelec)
     end if
 
     energy%atomElec(:) = energy%atomNonSCC + energy%atomSCC + energy%atomSpin + energy%atomDftbu&

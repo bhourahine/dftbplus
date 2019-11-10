@@ -109,6 +109,7 @@ module dftbp_rangeseparated
     procedure :: addLrEnergy
     procedure :: addLrGradients
     procedure :: evaluateLrEnergyDirect
+    procedure :: addLRAtomicEnergyDirect
 
   end type RangeSepFunc
 
@@ -1250,5 +1251,62 @@ contains
     call env%globalTimer%stopTimer(globalTimers%energyEval)
 
   end function evaluateLrEnergyDirect
+
+
+  !> evaluate the LR-Energy contribution directly for atoms
+  subroutine addLRAtomicEnergyDirect(this, env, deltaRho, ovrlap, iSquare, eAtom)
+
+    !> instance of LR
+    class(RangeSepFunc), intent(inout) :: this
+
+    !> Environment settings
+    type(TEnvironment), intent(inout) :: env
+
+    !> square density matrix
+    real(dp), intent(in) :: deltaRho(:,:)
+
+    !> square overlap matrix
+    real(dp), intent(in) :: ovrlap(:,:)
+
+    !> Dense matrix atom indexing
+    integer, intent(in) :: iSquare(:)
+
+    !> resulting energy
+    real(dp), intent(inout) :: eAtom(:)
+
+    integer :: iAt1, iAt2, nAtom, mu, nu, alpha, beta
+    real(dp), allocatable :: tmpOvr(:,:), tmpDRho(:,:)
+    real(dp) :: tmp, eTmp
+
+    call env%globalTimer%startTimer(globalTimers%energyEval)
+    nAtom = size(this%species)
+    tmpOvr = ovrlap
+    tmpDRho = deltaRho
+    call symmetrizeSquareMatrix(tmpOvr)
+    call symmetrizeSquareMatrix(tmpDRho)
+
+    do iAt1 = 1, nAtom
+      do iAt2 = 1, nAtom
+        tmp = 0.0_dp
+        do mu = iSquare(iAt1), iSquare(iAt1 + 1) - 1
+          do nu = iSquare(iAt2), iSquare(iAt2 + 1) - 1
+            do alpha = 1, size(tmpOvr, dim = 1)
+              do beta = 1, size(tmpOvr, dim = 1)
+                tmp = tmp + (&
+                    & tmpDRho(alpha,beta) * tmpDRho(mu,nu)&
+                    & +tmpDRho(mu,beta) * tmpDRho(alpha,nu)) * tmpOvr(mu,alpha) * tmpOvr(nu,beta)
+              end do
+            end do
+          end do
+        end do
+        eTmp = 0.0625_dp * tmp * this%lrGammaEval(iAt1,iAt2)
+        eAtom(iAt1) = eAtom(iAt1) + eTmp
+        eAtom(iAt2) = eAtom(iAt2) + eTmp
+      end do
+    end do
+
+    call env%globalTimer%stopTimer(globalTimers%energyEval)
+
+  end subroutine addLRAtomicEnergyDirect
 
 end module dftbp_rangeseparated
