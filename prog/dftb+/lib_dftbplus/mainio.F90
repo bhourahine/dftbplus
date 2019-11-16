@@ -26,7 +26,7 @@ module dftbp_mainio
   use dftbp_accuracy
   use dftbp_constants
   use dftbp_orbitals, only : orbitalNames, getShellNames
-  use dftbp_periodic
+  use dftbp_neighbourlists, only : TNeighbourList
   use dftbp_commontypes
   use dftbp_sparse2dense
   use dftbp_blasroutines

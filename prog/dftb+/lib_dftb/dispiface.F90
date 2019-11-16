@@ -8,7 +8,7 @@
 !> Common interface for all dispersion modules.
 module dftbp_dispiface
   use dftbp_accuracy, only : dp
-  use dftbp_periodic, only : TNeighbourList
+  use dftbp_neighbourlists, only : TNeighbourList
   implicit none
   private
   

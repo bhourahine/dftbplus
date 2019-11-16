@@ -39,6 +39,8 @@ module dftbp_main
   use dftbp_onsitecorrection
   use dftbp_externalcharges
   use dftbp_periodic
+  use dftbp_neighbourlists, only : TNeighbourList, getNrOfNeighboursForAll
+  use dftbp_matrixindexing, only : getSparseDescriptor
   use dftbp_mixer
   use dftbp_geoopt
   use dftbp_numderivs2

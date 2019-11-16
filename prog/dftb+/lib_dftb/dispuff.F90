@@ -20,7 +20,9 @@ module dftbp_dispuff
   use dftbp_accuracy
   use dftbp_simplealgebra, only : determinant33
   use dftbp_lapackroutines, only : matinv
-  use dftbp_periodic, only: TNeighbourList, getNrOfNeighboursForAll, getLatticePoints
+  use dftbp_neighbourlists, only: TNeighbourList
+  use dftbp_periodic, only: getLatticePoints
+  use dftbp_neighbourlists, only: getNrOfNeighboursForAll
   use dftbp_constants, only: pi
   use dftbp_dispiface
   use dftbp_dispcommon

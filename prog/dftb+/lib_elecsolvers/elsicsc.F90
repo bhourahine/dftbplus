@@ -15,7 +15,7 @@ module dftbp_elsicsc
   use dftbp_accuracy, only : dp
   use dftbp_assert
   use dftbp_environment, only : TEnvironment
-  use dftbp_periodic, only : TNeighbourList
+  use dftbp_neighbourlists, only : TNeighbourList
   use dftbp_constants, only : pi
   use dftbp_message, only : error
   implicit none

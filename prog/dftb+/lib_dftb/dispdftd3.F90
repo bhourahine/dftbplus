@@ -13,7 +13,7 @@ module dftbp_dispdftd3
   use dftbp_accuracy
   use dftbp_dispiface
   use dftbp_dftd3
-  use dftbp_periodic, only : TNeighbourList, getNrOfNeighboursForAll
+  use dftbp_neighbourlists, only : TNeighbourList, getNrOfNeighboursForAll
   use dftbp_simplealgebra, only : determinant33
   use dftbp_constants
   implicit none

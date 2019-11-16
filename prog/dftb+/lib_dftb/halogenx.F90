@@ -14,7 +14,7 @@ module dftbp_halogenx
   use dftbp_accuracy, only : dp, mc
   use dftbp_vdwdata
   use dftbp_constants, only : AA__Bohr, Bohr__AA, kcal_mol__Hartree
-  use dftbp_periodic, only : TNeighbourList, getNrOfNeighboursForAll
+  use dftbp_neighbourlists, only : TNeighbourList, getNrOfNeighboursForAll
   use dftbp_message
   implicit none
   private

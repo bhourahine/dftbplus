@@ -18,7 +18,7 @@ module dftbp_pmlocalisation
   use dftbp_sparse2dense, only :unpackHS
   use dftbp_sorting
   use dftbp_message
-  use dftbp_periodic, only : TNeighbourList
+  use dftbp_neighbourlists, only : TNeighbourList
   implicit none
   private
 

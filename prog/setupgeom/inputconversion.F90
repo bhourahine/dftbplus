@@ -15,7 +15,7 @@ module dftbp_inputconversion
   use dftbp_accuracy
   use dftbp_commontypes
   use dftbp_wrappedintr
-  use dftbp_periodic, only : buildSquaredAtomIndex
+  use dftbp_matrixindexing, only : buildSquaredAtomIndex
   implicit none
   private
 

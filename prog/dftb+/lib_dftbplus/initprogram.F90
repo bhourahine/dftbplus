@@ -25,6 +25,8 @@ module dftbp_initprogram
   use dftbp_elsisolver, only : TElsiSolver_init, TElsiSolver_final
   use dftbp_elsiiface
   use dftbp_periodic
+  use dftbp_matrixindexing, only : buildSquaredAtomIndex
+  use dftbp_neighbourlists, only : TNeighbourList, neighbourList_init
   use dftbp_accuracy
   use dftbp_intrinsicpr
   use dftbp_shortgamma
@@ -2453,7 +2455,7 @@ contains
 
     ! Initialize neighbourlist.
     allocate(neighbourList)
-    call init(neighbourList, nAtom, nInitNeighbour)
+    call neighbourList_init(neighbourList, nAtom, nInitNeighbour)
     allocate(nNeighbourSK(nAtom))
     allocate(nNeighbourRep(nAtom))
     if (tRangeSep) then

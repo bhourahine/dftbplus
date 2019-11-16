@@ -21,7 +21,8 @@ module dftbp_scc
   use dftbp_shortgamma
   use dftbp_fileid
   use dftbp_constants
-  use dftbp_periodic
+  use dftbp_periodic, only : getLatticePoints, getCellTranslations
+  use dftbp_neighbourlists, only : TNeighbourList, getNrOfNeighbours
   use dftbp_externalcharges
   use dftbp_blasroutines
   use dftbp_commontypes

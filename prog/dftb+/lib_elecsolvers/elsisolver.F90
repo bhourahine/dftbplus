@@ -18,7 +18,7 @@ module dftbp_elsisolver
   use dftbp_elsiiface
   use dftbp_elsicsc
   use dftbp_densedescr
-  use dftbp_periodic
+  use dftbp_neighbourlists, only : TNeighbourList
   use dftbp_orbitals
   use dftbp_message, only : error, cleanshutdown
   use dftbp_commontypes, only : TParallelKS, TOrbitals
