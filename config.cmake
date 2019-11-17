@@ -1,7 +1,7 @@
 #
 # Global architecture independent build settings
 #
-set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type (Release|Debug)")
+set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (Release|Debug)")
 
 set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/_install" CACHE STRING
   "Directory to install the compiled code into")

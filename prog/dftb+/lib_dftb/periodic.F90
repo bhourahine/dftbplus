@@ -7,7 +7,7 @@
 
 #:include 'common.fypp'
 
-!> Contains subroutines for the periodic boundary conditions
+!> Contains subroutines for periodic boundary conditions
 module dftbp_periodic
   use dftbp_assert
   use dftbp_accuracy
@@ -196,7 +196,7 @@ contains
   end subroutine foldCoordToUnitCell
 
 
-  !> Updates the neighbour list according to a given geometry.
+  !> Updates the neighbour list for a given geometry.
   !> The neighbourlist for the given cutoff is calculated. Arrays are resized if necessary. The
   !> neighbour list determination is a simple N^2 algorithm, calculating the distance between the
   !> possible atom pairs.
@@ -411,85 +411,6 @@ contains
     species(1:nAllAtom) = species0(img2CentCell(1:nAllAtom))
 
   end subroutine updateNeighbourListAndSpecies
-
-
-  !> Reallocate arrays which depends on the maximal nr. of all atoms.
-  subroutine reallocateArrays1(img2CentCell, iCellVec, coord, mNewAtom)
-
-    !> array mapping images of atoms to originals in the central cell
-    integer, allocatable, intent(inout) :: img2CentCell(:)
-
-    !> Index of unit cell containing atom
-    integer, allocatable, intent(inout) :: iCellVec(:)
-
-    !> coordinates of all atoms (actual and image)
-    real(dp), allocatable, intent(inout) :: coord(:, :)
-
-    !> maximum number of new atoms
-    integer, intent(in) :: mNewAtom
-
-    integer :: mAtom
-    integer, allocatable :: tmpIntR1(:)
-    real(dp), allocatable :: tmpRealR2(:, :)
-
-    mAtom = size(img2CentCell)
-
-    @:ASSERT(size(iCellVec) == mAtom)
-    @:ASSERT(all(shape(coord) == (/ 3, mAtom /)))
-    !@:ASSERT((mNewAtom > 0) .and. (mNewAtom > mAtom))
-    @:ASSERT((mNewAtom > 0))
-    mAtom = min(mAtom,mNewAtom)
-
-    call move_alloc(img2CentCell, tmpIntR1)
-    allocate(img2CentCell(mNewAtom))
-    img2CentCell(:) = 0
-    img2CentCell(:mAtom) = tmpIntR1(:mAtom)
-
-    tmpIntR1(:) = iCellVec(:)
-    deallocate(iCellVec)
-    allocate(iCellVec(mNewAtom))
-    iCellVec(:mAtom) = tmpIntR1(:mAtom)
-
-    call move_alloc(coord, tmpRealR2)
-    allocate(coord(3, mNewAtom))
-    coord(:, :mAtom) = tmpRealR2(:, :mAtom)
-
-  end subroutine reallocateArrays1
-
-
-  !> Reallocate array which depends on the maximal nr. of neighbours.
-  subroutine reallocateArrays3(iNeighbour, neighDist2, mNewNeighbour)
-
-    !> list of neighbours
-    integer, allocatable, intent(inout) :: iNeighbour(:, :)
-
-    !> square of distances between atoms
-    real(dp), allocatable, intent(inout) :: neighDist2(:,:)
-
-    !> maximum number of new atoms
-    integer, intent(in) :: mNewNeighbour
-
-    integer :: mNeighbour, mAtom
-    integer, allocatable :: tmpIntR2(:,:)
-    real(dp), allocatable :: tmpRealR2(:,:)
-
-    mNeighbour = ubound(iNeighbour, dim=1)
-    mAtom = size(iNeighbour, dim=2)
-
-    @:ASSERT(mNewNeighbour > 0 .and. mNewNeighbour > mNeighbour)
-    @:ASSERT(all(shape(neighDist2) == shape(iNeighbour)))
-
-    call move_alloc(iNeighbour, tmpIntR2)
-    allocate(iNeighbour(0:mNewNeighbour, mAtom))
-    iNeighbour(:,:) = 0
-    iNeighbour(:mNeighbour, :mAtom) = tmpIntR2
-
-    call move_alloc(neighDist2, tmpRealR2)
-    allocate(neighDist2(0:mNewNeighbour, mAtom))
-    neighDist2(:,:) = 0.0_dp
-    neighDist2(:mNeighbour, :mAtom) = tmpRealR2
-
-  end subroutine reallocateArrays3
 
 
   !> Creates a K-points sampling, equivalent to folding of a reciprocal point of a super lattice.

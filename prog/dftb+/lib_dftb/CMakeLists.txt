@@ -1,8 +1,10 @@
 set(curdir "lib_dftb")
 
 set(sources-fpp
+  ${curdir}/boundaryconditions.F90
   ${curdir}/chargeconstr.F90
   ${curdir}/charges.F90
+  ${curdir}/cluster.F90
   ${curdir}/coulomb.F90
   ${curdir}/densitymatrix.F90
   ${curdir}/dftbplusu.F90

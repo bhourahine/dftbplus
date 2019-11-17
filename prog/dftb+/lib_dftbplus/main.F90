@@ -39,6 +39,7 @@ module dftbp_main
   use dftbp_onsitecorrection
   use dftbp_externalcharges
   use dftbp_periodic
+  use dftbp_cluster
   use dftbp_neighbourlists, only : TNeighbourList, getNrOfNeighboursForAll
   use dftbp_matrixindexing, only : getSparseDescriptor
   use dftbp_mixer
@@ -864,7 +865,7 @@ contains
     !> MD instantaneous thermal energy
     real(dp), intent(out) :: tempIon
 
-    !> Whether geometry optimisation should be stop
+    !> Whether geometry optimisation should be stopped
     logical, intent(out) :: tExitGeoOpt
 
 
@@ -1175,8 +1176,13 @@ contains
       call foldCoordToUnitCell(coord0Fold, latVec, invLatVec)
     end if
 
-    call updateNeighbourListAndSpecies(coord, species, img2CentCell, iCellVec, neighbourList,&
-        & nAllAtom, coord0Fold, species0, cutoff%mCutOff, rCellVec)
+    if (tPeriodic) then
+      call updateNeighbourListAndSpecies(coord, species, img2CentCell, iCellVec, neighbourList,&
+          & nAllAtom, coord0Fold, species0, cutoff%mCutOff, rCellVec)
+    else
+      call clusterNeighbourList(coord, img2CentCell, iCellVec, neighbourList, nAllAtom,&
+          & coord0Fold, cutoff%mCutOff, species0=species0, species=species)
+    end if
 
     call getNrOfNeighboursForAll(nNeighbourSK, neighbourList, cutoff%skCutOff)
 

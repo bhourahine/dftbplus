@@ -24,7 +24,10 @@ module dftbp_initprogram
   use dftbp_elecsolvers
   use dftbp_elsisolver, only : TElsiSolver_init, TElsiSolver_final
   use dftbp_elsiiface
+
+  use dftbp_boundaryconditions
   use dftbp_periodic
+
   use dftbp_matrixindexing, only : buildSquaredAtomIndex
   use dftbp_neighbourlists, only : TNeighbourList, neighbourList_init
   use dftbp_accuracy
@@ -191,6 +194,9 @@ module dftbp_initprogram
 
   !> if calculation is periodic
   logical :: tPeriodic
+
+  !> geometric boundary conditions
+  type(TBoundaryConditions) :: bc
 
   !> Should central cell coordinates be output?
   logical :: tShowFoldedCoord
@@ -1158,7 +1164,14 @@ contains
     nType = input%geom%nSpecies
     orb = input%slako%orb
     nOrb = orb%nOrb
-    tPeriodic = input%geom%tPeriodic
+
+    if (input%geom%tPeriodic) then
+      allocate(latVec(3, 3))
+      latVec(:,:) = input%geom%latVecs
+    end if
+    call BoundaryConditions_init(bc, latVec)
+
+    tPeriodic = bc%periodic()
 
     ! Brillouin zone sampling
     if (tPeriodic) then
@@ -1228,9 +1241,6 @@ contains
 
     if (tPeriodic) then
       tLatticeChanged = .true.
-      allocate(latVec(3, 3))
-      @:ASSERT(all(shape(input%geom%latVecs) == shape(latVec)))
-      latVec(:,:) = input%geom%latVecs(:,:)
       allocate(recVec(3, 3))
       allocate(invLatVec(3, 3))
       invLatVec = latVec(:,:)

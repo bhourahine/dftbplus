@@ -26,6 +26,7 @@ module dftbp_parser
   use dftbp_inputconversion
   use dftbp_lapackroutines, only : matinv
   use dftbp_periodic
+  use dftbp_cluster
   use dftbp_neighbourlists, only : TNeighbourList, neighbourList_init
   use dftbp_dispersions
   use dftbp_simplealgebra, only: cross3, determinant33
@@ -3216,8 +3217,14 @@ contains
       allocate(coords(3, nAllAtom))
       allocate(img2CentCell(nAllAtom))
       allocate(iCellVec(nAllAtom))
-      call updateNeighbourList(coords, img2CentCell, iCellVec, neighs, &
-          &nAllAtom, geo%coords, mCutoff, rCellVec)
+      if (geo%tPeriodic) then
+        call updateNeighbourList(coords, img2CentCell, iCellVec, neighs, &
+            &nAllAtom, geo%coords, mCutoff, rCellVec)
+      else
+        call clusterNeighbourList(coords, img2CentCell, iCellVec, neighs, &
+            &nAllAtom, geo%coords, mCutoff)
+      end if
+
       allocate(nNeighs(geo%nAtom))
       nNeighs(:) = 0
       do iAt1 = 1, geo%nAtom
