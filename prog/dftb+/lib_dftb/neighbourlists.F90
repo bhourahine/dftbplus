@@ -120,7 +120,7 @@ contains
   @:ASSERT(cutoff >= 0.0_dp)
   @:ASSERT(iAtom <= size(neigh%nNeighbour))
 
-    ! Issue warning, if cutoff is bigger as used for the neighbourlist.
+    ! Issue warning, if cutoff is bigger than than used for the neighbourlist.
     if (cutoff > neigh%cutoff) then
       write (strError, formatErr) cutoff, neigh%cutoff
       call warning(strError)

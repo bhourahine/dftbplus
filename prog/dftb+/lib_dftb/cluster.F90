@@ -88,6 +88,8 @@ contains
       symm = symmetric
     end if
 
+    neigh%cutoff = cutoff
+
     ! Clean out arrays
     !  (Every atom is the 0th neighbour of itself with zero distance square.)
     neigh%nNeighbour(:) = 0
