@@ -12,6 +12,7 @@ set(sources-fpp
   ${curdir}/factorial.F90
   ${curdir}/hermite.F90
   ${curdir}/interpolation.F90
+  ${curdir}/kdtree.F90
   ${curdir}/lapackroutines.F90
   ${curdir}/qm.F90
   ${curdir}/randomgenpool.F90
