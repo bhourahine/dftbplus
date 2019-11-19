@@ -10,22 +10,35 @@
 !> kd-data structure for range searches
 module dftbp_kdtree
   use dftbp_accuracy, only : dp
+  use dftbp_constants
   use dftbp_sorting
   use dftbp_message
   use dftbp_globalenv, only : stdOut
   implicit  none
 
   private
-  public :: tKDTree, newleaf, insertnodes, printtree, destroytree
+  public :: tKDTree, newleaf, insertnodes, rangesearch, printtree, destroytree
 
   !> Tree node
   type :: tKDTree
     private
+
+    !> Index of coordinate on which the split was performed
     integer :: split
+
+    !> Depth in the tree
     integer :: depth
-    type (tKDTree), allocatable :: left, right
+
+    !> left descendant node from this one
+    type (tKDTree), allocatable :: left
+
+    !> right descendant node from this one
+    type (tKDTree), allocatable :: right
+
   end type tKDTree
 
+
+  !> Blank string to pad out tree printing for aesthetic reasons
   character (*), parameter :: padding = "                                                          "
 
 contains
@@ -54,7 +67,10 @@ contains
   end subroutine newleaf
 
 
-  !> Function to insert many points in a balanced way into the tree
+  !> Function to insert many points in a reasonably balanced way into a tree. Note there is room to
+  !> optimise performance as sorting is on all coordinates at each level. Can instead estimate
+  !> median from a sample or use a more complex sorting pattern initially. Also can stop tree with
+  !> multiple coordinates in leaf nodes instead of extending to single site at each leaf.
   recursive subroutine insertnodes(t, n, coord, depth)
 
     !> Tree instance
@@ -85,7 +101,9 @@ contains
     case(0)
       call error("Shouldn't be here")
     case(1)
+
       t % split = n(1)
+
     case default
 
       allocate(indx(nPts))
@@ -96,6 +114,16 @@ contains
       if (mod(nPts+1, 2) == 0) then
         median = median + 1
       end if
+
+      ! if the there are other points matching the median coordinate, increase to the end of the
+      ! degenerate group, as we are using sorted set instead of comparision against point
+      do while(median < nPts)
+        if ( abs(coord(iDim, n(median)) - coord(iDim, n(median + 1))) < epsilon(1.0-dp)) then
+          median = median + 1
+        else
+          exit
+        end if
+      end do
 
       t % split = n(median)
 
@@ -118,7 +146,81 @@ contains
   end subroutine insertnodes
 
 
+  !> Perform an orthogonal range search on the tree around a specified point, returning coordinate
+  !> labels within the cutOff
+  recursive subroutine rangesearch(t, depth, point, cutOff, coord, nChecked, found, nFound, starter)
+
+    !> Tree instance
+    type (tKDTree), intent (in), allocatable :: t
+
+    !> Depth in tree
+    integer, intent(in) :: depth
+
+    !> Point around which to compare
+    real(dp), intent(in) :: point(:)
+
+    !> Side of box containing point
+    real(dp), intent(in) :: cutOff
+
+    !> Coordinates
+    real(dp), intent(in)  :: coord(:,:)
+
+    !> number of points being checked
+    integer, intent(inout) :: nChecked
+
+    !> List of found points
+    integer, intent(inout), allocatable :: found(:)
+
+    !> Number of found points
+    integer, intent(inout) :: nFound
+
+    !> starting value to check
+    integer, intent(in) :: starter
+
+    integer :: iDim
+    integer, allocatable :: tmp(:)
+
+    if (.not. allocated(t)) then
+      return
+    end if
+
+    nChecked = nChecked + 1
+
+    iDim = mod(t % depth, size(coord, dim=1)) + 1
+
+    if ( sum( (point - coord(:, t % split))**2) <= cutOff**2 ) then
+      if (t % split > starter) then
+        nFound = nFound + 1
+        if (nFound > size(found)) then
+          allocate(tmp(2*nFound))
+          tmp(:nFound -1) = found(:nFound -1)
+          tmp(nFound) = t%split
+          call move_alloc(tmp, found)
+        end if
+      end if
+    end if
+
+    if ( point(iDim) - cutOff <= coord(iDim, t % split) ) then
+
+      ! explore left side
+      call rangesearch(t%left, depth+1, point, cutOff, coord, nChecked, found, nFound, starter)
+
+    end if
+
+    if ( point(iDim) + cutOff >= coord(iDim, t % split) ) then
+
+      ! explore right side
+      call rangesearch(t%right, depth+1, point, cutOff, coord, nChecked, found, nFound, starter)
+
+    end if
+
+  end subroutine rangesearch
+
+
+  !> Print out the tree if requested
   recursive subroutine printtree(t)
+
+    !> tree node
     type (tKDTree), intent (in), allocatable :: t
 
     if (allocated(t)) then
@@ -133,15 +235,16 @@ contains
 
   end subroutine printtree
 
+
+  !> Destroy the tree
   recursive subroutine destroytree(t)
 
+    !> Tree node instance
     type (tKDTree), allocatable :: t
 
     if (.not. allocated(t)) then
       return
     end if
-
-    !write(*,*)padding(:2*t%depth), 'Node with ', t % split, t % depth
 
     call destroytree(t % left)
     call destroytree(t % right)
@@ -157,28 +260,3 @@ contains
   end subroutine destroytree
 
 end module dftbp_kdtree
-
-
-!program main
-!  use class_tree
-!  implicit none
-!
-!  integer :: ii, n, nPts
-!  type (tKDTree), allocatable :: t
-!
-!  allocate(t)
-!  read(*,*)nPts
-!  do ii = 1, nPts
-!    read(*,*)n
-!    if (ii == 1) then
-!      call newleaf(t, n)
-!    else
-!      call insertnode(t,n)
-!    end if
-!  end do
-!  write(*,*)'Tree'
-!  call printtree(t)
-!  write(*,*)'Destroy'
-!  call destroytree(t)
-!
-!end program main
