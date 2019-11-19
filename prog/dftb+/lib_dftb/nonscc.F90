@@ -18,6 +18,7 @@ module dftbp_nonscc
   use dftbp_message
   use dftbp_schedule
   use dftbp_environment
+  use dftbp_message
   implicit none
   private
 
@@ -38,12 +39,17 @@ module dftbp_nonscc
     integer :: diffType
   contains
 
-    !> evaluate first derivative
+    !> evaluate first derivative for a pair of atoms
+    procedure :: getFirstDerivBlock
+
+    !> evaluate second derivative for a pair of atoms
+    procedure :: getSecondDerivBlock
+
+    !> evaluate first derivative of whole matrix wrt to one atom
     procedure :: getFirstDeriv
 
-    !> evaluate second derivative
-    procedure :: getSecondDeriv
   end type NonSccDiff
+
 
   !> Namespace for possible differentiation methods
   type :: diffTypesEnum
@@ -84,7 +90,7 @@ contains
     !> Chemical species of each atom
     integer, intent(in) :: species(:)
 
-    !> Shift vector, where the interaction between two atoms
+    !> Where the interaction between two atoms starts in the sparse format.
     integer, intent(in) :: iPair(0:,:)
 
     !> Information about the orbitals in the system
@@ -141,7 +147,7 @@ contains
     !> Chemical species of each atom
     integer, intent(in) :: species(:)
 
-    !> Shift vector, where the interaction between two atoms starts in the sparse format.
+    !> Where the interaction between two atoms starts in the sparse format.
     integer, intent(in) :: iPair(0:,:)
 
     !> Information about the orbitals in the system.
@@ -197,13 +203,14 @@ contains
 
   end subroutine NonSccDiff_init
 
-  !> Calculates the first derivative of H0 or S.
-  subroutine getFirstDeriv(this, deriv, skCont,coords, species, atomI, atomJ, orb)
+
+  !> Calculates the first derivative of a block of H0 or S between atomI and atomJ
+  subroutine getFirstDerivBlock(this, deriv, skCont, coords, species, atomI, atomJ, orb)
 
     !> Instance
     class(NonSccDiff), intent(in) :: this
 
-    !> Derivative of H or S diatomic block, with respect to x,y,z (last index).
+    !> Derivative of H0 or S diatomic block, with respect to x,y,z (last index).
     real(dp), intent(out) :: deriv(:,:,:)
 
     !> Container for the SK integrals
@@ -230,23 +237,100 @@ contains
           & this%deltaXDiff)
     case (diffTypes%richardson)
       call getFirstDerivRichardson(deriv, skCont, coords, species, atomI, atomJ, orb)
+    case default
+      call error("Derivator not initialised")
     end select
+
+  end subroutine getFirstDerivBlock
+
+
+  !> Calculates the first derivative of H0 or S with respect to iAt position
+  subroutine getFirstDeriv(this, deriv, env, skCont, coords, species, iAt, orb, nNeighbourSK,&
+      & iNeighbours, iPair, img2centcell)
+
+    !> Instance
+    class(NonSccDiff), intent(in) :: this
+
+    !> Derivative of H0 or S diatomic block, with respect to x,y,z (last index).
+    real(dp), intent(out) :: deriv(:,:)
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Container for the SK integrals
+    type(OSlakoCont), intent(in) :: skCont
+
+    !> List of all coordinates, including possible periodic images of atoms
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Chemical species of each atom
+    integer, intent(in) :: species(:)
+
+    !> Atom to differentiate wrt
+    integer, intent(in) :: iAt
+
+    !> Orbital informations
+    type(TOrbitals), intent(in) :: orb
+
+    !> Number of neighbours for each central cell atom
+    integer, intent(in) :: nNeighbourSK(:)
+
+    !> List of neighbours for each central cell
+    integer, intent(in) :: iNeighbours(0:,:)
+
+    !> Index in the sparse matrix for the start of diatomic pairs
+    integer, intent(in) :: iPair(0:,:)
+
+    !> indexing array for periodic image atoms
+    integer, intent(in) :: img2CentCell(:)
+
+    real(dp) :: tmp(size(deriv,dim=1))
+    real(dp), allocatable :: coordTmp(:,:)
+    integer :: ii, iCart
+
+    deriv(:,:) = 0.0_dp
+
+    select case (this%diffType)
+    case (diffTypes%finiteDiff)
+
+      coordTmp = coords
+      do iCart = 1, 3
+        tmp(:) = 0.0_dp
+        do ii = -1, 1, 2
+          coordTmp(:,iAt) = coords(:,iAt)
+          coordTmp(iCart,iAt) = coords(iCart,iAt) + ii * this%deltaXDiff
+          if (ii == 1) then
+            ! onsites cancel, so can use build S for either H0 or S
+            call buildS(env, deriv(:,iCart), skCont, coordTmp, nNeighbourSK, iNeighbours, species,&
+                & iPair, orb)
+          else
+            call buildS(env, tmp, skCont, coordTmp, nNeighbourSK, iNeighbours, species, iPair, orb)
+          end if
+        end do
+        deriv(:,iCart) = (deriv(:,iCart) - tmp) / (2.0_dp * this%deltaXDiff)
+      end do
+
+    case default
+      call error("Method not currently implemented for full derivatives")
+    end select
+
 
   end subroutine getFirstDeriv
 
+
   !> Calculates the numerical second derivative of a diatomic block of H0 or S.
-  subroutine getSecondDeriv(this, deriv, skCont, coords, species, atomI, atomJ, orb)
+  subroutine getSecondDerivBlock(this, deriv, skCont, coords, species, atomI, atomJ, orb)
 
     !> Instance.
     class(NonSccDiff), intent(in) :: this
 
-    !> Derivative of the diatomic block, with respect to x,y,z (last 2 indices)
+    !> Derivatives of the diatomic block, with respect to x,y,z (last 2 indices)
     real(dp), intent(out) :: deriv(:,:,:,:)
 
     !> Container for SK Hamiltonian integrals
     type(OSlakoCont), intent(in) :: skCont
 
-    !> List of all coordinates, including possible  periodic images of atoms.
+    !> All coordinates, including possible  periodic images of atoms.
     real(dp), intent(in) :: coords(:,:)
 
     !> Chemical species of each atom
@@ -270,23 +354,45 @@ contains
     case (diffTypes%richardson)
       call getSecondDerivFiniteDiff(deriv, skCont, coords, species, atomI, atomJ, orb,&
           & this%deltaXDiff)
+    case default
+      call error("Derivator not initialised")
     end select
 
-  end subroutine getSecondDeriv
+  end subroutine getSecondDerivBlock
 
 
   !> Helper routine to calculate the diatomic blocks for the routines buildH0 and buildS.
   subroutine buildDiatomicBlocks(firstAtom, lastAtom, skCont, coords, nNeighbourSK, iNeighbours,&
       & species, iPair, orb, out)
+
+    !> First atom to evaluate blocks for
     integer, intent(in) :: firstAtom
+
+    !> Last atom to evaluate blocks for
     integer, intent(in) :: lastAtom
+
+    !> Container for the SK integrals
     type(OSlakoCont), intent(in) :: skCont
+
+    !> All coordinates, including possible  periodic images of atoms.
     real(dp), intent(in) :: coords(:,:)
+
+    !> Number of neighbours for each central cell atom
     integer, intent(in) :: nNeighbourSK(:)
+
+    !> List of neighbours for each central cell
     integer, intent(in) :: iNeighbours(0:,:)
+
+    !> Chemical species of each atom
     integer, intent(in) :: species(:)
+
+    !> Where the interaction between two atoms starts in the sparse format.
     integer, intent(in) :: iPair(0:,:)
+
+    !> Orbital informations
     type(TOrbitals), intent(in) :: orb
+
+    !> Resulting diatomic block as a 1D reshape
     real(dp), intent(inout) :: out(:)
 
     real(dp) :: tmp(orb%mOrb,orb%mOrb)

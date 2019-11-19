@@ -90,19 +90,19 @@ module dftbp_inputdata
   type control
 
     !> random number generator seed
-    integer :: iSeed       = 0
+    integer :: iSeed = 0
 
     !> maximum force for geometry convergence
-    real(dp) :: maxForce    = 0.0_dp
+    real(dp) :: maxForce = 0.0_dp
 
     !> SCC calculation?
-    logical :: tScc        = .false.
+    logical :: tScc = .false.
 
     !> l-shell resolved SCC
     logical :: tShellResolved = .false.
 
     !> SCC tolerance
-    real(dp) :: sccTol      = 0.0_dp
+    real(dp) :: sccTol = 0.0_dp
 
     !> Read starting charges from disc
     logical :: tReadChrg = .false.
@@ -116,16 +116,16 @@ module dftbp_inputdata
     logical :: tWriteChrgAscii = .true.
 
     !> should probably be packaged
-    logical :: tGeoOpt     = .false.
+    logical :: tGeoOpt = .false.
 
     !> coordinate optimisation
-    logical :: tCoordOpt   = .false.
+    logical :: tCoordOpt = .false.
 
     !> maximum line search step for atoms
     real(dp) :: maxAtomDisp = 0.2_dp
 
     !> should probably be packaged
-    logical :: tLatOpt     = .false.
+    logical :: tLatOpt = .false.
 
     !> Fix angles during lattice optimisation
     logical :: tLatOptFixAng = .false.
@@ -140,13 +140,13 @@ module dftbp_inputdata
     real(dp) :: maxLatDisp = 0.2_dp
 
     !> add new geometries at the end of files
-    logical :: tAppendGeo  = .false.
+    logical :: tAppendGeo = .false.
 
     !> use converged SCC forces only
     logical :: tConvrgForces = .true.
 
     !> geometry step
-    integer :: iGeoOpt     = 0
+    integer :: iGeoOpt = 0
 
     !> used for gDIIS
     real(dp) :: deltaGeoOpt = 0.0_dp
@@ -155,24 +155,40 @@ module dftbp_inputdata
     integer :: iGenGeoOpt = 0
 
     !> internal variable for requirement of Mulliken analysis
-    logical :: tMulliken   = .false.
+    logical :: tMulliken = .false.
 
     !> printout of Mulliken
-    logical :: tPrintMulliken   = .false.
+    logical :: tPrintMulliken = .false.
 
     !> electrostatic potential evaluation and printing
     type(TElStatPotentialsInp), allocatable :: elStatPotentialsInp
 
     !> Localise electronic states
-    logical :: tLocalise   = .false.
+    logical :: tLocalise = .false.
 
+    !> Type for PM localisation
     type(TPipekMezeyInp), allocatable :: pipekMezeyInp
+
+    !> Should polarisability be calculated
+    logical :: tPolarisability = .false.
+
+    !> Should derivatives wrt to k be evaluated for band states
+    logical :: tKDerivs = .false.
+
+    !> Should derivatives wrt to coords be evaluated
+    logical :: tXDerivs = .false.
+
+    !> Should static polarisability be calculated
+    logical :: tStaticPolarisability = .false.
+
+    !> Energies for frequency driving in dynamic polarizability
+    real(dp), allocatable :: omegaPolarisability(:)
 
     !> printing of atom resolved energies
     logical :: tAtomicEnergy = .false.
 
     !> print eigenvectors to disc
-    logical :: tPrintEigVecs  = .false.
+    logical :: tPrintEigVecs = .false.
 
     !> text file of eigenvectors?
     logical :: tPrintEigVecsTxt = .false.
@@ -200,37 +216,37 @@ module dftbp_inputdata
 
 
     !> Molecular dynamics
-    logical :: tMD         = .false.
+    logical :: tMD = .false.
 
     !> Finite difference derivatives calculation?
-    logical :: tDerivs     = .false.
+    logical :: tDerivs = .false.
 
     !> Should central cell coordinates be output?
     logical :: tShowFoldedCoord
 
-    real(dp) :: nrChrg        = 0.0_dp
-    real(dp) :: nrSpinPol     = 0.0_dp
-    logical :: tSpin         = .false.
+    real(dp) :: nrChrg = 0.0_dp
+    real(dp) :: nrSpinPol = 0.0_dp
+    logical :: tSpin = .false.
     logical :: tSpinSharedEf = .false.
-    logical :: tSpinOrbit    = .false.
+    logical :: tSpinOrbit = .false.
     logical :: tDualSpinOrbit = .false.
-    logical :: t2Component   = .false.
+    logical :: t2Component = .false.
 
     !> initial spin pattern
     real(dp), allocatable :: initialSpins(:,:)
 
     !> initial charges
     real(dp), allocatable :: initialCharges(:)
-    logical :: tDFTBU        = .false.
+    logical :: tDFTBU = .false.
 
     !> Electronic/eigenvalue solver options
     type(TElectronicSolverInp) :: solver
 
-    integer :: iMixSwitch    = 0
-    integer :: maxIter       = 0
-    real(dp) :: almix         = 0.0_dp
-    integer :: iGenerations  = 0
-    logical :: tFromStart    = .true.
+    integer :: iMixSwitch = 0
+    integer :: maxIter = 0
+    real(dp) :: almix = 0.0_dp
+    integer :: iGenerations = 0
+    logical :: tFromStart = .true.
     real(dp) :: broydenOmega0 = 0.01_dp
     real(dp) :: broydenMinWeight = 1.0_dp
     real(dp) :: broydenMaxWeight = 1.0e5_dp
@@ -239,22 +255,22 @@ module dftbp_inputdata
     integer :: andersonNrDynMix = 0
     real(dp), allocatable :: andersonDynMixParams(:,:)
     real(dp) :: andersonOmega0 = 1.0e-2_dp
-    integer :: nrMoved       = 0
+    integer :: nrMoved = 0
     integer, allocatable :: indMovedAtom(:)
-    integer :: nrConstr      = 0
+    integer :: nrConstr = 0
     integer, allocatable :: conAtom(:)
     real(dp), allocatable :: conVec(:,:)
-    character(lc) :: outFile       = ''
+    character(lc) :: outFile = ''
 
     !> do we have MD velocities
     logical :: tReadMDVelocities = .false.
 
     !> initial MD velocities
     real(dp), allocatable :: initialVelocities(:,:)
-    real(dp) :: deltaT        = 0.0_dp
+    real(dp) :: deltaT = 0.0_dp
 
-    real(dp) :: tempAtom      = 0.0_dp
-    integer :: iThermostat   = 0
+    real(dp) :: tempAtom = 0.0_dp
+    integer :: iThermostat = 0
 
     !> whether to initialize internal state of the Nose-Hoover thermostat from input
     logical :: tInitNHC = .false.
@@ -271,35 +287,35 @@ module dftbp_inputdata
     real(dp), allocatable :: tempValues(:)
     logical :: tSetFillingTemp = .false.
 
-    real(dp) :: tempElec      = 0.0_dp
-    logical :: tFixEf        = .false.
+    real(dp) :: tempElec = 0.0_dp
+    logical :: tFixEf = .false.
     real(dp), allocatable :: Ef(:)
-    logical :: tFillKSep     = .false.
-    integer :: iDistribFn    = 0
-    real(dp) :: wvScale       = 0.0_dp
+    logical :: tFillKSep = .false.
+    integer :: iDistribFn = 0
+    real(dp) :: wvScale = 0.0_dp
 
     !> default chain length for Nose-Hoover
-    integer :: nh_npart      = 3
+    integer :: nh_npart = 3
 
     !> default order of NH integration
-    integer :: nh_nys        = 3
+    integer :: nh_nys = 3
 
     !> default multiple time steps for N-H propagation
-    integer :: nh_nc         = 1
+    integer :: nh_nc = 1
 
-    integer :: maxRun        = -2
+    integer :: maxRun = -2
 
 
     !> second derivative finite difference step
-    real(dp) :: deriv2ndDelta    = 0.0_dp
+    real(dp) :: deriv2ndDelta = 0.0_dp
 
-    integer :: nKPoint       = 0
+    integer :: nKPoint = 0
     real(dp), allocatable :: kPoint(:,:)
     real(dp), allocatable :: kWeight(:)
 
 
     !> cell presure if periodic
-    real(dp) :: pressure       = 0.0_dp
+    real(dp) :: pressure = 0.0_dp
     logical :: tBarostat = .false.
 
     !> use isotropic scaling if barostatting
@@ -322,7 +338,7 @@ module dftbp_inputdata
 
 
     !> choice of the DFTB+U functional
-    integer :: DFTBUfunc     = 0
+    integer :: DFTBUfunc = 0
 
     !> list of U-J for species
     real(dp), allocatable :: UJ(:,:)
@@ -413,7 +429,7 @@ module dftbp_inputdata
     logical :: tWriteTagged = .false.
 
     !> Nr. of SCC iterations without restart info
-    integer :: restartFreq  = 20
+    integer :: restartFreq = 20
     logical :: tWriteDetailedXML = .false.
     logical :: tWriteResultsTag = .false.
     logical :: tWriteDetailedOut = .true.

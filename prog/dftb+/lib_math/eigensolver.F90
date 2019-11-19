@@ -22,7 +22,7 @@ module dftbp_eigensolver
   implicit none
   private
 
-  public :: heev, hegv, hegvd, gvr, bgv
+  public :: heev, hegv, hegvd, gvr, bgv, geev
 #:if WITH_GPU
   public :: gpu_gvd
 #:endif
@@ -95,6 +95,12 @@ module dftbp_eigensolver
     module procedure dblecmplx_magma_zhegvd
   end interface
 #:endif
+
+  !> Simple eigensolver for a general matrix
+  interface geev
+    module procedure real_sgeev
+    module procedure dble_dgeev
+  end interface geev
 
 contains
 
@@ -2173,6 +2179,77 @@ contains
 #:endfor
 
 #:endif
+
+
+#:for DTYPE, VPREC, VTYPE, NAME in [('real', 's', 'real', 'sgeev'), ('dble', 'd', 'real', 'dgeev')]
+  !> Real eigensolver for a non-symmetric square matrix
+  subroutine ${DTYPE}$_${NAME}$(a, wr, wi, vl, vr, info)
+
+    !> contains the matrix for the solver, overwritten on return
+    real(r${VPREC}$p), intent(inout) :: a(:,:)
+
+    !> Real part of eigenvalues
+    real(r${VPREC}$p), intent(out) :: wr(:)
+
+    !> Imaginary part of eigenvalues
+    real(r${VPREC}$p), intent(out) :: wi(:)
+
+    !> Left eigenvectors, only calculated if allocated
+    real(r${VPREC}$p), intent(inout), allocatable :: vl(:,:)
+
+    !> Right eigenvectors, only calculated if allocated
+    real(r${VPREC}$p), intent(inout), allocatable :: vr(:,:)
+
+    !> Optional error flag from eigensolver
+    integer, intent(out), optional :: info
+
+    character :: jobvl, jobvr
+    integer :: n, lda, ldvl, ldvr, lwork, iinfo
+    real(r${VPREC}$p) :: tmpWork(1)
+    real(r${VPREC}$p), allocatable :: work(:)
+
+    n = size(a, dim=2)
+    lda = size(a, dim=1)
+  @:ASSERT(lda >= n)
+
+  #:for SIDE in [('l'), ('r')]
+    if (allocated(v${SIDE}$)) then
+      ldv${SIDE}$ = size(v${SIDE}$, dim=1)
+      jobv${SIDE}$ = 'V'
+    @:ASSERT(all(shape(v${SIDE}$) >= [n,n]))
+    else
+      jobv${SIDE}$ = 'N'
+    end if
+  #:endfor
+
+    call ${NAME}$(jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl, vr, ldvr, tmpWork, -1, iinfo)
+
+    if (iinfo/=0) then
+      call error("Failure in ${NAME}$ to determine optimum workspace")
+    endif
+    lwork = floor(tmpWork(1))
+    allocate(work(lwork))
+
+    call ${NAME}$(jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl, vr, ldvr, work, lwork, iinfo)
+
+    if (present(info)) then
+      info = iinfo
+    else
+      if (iinfo/=0) then
+        if (iinfo<0) then
+99700     format ("Failure in diagonalisation routine ${NAME}$, illegal argument at position ",i6)
+          write(error_string, 99700) iinfo
+          call error(error_string)
+        else
+99710     format ("Failure in diagonalisation routine ${NAME}$, eigenvalue ",i0, "failed")
+          write(error_string, 99710) iinfo
+          call error(error_string)
+        end if
+      end if
+    end if
+
+  end subroutine ${DTYPE}$_${NAME}$
+#:endfor
 
 
 end module dftbp_eigensolver

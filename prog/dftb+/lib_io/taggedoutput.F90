@@ -123,6 +123,21 @@ module dftbp_taggedoutput
     !> External electric field
     character(lenLabel) :: externField = 'external_efield'
 
+    !> Static electric polarizability from linear response/perturbation
+    character(lenLabel) :: dmudEPerturb = 'staticPolResponse'
+
+    !> Static electric polarizability from linear response/perturbation
+    character(lenLabel) :: dqdEPerturb = 'staticChargeReponse'
+
+    !> Ground state single particle eigenvalues
+    character(lenLabel) :: eigenVals = 'eigenvalues'
+
+    !> Derivatives of ground state single particle eigenvalues wrt. k
+    character(lenLabel) :: dEigenDk  = 'dEidk'
+
+    !> Electric dipole moment
+    character(lenLabel) :: electricDipole   = 'electricdipole'
+
   end type TTagLabelsEnum
 
 

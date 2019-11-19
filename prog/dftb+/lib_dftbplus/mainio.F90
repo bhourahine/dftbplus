@@ -61,7 +61,7 @@ module dftbp_mainio
   public :: writeProjectedEigenvectors
   public :: initOutputFile, writeAutotestTag, writeResultsTag, writeDetailedXml, writeBandOut
   public :: writeHessianOut
-  public :: openDetailedOut
+  public :: openDetailedOut, closeDetailedOut
   public :: writeDetailedOut1, writeDetailedOut1a, writeDetailedOut2, writeDetailedOut3
   public :: writeDetailedOut4, writeDetailedOut5
   public :: writeMdOut1, writeMdOut2, writeMdOut3
@@ -2028,7 +2028,7 @@ contains
   !> Writes out machine readable data
   subroutine writeResultsTag(fileName, energy, derivs, chrgForces, electronicSolver, tStress,&
       & totalStress, pDynMatrix, tPeriodic, cellVol, tMulliken, qOutput, q0, taggedWriter,&
-      & tDefinedFreeE)
+      & tDefinedFreeE, eigen, dipoleMoment)
 
     !> Name of output file
     character(*), intent(in) :: fileName
@@ -2044,7 +2044,6 @@ contains
 
     !> Electronic solver information
     type(TElectronicSolver), intent(in) :: electronicSolver
-
 
     !> Should stresses be printed (assumes periodic)
     logical, intent(in) :: tStress
@@ -2076,16 +2075,23 @@ contains
     !> Is the free energy correctly defined
     logical, intent(in) :: tDefinedFreeE
 
+    !> eigenvalues (level, kpoint, spin)
+    real(dp), intent(in) :: eigen(:,:,:)
+
+    !> Dipole moment
+    real(dp), intent(in), allocatable :: dipoleMoment(:)
+
     real(dp), allocatable :: qOutputUpDown(:,:,:)
     integer :: fd
 
     @:ASSERT(tPeriodic .eqv. tStress)
 
-    open(newunit=fd, file=fileName, action="write", status="replace")
-
+    open(newunit=fd, file=fileName, action="write", status="old", position="append")
     call taggedWriter%write(fd, tagLabels%egyTotal, energy%ETotal)
 
     if (electronicSolver%providesEigenvals) then
+      call taggedWriter%write(fd, tagLabels%eigenVals, eigen)
+
       call taggedWriter%write(fd, tagLabels%freeEgy, energy%EMermin)
       ! extrapolated zero temperature energy
       call taggedWriter%write(fd, tagLabels%egy0Total, energy%Ezero)
@@ -2118,6 +2124,9 @@ contains
       call taggedWriter%write(fd, tagLabels%qOutput, qOutputUpDown(:,:,1))
       call taggedWriter%write(fd, tagLabels%qOutAtGross, sum(q0(:,:,1) - qOutputUpDown(:,:,1),&
           & dim=1))
+      if (allocated(dipoleMoment)) then
+        call taggedWriter%write(fd, tagLabels%electricDipole, dipoleMoment)
+      end if
     end if
 
     close(fd)
@@ -3208,9 +3217,20 @@ contains
       end if
     end if
     write(fd,*)
-    close(fd)
 
   end subroutine writeDetailedOut5
+
+
+  !> Close file used for detailed.out
+  subroutine closeDetailedOut(fd)
+
+    !> File  ID
+    integer, intent(in) :: fd
+
+    close(fd)
+
+  end subroutine closeDetailedOut
+
 
   !> First group of output data during molecular dynamics
   subroutine writeMdOut1(fd, fileName, iGeoStep, pMdIntegrator)

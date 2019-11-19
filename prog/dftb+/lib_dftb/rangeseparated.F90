@@ -418,7 +418,7 @@ contains
           nOrb1 = orb%nOrbSpecies(iSp1)
           prb = pbound * testOvr(iAt1, iAtMu)
           if(abs(prb) < this%pScreeningThreshold) then
-            exit
+            exit loopKK
           end if
           loopNu: do iAtNu = 1, iAtMu
             descN = getDescriptor(iAtNu, iSquare)
@@ -429,7 +429,7 @@ contains
               nOrb2 = orb%nOrbSpecies(iSp2)
               tstbound = prb * testOvr(iAt2, iAtNu)
               if(abs(tstbound) < this%pScreeningThreshold) then
-                exit
+                exit loopLL
               end if
               desc2 = getDescriptor(iAt2, iSquare)
               gammabatch = (this%lrGammaEval(iAtMu, iAt2) + this%lrGammaEval(iAt1, iAt2)&
@@ -1079,8 +1079,9 @@ contains
         sPrimeTmp2 = 0.0_dp
         sPrimeTmp = 0.0_dp
         if ( iAtK /= iAtC ) then
-          call derivator%getFirstDeriv(sPrimeTmp, skOverCont, coords, species, iAtK, iAtC, orb)
-          call derivator%getFirstDeriv(sPrimeTmp2, skOverCont, coords, species, iAtC, iAtK, orb)
+          call derivator%getFirstDerivBlock(sPrimeTmp, skOverCont, coords, species, iAtK, iAtC, orb)
+          call derivator%getFirstDerivBlock(sPrimeTmp2, skOverCont, coords, species, iAtC, iAtK,&
+              & orb)
         end if
         loopB: do iAtB = 1, nAtom
           ! A > B

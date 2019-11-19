@@ -395,7 +395,7 @@ module dftbp_initprogram
   !> Minimal number of SCC iterations
   integer :: minSccIter
 
-  !> is this a spin polarized calculation?
+  !> is this a spin polarised calculation?
   logical :: tSpin
 
   !> Number of spin components, 1 is unpolarised, 2 is polarised, 4 is noncolinear / spin-orbit
@@ -497,6 +497,18 @@ module dftbp_initprogram
 
   !> Pipek-Mezey localisation calculator
   type(TPipekMezey), allocatable :: pipekMezey
+
+  !> Should polarisability be calculated
+  logical :: tPolarisability
+
+  !> Should derivatives of eigenstates wrt to k be evaluated
+  logical :: tKDerivs
+
+  !> Should derivatives wrt to atomic coordinates be evaluated
+  logical :: tXDerivs
+
+  !> Frequencies at which to calculate polarizability
+  real(dp), allocatable :: omegaPolarisability(:)
 
   !> use commands from socket communication to control the run
   logical :: tSocket
@@ -819,6 +831,12 @@ module dftbp_initprogram
 
   !> Eigenvalues
   real(dp), allocatable :: eigen(:,:,:)
+
+  !> Complex eigenvectors at q shifted k-points
+  complex(dp), allocatable :: eigvecsCplxDeltaq(:,:,:)
+
+  !> Eigenvalues at q shifted values (periodic only)
+  real(dp), allocatable :: eigValsDeltaq(:,:,:)
 
   !> density matrix
   real(dp), allocatable :: rhoSqrReal(:,:,:)
@@ -1756,7 +1774,7 @@ contains
     if (forceType == forceTypes%dynamicT0 .and. tempElec > minTemp) then
        call error("This ForceEvaluation method requires the electron temperature to be zero")
     end if
-    if (tForces) then
+    if (tForces .or. input%ctrl%tXDerivs) then
       select case(input%ctrl%iDerivMethod)
       case (1)
         ! set step size from input
@@ -2057,6 +2075,49 @@ contains
     if (tLocalise .and. (nSpin > 2 .or. t2Component)) then
       call error("Localisation of electronic states currently unsupported for non-collinear and&
           & spin orbit calculations")
+    end if
+
+    !> k derivatives (first steps for properties like one method of Berry phase evaluation or for
+    !> dielectric tensors)
+    tKDerivs = input%ctrl%tKDerivs
+
+    !> x derivatives (first steps for properties vibrational modes and dq/dx)
+    tXDerivs = input%ctrl%tXDerivs
+
+    !> Polarisability of the system
+    tPolarisability = input%ctrl%tPolarisability
+    ii = 0
+    jj = 1
+    if (input%ctrl%tStaticPolarisability) then
+      ii = 1
+      jj = 2
+    end if
+    if (allocated(input%ctrl%omegaPolarisability)) then
+      ii = ii + size(input%ctrl%omegaPolarisability)
+    end if
+    if (ii > 0) then
+      ! place any static (0 energy case) at start of array
+      allocate(omegaPolarisability(ii))
+      omegaPolarisability(:) = 0.0_dp
+      if (jj <= ii) then
+         omegaPolarisability(jj:) = input%ctrl%omegaPolarisability
+      end if
+    end if
+
+    if (tPolarisability) then
+      if (.not. electronicSolver%providesEigenvals) then
+        call error("Currently the perturbation expresions require a solver that provides&
+            & eigenstates")
+      end if
+      if (tNegf) then
+        call error("Currently the perturbation expresions for NEGF are not implemented")
+      end if
+      if (tPeriodic) then
+        call error("Currently the perturbation expresions periodic systems are not implemented")
+      end if
+      if (t3rd) then
+        call error("Only full 3rd order currently supported for perturbation")
+      end if
     end if
 
     if (tLinResp) then
@@ -3908,7 +3969,7 @@ contains
       if (tXlbomd) then
         call error("Range separated calculations not currently implemented for XLBOMD")
       end if
-      if (t3rd) then
+      if (t3rd .or. t3rdFull) then
         call error("Range separated calculations not currently implemented for 3rd order DFTB")
       end if
       if (tLinResp) then

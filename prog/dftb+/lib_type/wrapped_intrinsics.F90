@@ -11,21 +11,26 @@ module dftbp_wrappedintr
   implicit none
   private
 
-  public :: WrappedInt1, WrappedReal1, WrappedLogical1
+#:set FLAVOURS = [('logical','Logical',''), ('integer', 'Int', ''), ('real', 'Real', '(dp)'),&
+  & ('complex', 'Cmplx', '(dp)') ]
 
-  !> 1 dimensional integers
-  type :: WrappedInt1
-    integer, allocatable :: data(:)
-  end type WrappedInt1
+#:for _, SUFFIX, _ in FLAVOURS
+#:for DIM in [('1'), ('2')]
 
-  !> 1 dimensional reals
-  type :: WrappedReal1
-    real(dp), allocatable :: data(:)
-  end type WrappedReal1
+  public :: wrapped${SUFFIX}$${DIM}$
 
-  !> 1 dimensional logicals
-  type :: WrappedLogical1
-    logical, allocatable :: data(:)
-  end type WrappedLogical1
+#:endfor
+#:endfor
+
+#:for TYPE, NAME, PREC in FLAVOURS
+#:for DIM, ARRAY in [('1',':'), ('2', ':,:')]
+
+  !> ${DIM}$ dimensional ${TYPE}$
+  type :: wrapped${NAME}$${DIM}$
+    ${TYPE}$${PREC}$, allocatable :: data(${ARRAY}$)
+  end type wrapped${NAME}$${DIM}$
+
+#:endfor
+#:endfor
 
 end module dftbp_wrappedintr

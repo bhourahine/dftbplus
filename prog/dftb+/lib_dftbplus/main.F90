@@ -85,6 +85,9 @@ module dftbp_main
   use dftbp_qdepextpotproxy, only : TQDepExtPotProxy
   use dftbp_taggedoutput, only : TTaggedWriter
   use dftbp_mbd, only : TMbd
+  use dftbp_perturbderivs
+  use dftbp_perturbkderivs
+  use dftbp_perturbxderivs
 #:if WITH_TRANSPORT
   use libnegf_vars, only : TTransPar
   use negf_int
@@ -163,9 +166,22 @@ contains
       call printGeoStepInfo(tCoordOpt, tLatOpt, iLatGeoStep, iGeoStep)
       call processGeometry(env, iGeoStep, iLatGeoStep, tWriteRestart, tStopDriver, tStopScc,&
           & tExitGeoOpt)
+
+      if (tXDerivs) then
+        call dPsidx(env, parallelKS, filling, eigen, eigVecsReal, eigvecsCplx, rhoPrim, potential,&
+            & qOutput, q0, ham, over, skHamCont, skOverCont, nonSccDeriv, orb, nAtom, species, speciesName,&
+            & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, coord, sccCalc,&
+            & maxSccIter, sccTol, nMixElements, nIneqOrb, iEqOrbitals, tempElec, Ef, tFixEf,&
+            & spinW, thirdOrd, tDFTBU, UJ, nUJ, iUJ, niUJ, iEqBlockDftbu, onSiteElements,&
+            & iEqBlockOnSite, rangeSep, nNeighbourLC, pChrgMixer, taggedWriter, tWriteAutotest,&
+            & autotestTag, tWriteResultsTag, resultsTag, tWriteDetailedOut, fdDetailedOut, kPoint,&
+            & kWeight, iCellVec, cellVec, tPeriodic, tMulliken)
+      end if
+
       if (tExitGeoOpt) then
         exit geoOpt
       end if
+
       call postProcessDerivs(derivs, conAtom, conVec, tLatOpt, totalLatDeriv, extLatDerivs,&
           & normOrigLatVec, tLatOptFixAng, tLatOptFixLen, tLatOptIsotropic, constrLatDerivs)
       call printMaxForces(derivs, constrLatDerivs, tCoordOpt, tLatOpt, indMovedAtom)
@@ -174,6 +190,7 @@ contains
         call sendEnergyAndForces(env, socket, energy, TS, derivs, totalStress, cellVol)
       end if
     #:endif
+
       tWriteCharges = tWriteRestart .and. tMulliken .and. tSccCalc .and. .not. tDerivs&
           & .and. maxSccIter > 1
       if (tWriteCharges) then
@@ -203,6 +220,7 @@ contains
         exit geoOpt
       end if
       call env%globalTimer%stopTimer(globalTimers%postSCC)
+
     end do geoOpt
 
     call env%globalTimer%startTimer(globalTimers%postGeoOpt)
@@ -275,6 +293,27 @@ contains
     end if
   #:endif
 
+    ! response properties from perturbation-like expressions
+    if (tKDerivs .and. tPeriodic .and. allocated(eigVecsCplx)) then
+      call dPsidK(env, parallelKS, eigen, eigVecsCplx, ham, over, orb, nAtom, species,&
+          & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, coord, kPoint,&
+          & kWeight, cellVec, iCellVec, latVec, taggedWriter, tWriteAutotest, autotestTag,&
+          & tWriteResultsTag, resultsTag, tWriteDetailedOut, fdDetailedOut)
+    end if
+
+    if (tPolarisability) then
+      if (.not.(tPeriodic .or. tNegf)) then
+        call staticPerturWrtE(env, parallelKS, filling, eigen, eigVecsReal, eigvecsCplx, ham,&
+            & over, orb, nAtom, species, speciesName, neighbourList, nNeighbourSK, denseDesc,&
+            & iSparseStart, img2CentCell, coord, sccCalc, maxSccIter, sccTol, nMixElements,&
+            & nIneqOrb, iEqOrbitals, tempElec, Ef, tFixEf, spinW, thirdOrd, tDFTBU, UJ, nUJ, iUJ,&
+            & niUJ, iEqBlockDftbu, onSiteElements, iEqBlockOnSite, rangeSep, nNeighbourLC,&
+            & pChrgMixer, taggedWriter, tWriteAutotest, autotestTag, tWriteResultsTag,&
+            & resultsTag, tWriteDetailedOut, fdDetailedOut, kPoint, kWeight, iCellVec, cellVec,&
+            & tPeriodic, omegaPolarisability)
+      end if
+    end if
+
     if (allocated(pipekMezey)) then
       ! NOTE: the canonical DFTB ground state orbitals are over-written after this point
       if (withMpi) then
@@ -302,7 +341,7 @@ contains
     if (tWriteResultsTag) then
       call writeResultsTag(resultsTag, energy, derivs, chrgForces, electronicSolver, tStress,&
           & totalStress, pDynMatrix, tPeriodic, cellVol, tMulliken, qOutput, q0, taggedWriter,&
-          & tDefinedFreeE)
+          & tDefinedFreeE, eigen, dipoleMoment)
     end if
     if (tWriteDetailedXML) then
       call writeDetailedXml(runId, speciesName, species0, pCoord0Out, tPeriodic, latVec, tRealHS,&
@@ -310,6 +349,12 @@ contains
     end if
 
     call env%globalTimer%startTimer(globalTimers%postGeoOpt)
+
+    if (env%tGlobalMaster) then
+      if (tWriteDetailedOut) then
+        call closeDetailedOut(fdDetailedOut)
+      end if
+    end if
 
   #:if WITH_TRANSPORT
     if (tPoisson) then
@@ -319,6 +364,7 @@ contains
       call negf_destroy()
     end if
   #:endif
+
 
   end subroutine runDftbPlus
 
@@ -496,8 +542,8 @@ contains
             & nDftbUFunc, UJ, nUJ, iUJ, niUJ, potential)
 
         if (allocated(onSiteElements) .and. (iSCCIter > 1 .or. tReadChrg)) then
-          call addOnsShift(potential%intBlock, potential%iOrbitalBlock, qBlockIn, qiBlockIn, q0,&
-              & onSiteElements, species, orb)
+          call addOnsShift(potential%intBlock, potential%iOrbitalBlock, qBlockIn, qiBlockIn,&
+              & onSiteElements, species, orb, q0)
         end if
 
       end if
@@ -587,7 +633,7 @@ contains
 
         if (allocated(onSiteElements)) then
           call addOnsShift(potential%intBlock, potential%iOrbitalBlock, qBlockOut, qiBlockOut,&
-              & q0, onSiteElements, species, orb)
+              & onSiteElements, species, orb, q0)
         end if
 
         potential%intBlock = potential%intBlock + potential%extBlock
@@ -619,7 +665,8 @@ contains
           call getNextInputDensity(SSqrReal, over, neighbourList, nNeighbourSK,&
               & denseDesc%iAtomStart, iSparseStart, img2CentCell, pChrgMixer, qOutput, orb,&
               & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tReadChrg, q0,&
-              & qInput, sccErrorQ, tConverged, deltaRhoOut, deltaRhoIn, deltaRhoDiff)
+              & qInput, sccErrorQ, tConverged, deltaRhoOut, deltaRhoIn, deltaRhoDiff,&
+              & qBlockIn, qBlockOut)
         end if
 
         call getSccInfo(iSccIter, energy%Eelec, Eold, diffElec)
@@ -677,7 +724,7 @@ contains
       if (withMpi) then
         call error("Linear response calc. does not work with MPI yet")
       end if
-      call ensureLinRespConditions(t3rd, tRealHS, tPeriodic, tCasidaForces)
+      call ensureLinRespConditions(t3rd.or.t3rdFull, tRealHS, tPeriodic, tCasidaForces)
       call calculateLinRespExcitations(env, lresp, parallelKS, sccCalc, qOutput, q0, over,&
           & eigvecsReal, eigen(:,1,:), filling(:,1,:), coord0, species, speciesName, orb,&
           & skHamCont, skOverCont, autotestTag, taggedWriter, runId, neighbourList, nNeighbourSK,&
@@ -868,7 +915,6 @@ contains
 
     !> Whether geometry optimisation should be stop
     logical, intent(out) :: tExitGeoOpt
-
 
     !> Difference between last calculated and new geometry.
     real(dp) :: diffGeo
@@ -1765,7 +1811,7 @@ contains
     allocate(atomPot(nAtom, nSpin))
     allocate(shellPot(orb%mShell, nAtom, nSpin))
 
-    call sccCalc%updateCharges(env, qInput, q0, orb, species)
+    call sccCalc%updateCharges(env, qInput, orb, species, q0)
 
     select case(electrostatics)
 
@@ -1830,8 +1876,8 @@ contains
 
 
   !> Add potentials comming from on-site block of the dual density matrix.
-  subroutine addBlockChargePotentials(qBlockIn, qiBlockIn, tDftbU, tImHam, species, orb, nDftbUFunc&
-      &, UJ, nUJ, iUJ, niUJ, potential)
+  subroutine addBlockChargePotentials(qBlockIn, qiBlockIn, tDftbU, tImHam, species, orb,&
+      & nDftbUFunc, UJ, nUJ, iUJ, niUJ, potential)
 
     !> block input charges
     real(dp), allocatable, intent(in) :: qBlockIn(:,:,:,:)
@@ -2453,7 +2499,7 @@ contains
     !> K-points and spins to be handled
     type(TParallelKS), intent(in) :: parallelKS
 
-    !>Data for rangeseparated calcualtion
+    !> Data for rangeseparated calculation
     type(RangeSepFunc), allocatable, intent(inout) :: rangeSep
 
     !> Change in density matrix during last rangesep SCC cycle
@@ -2503,8 +2549,8 @@ contains
 
       call env%globalTimer%stopTimer(globalTimers%sparseToDense)
 
-      ! Add rangeseparated contribution
-      ! Assumes deltaRhoInSqr only used by rangeseparation
+      ! Add range separated contribution
+      ! Assumes deltaRhoInSqr only used by range separation
       ! Should this be used elsewhere, need to pass tRangeSep
       if (allocated(rangeSep)) then
         call denseMulliken(deltaRhoInSqr, SSqrReal, denseDesc%iAtomStart, qOutput)
@@ -3782,7 +3828,7 @@ contains
   subroutine getNextInputDensity(SSqrReal, over, neighbourList, nNeighbourSK, iAtomStart,&
       & iSparseStart, img2CentCell, pChrgMixer, qOutput, orb, iGeoStep, iSccIter, minSccIter,&
       & maxSccIter, sccTol, tStopScc, tReadChrg, q0, qInput, sccErrorQ, tConverged, deltaRhoOut,&
-      & deltaRhoIn, deltaRhoDiff)
+      & deltaRhoIn, deltaRhoDiff, qBlockIn, qBlockOut)
 
     !> Square dense overlap storage
     real(dp), allocatable, intent(inout) :: SSqrReal(:,:)
@@ -3856,8 +3902,14 @@ contains
     !> difference of delta density matrix in and out
     real(dp), intent(inout) :: deltaRhoDiff(:)
 
+    !> block charge input (if needed for orbital potentials)
+    real(dp), intent(inout), allocatable :: qBlockIn(:,:,:,:)
 
-    integer :: nSpin
+    !> Dual output charges
+    real(dp), intent(inout), allocatable :: qBlockOut(:,:,:,:)
+
+
+    integer :: nSpin, iSpin, iAt, iOrb
     real(dp), pointer :: deltaRhoInSqr(:,:,:)
 
     nSpin = size(qOutput, dim=3)
@@ -3871,6 +3923,9 @@ contains
       if ((iSCCIter + iGeoStep) == 1 .and. (nSpin > 1 .and. .not. tReadChrg)) then
         deltaRhoIn(:) = deltaRhoOut
         qInput(:,:,:) = qOutput
+        if (allocated(qBlockIn)) then
+          qBlockIn(:,:,:,:) = qBlockOut
+        end if
       else
         call mix(pChrgMixer, deltaRhoIn, deltaRhoDiff)
         call unpackHS(SSqrReal, over, neighbourList%iNeighbour, nNeighbourSK, iAtomStart,&
@@ -3886,7 +3941,22 @@ contains
         else
           qInput(:,:,:) = qInput + q0
         end if
+
+        if (allocated(qBlockIn)) then
+          call denseBlockMulliken(deltaRhoInSqr, SSqrReal, iAtomStart, qBlockIn)
+          do iSpin = 1, nSpin
+            do iAt = 1, size(qInput, dim=2)
+              do iOrb = 1, size(qInput, dim=1)
+                qBlockIn(iOrb, iOrb, iAt, iSpin) = qInput(iOrb, iAt, iSpin)
+              end do
+            end do
+          end do
+        end if
+
         call ud2qm(qInput)
+        if (allocated(qBlockIn)) then
+          call ud2qm(qBlockIn)
+        end if
       end if
     end if
 
