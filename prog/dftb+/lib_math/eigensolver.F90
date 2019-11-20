@@ -2195,10 +2195,10 @@ contains
     real(r${VPREC}$p), intent(out) :: wi(:)
 
     !> Left eigenvectors, only calculated if allocated
-    real(r${VPREC}$p), intent(inout), allocatable :: vl(:,:)
+    real(r${VPREC}$p), intent(out) :: vl(:,:)
 
     !> Right eigenvectors, only calculated if allocated
-    real(r${VPREC}$p), intent(inout), allocatable :: vr(:,:)
+    real(r${VPREC}$p), intent(out) :: vr(:,:)
 
     !> Optional error flag from eigensolver
     integer, intent(out), optional :: info
@@ -2213,13 +2213,9 @@ contains
   @:ASSERT(lda >= n)
 
   #:for SIDE in [('l'), ('r')]
-    if (allocated(v${SIDE}$)) then
-      ldv${SIDE}$ = size(v${SIDE}$, dim=1)
-      jobv${SIDE}$ = 'V'
-    @:ASSERT(all(shape(v${SIDE}$) >= [n,n]))
-    else
-      jobv${SIDE}$ = 'N'
-    end if
+    ldv${SIDE}$ = size(v${SIDE}$, dim=1)
+    jobv${SIDE}$ = 'V'
+  @:ASSERT(all(shape(v${SIDE}$) >= [n,n]))
   #:endfor
 
     call ${NAME}$(jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl, vr, ldvr, tmpWork, -1, iinfo)

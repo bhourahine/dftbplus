@@ -2121,5 +2121,64 @@ module dftbp_lapack
     end subroutine zgesvd
 
   end interface zgesvd
-  
+
+
+#:for DTYPE, VPREC, VTYPE, NAME in [('real', 's', 'real', 'sgeev'), ('dble', 'd', 'real', 'dgeev')]
+
+  !> Eigensolver for a non-symmetric square matrix
+  interface ${NAME}$
+
+    !> Non-symmetric eigensolver
+    subroutine ${NAME}$(jobvl, jobvr, n, a, lda, wr, wi, vl, ldvl, vr, ldvr, work, lwork, info)
+
+      import r${VPREC}$p
+
+      !> Left solution job type
+      character, intent(in) :: jobvl
+
+      !> Right solution job type
+      character, intent(in) :: jobvr
+
+      !> matrix dimension
+      integer, intent(in) :: n
+
+      !> matrix to diagonalise
+      real(r${VPREC}$p), intent(inout) :: a(lda, *)
+
+      !> Leading dimension of a
+      integer, intent(in) :: lda
+
+      !> Real part of eigenvalues
+      real(r${VPREC}$p), intent(out) :: wr(*)
+
+      !> Imaginary part of eigenvalues
+      real(r${VPREC}$p), intent(out) :: wi(*)
+
+      !> Left eigenvectors
+      real(r${VPREC}$p), intent(out) :: vl(ldvl, *)
+
+      !> Leading dimension of vl
+      integer, intent(in) :: ldvl
+
+      !> Right eigenvectors
+      real(r${VPREC}$p), intent(out) :: vr(ldvr, *)
+
+      !> Leading dimension of vr
+      integer, intent(in) :: ldvr
+
+      !> workspace
+      real(r${VPREC}$p), intent(out) :: work(*)
+
+      !> workspace sizing
+      integer, intent(in) :: lwork
+
+      !> state of routine on return
+      integer, intent(out) :: info
+
+    end subroutine ${NAME}$
+
+  end interface ${NAME}$
+
+#:endfor
+
 end module dftbp_lapack
