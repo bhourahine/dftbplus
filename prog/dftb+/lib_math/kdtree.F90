@@ -19,6 +19,8 @@ module dftbp_kdtree
   private
   public :: tKDTree, newleaf, insertnodes, rangesearch, printtree, destroytree
 
+  integer, parameter :: nMinDivide = 25
+
   !> Tree node
   type :: tKDTree
     private
@@ -34,6 +36,8 @@ module dftbp_kdtree
 
     !> right descendant node from this one
     type (tKDTree), allocatable :: right
+
+    integer, allocatable :: data(:)
 
   end type tKDTree
 
@@ -96,6 +100,12 @@ contains
     t % depth = thisDepth
     iDim = mod(t % depth, size(coord, dim=1)) + 1
     nPts = size(n)
+
+    if (nPts <= nMinDivide) then
+      allocate(t % data(nPts))
+      t % data(:) = n
+      return
+    end if
 
     select case(nPts)
     case(0)
@@ -177,7 +187,7 @@ contains
     !> starting value to check
     integer, intent(in) :: starter
 
-    integer :: iDim
+    integer :: iDim, ii, jj
     integer, allocatable :: tmp(:)
 
     if (.not. allocated(t)) then
@@ -185,6 +195,24 @@ contains
     end if
 
     nChecked = nChecked + 1
+
+    if (allocated(t%data)) then
+      do ii = 1, size(t%data)
+        jj = t%data(ii)
+        if ( sum( (point - coord(:, jj))**2) <= cutOff**2 ) then
+          if (jj > starter) then
+            nFound = nFound + 1
+            if (nFound > size(found)) then
+              allocate(tmp(2*nFound))
+              tmp(:nFound -1) = found(:nFound -1)
+              tmp(nFound) = t%split
+              call move_alloc(tmp, found)
+            end if
+          end if
+        end if
+      end do
+      return
+    end if
 
     iDim = mod(t % depth, size(coord, dim=1)) + 1
 
@@ -224,6 +252,10 @@ contains
     type (tKDTree), intent (in), allocatable :: t
 
     if (allocated(t)) then
+      if (allocated(t%data)) then
+        write(stdOut,*)t%data
+        return
+      end if
       write(stdOut,*) padding(:2*t%depth), 'Node ', t % split, t % depth
       if (allocated(t % left)) then
         call printtree(t % left)
@@ -246,13 +278,17 @@ contains
       return
     end if
 
-    call destroytree(t % left)
-    call destroytree(t % right)
-    if (allocated(t % left)) then
-      deallocate(t % left)
-    end if
-    if (allocated(t % right)) then
-      deallocate(t % right)
+    if (allocated(t%data)) then
+      deallocate(t%data)
+    else
+      call destroytree(t % left)
+      call destroytree(t % right)
+      if (allocated(t % left)) then
+        deallocate(t % left)
+      end if
+      if (allocated(t % right)) then
+        deallocate(t % right)
+      end if
     end if
 
     deallocate(t)
