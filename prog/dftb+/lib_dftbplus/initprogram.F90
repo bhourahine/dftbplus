@@ -2337,9 +2337,13 @@ contains
 
     allocate(qInput(orb%mOrb, nAtom, nSpin))
     allocate(qOutput(orb%mOrb, nAtom, nSpin))
-    allocate(qOnsite(nAtom))
     qInput(:,:,:) = 0.0_dp
     qOutput(:,:,:) = 0.0_dp
+
+    if (tMulliken) then
+      allocate(qOnsite(nAtom))
+      qOnsite(:) = 0.0_dp
+    end if
 
     if (tMixBlockCharges) then
       allocate(qBlockIn(orb%mOrb, orb%mOrb, nAtom, nSpin))

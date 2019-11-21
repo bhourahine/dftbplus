@@ -2028,7 +2028,7 @@ contains
   !> Writes out machine readable data
   subroutine writeResultsTag(fileName, energy, derivs, chrgForces, electronicSolver, tStress,&
       & totalStress, pDynMatrix, tPeriodic, cellVol, tMulliken, qOutput, q0, taggedWriter,&
-      & tDefinedFreeE, eigen, dipoleMoment)
+      & tDefinedFreeE, eigen, dipoleMoment, qOnsite)
 
     !> Name of output file
     character(*), intent(in) :: fileName
@@ -2081,6 +2081,9 @@ contains
     !> Dipole moment
     real(dp), intent(in), allocatable :: dipoleMoment(:)
 
+    !> Net part of atomic populations
+    real(dp), intent(in), allocatable :: qOnsite(:)
+
     real(dp), allocatable :: qOutputUpDown(:,:,:)
     integer :: fd
 
@@ -2127,6 +2130,9 @@ contains
       if (allocated(dipoleMoment)) then
         call taggedWriter%write(fd, tagLabels%electricDipole, dipoleMoment)
       end if
+    end if
+    if (allocated(qOnsite)) then
+      call taggedWriter%write(fd, tagLabels%qNet, qOnsite)
     end if
 
     close(fd)

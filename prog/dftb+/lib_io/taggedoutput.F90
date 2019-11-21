@@ -14,7 +14,7 @@
     & ('logical', 'Logical', 'logical', 'formLogical')]
 
 #! Maximal rank to include into the interface (string from 0 - scalar)
-#:set MAX_RANK = 4
+#:set MAX_RANK = 5
 
 
 !> Contains routines to write out various data structures in a comprehensive tagged format.
@@ -93,6 +93,9 @@ module dftbp_taggedoutput
     !> Mulliken charges
     character(lenLabel) :: qOutput = 'orbital_charges'
 
+    !> Mulliken charges
+    character(lenLabel) :: qNet = 'net_electrons'
+
     !> Pipek-Mezey localisation score of single particle levels
     character(lenLabel) :: pmlocalise = 'pm_localisation'
 
@@ -134,6 +137,9 @@ module dftbp_taggedoutput
 
     !> Derivatives of ground state single particle eigenvalues wrt. k
     character(lenLabel) :: dEigenDk  = 'dEidk'
+
+    !> Derivatives of gross atomic charges wrt. x
+    character(lenLabel) :: dqdx  = 'dqdx'
 
     !> Electric dipole moment
     character(lenLabel) :: electricDipole   = 'electricdipole'

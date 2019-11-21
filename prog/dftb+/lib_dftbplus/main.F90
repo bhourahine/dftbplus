@@ -149,6 +149,7 @@ contains
 
     logical :: tExitGeoOpt
 
+    real(dp), allocatable :: dqNet(:,:,:,:), dqGross(:,:,:,:,:)
 
     call initGeoOptParameters(tCoordOpt, nGeoSteps, tGeomEnd, tCoordStep, tStopDriver, iGeoStep,&
         & iLatGeoStep)
@@ -168,14 +169,21 @@ contains
           & tExitGeoOpt)
 
       if (tXDerivs) then
+        if (tMulliken) then
+          allocate(dqNet(nAtom, nSpin, 3, nAtom))
+          allocate(dqGross(orb%mOrb, nAtom, nSpin, 3, nAtom))
+        end if
         call dPsidx(env, parallelKS, filling, eigen, eigVecsReal, eigvecsCplx, rhoPrim, potential,&
-            & qOutput, q0, ham, over, skHamCont, skOverCont, nonSccDeriv, orb, nAtom, species, speciesName,&
-            & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, coord, sccCalc,&
-            & maxSccIter, sccTol, nMixElements, nIneqOrb, iEqOrbitals, tempElec, Ef, tFixEf,&
-            & spinW, thirdOrd, tDFTBU, UJ, nUJ, iUJ, niUJ, iEqBlockDftbu, onSiteElements,&
-            & iEqBlockOnSite, rangeSep, nNeighbourLC, pChrgMixer, taggedWriter, tWriteAutotest,&
-            & autotestTag, tWriteResultsTag, resultsTag, tWriteDetailedOut, fdDetailedOut, kPoint,&
-            & kWeight, iCellVec, cellVec, tPeriodic, tMulliken)
+            & qOutput, q0, ham, over, skHamCont, skOverCont, nonSccDeriv, orb, nAtom, species,&
+            & speciesName, neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell,&
+            & coord, sccCalc, maxSccIter, sccTol, nMixElements, nIneqOrb, iEqOrbitals, tempElec,&
+            & Ef, tFixEf, spinW, thirdOrd, tDFTBU, UJ, nUJ, iUJ, niUJ, iEqBlockDftbu,&
+            & onSiteElements, iEqBlockOnSite, rangeSep, nNeighbourLC, pChrgMixer, taggedWriter,&
+            & tWriteAutotest, autotestTag, tWriteResultsTag, resultsTag, tWriteDetailedOut,&
+            & fdDetailedOut, kPoint, kWeight, iCellVec, cellVec, tPeriodic, tMulliken, dqGross,&
+            & dqNet)
+        deallocate(dqNet)
+        deallocate(dqGross)
       end if
 
       if (tExitGeoOpt) then
@@ -341,7 +349,7 @@ contains
     if (tWriteResultsTag) then
       call writeResultsTag(resultsTag, energy, derivs, chrgForces, electronicSolver, tStress,&
           & totalStress, pDynMatrix, tPeriodic, cellVol, tMulliken, qOutput, q0, taggedWriter,&
-          & tDefinedFreeE, eigen, dipoleMoment)
+          & tDefinedFreeE, eigen, dipoleMoment, qOnsite)
     end if
     if (tWriteDetailedXML) then
       call writeDetailedXml(runId, speciesName, species0, pCoord0Out, tPeriodic, latVec, tRealHS,&
@@ -3650,11 +3658,8 @@ contains
     do i_atom = 1, nAtom
         i_spec = species0(i_atom)
         free_charges(i_atom) = sum(referenceN0(1:orb%nShell(i_spec), i_spec))
-        ! if (inp%mbd_debug.and. tIoProc) then
-        !   write(stdOut,*) i_atom, free_charges(i_atom)
-        ! end if
     end do
-    cpa = 1d0 + (cpa-free_charges)/dble(species_index(speciesName(species0)))
+    cpa = 1.0_dp + (cpa-free_charges)/real(species_index(speciesName(species0)),rdp)
     print *, "CPA:", cpa
     call mbDispersion%update_vdw_params_from_ratios(cpa)
 
