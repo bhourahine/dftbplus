@@ -601,9 +601,7 @@ contains
     if (this%tRealHS) then
       this%nOrbs = size(eigvecs, dim=1)
     else
-      if (allocated(rangeSep)) then
-        this%nOrbs = size(eigvecsCplx, dim=1)
-      end if
+      this%nOrbs = size(eigvecsCplx, dim=1)
     endif
 
     this%nAtom = size(coord, dim=2)
