@@ -105,6 +105,9 @@ module dftbp_taggedoutput
     !> final velocities after real-time (Ehrenfest) propagation
     character(lenLabel) :: ehrenvelos = 'final_ehrenfest_velo'
 
+    !> final molecular orbitals occupations after real-time (Ehrenfest) propagation
+    character(lenLabel) :: tdprojocc = 'final_td_proj_occupations'
+
     !> total energy including electron TS contribution
     character(lenLabel) :: freeEgy = 'mermin_energy'
 
@@ -123,7 +126,7 @@ module dftbp_taggedoutput
     !> total projected DOS vector
     character(lenLabel) :: ldos = 'total_localdos'
 
-    !> total bond currents 
+    !> total bond currents
     character(lenLabel) :: localCurrents = 'local_currents'
 
     !> total internal energy
