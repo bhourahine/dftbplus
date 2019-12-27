@@ -2823,7 +2823,7 @@ contains
     write(fd, format2U) 'Total energy', energy%Etotal, 'H', energy%Etotal * Hartree__eV, 'eV'
     if (any(electronicSolver%iSolver == [electronicSolverTypes%qr,&
         & electronicSolverTypes%divideandconquer, electronicSolverTypes%relativelyrobust,&
-        & electronicSolverTypes%elpa])) then
+        & electronicSolverTypes%elpa, electronicSolverTypes%pexsi])) then
       write(fd, format2U) 'Extrapolated to 0', energy%Ezero, 'H', energy%Ezero * Hartree__eV, 'eV'
       write(fd, format2U) 'Total Mermin free energy', energy%Etotal - sum(TS), 'H',&
           & (energy%Etotal - sum(TS)) * Hartree__eV, 'eV'
