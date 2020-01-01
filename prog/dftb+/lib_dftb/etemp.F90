@@ -251,7 +251,7 @@ contains
           do j = 1, size(eigenvals,dim=1)
             x = ( eigenvals(j,i,ispin) - Ef ) * w
             x = x + sqrt(0.5_dp)
-            x = 0.5_dp - 0.5_dp*erf(x) - sqrt(0.5_dp) * exp(-x**2) / sqrt(pi)
+            x = 0.5_dp - 0.5_dp*erf(x) - exp(-x**2) / sqrt(2.0_dp * pi)
             electronCount = electronCount + kWeight(i) *x
           end do
         end do
