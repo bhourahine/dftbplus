@@ -379,6 +379,8 @@ contains
       this%muBroadenScheme = 1
     else if (iDistribFn == fillingTypes%Gaussian) then
       this%muBroadenScheme = 0
+    else if (iDistribFn == fillingTypes%Marzari) then
+      this%muBroadenScheme = 4
     else if (iDistribFn >= fillingTypes%Methfessel) then
       this%muBroadenScheme = 2
       ! set Meth-Pax order

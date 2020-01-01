@@ -34,9 +34,12 @@ module dftbp_etemp
     !> Definition of a type of broadening function - Gaussian in this case
     integer :: Gaussian = 1
 
+    !> Marzari-Vanderbilt filling function
+    integer :: Marzari = 2
+
     !> Definition of a type of broadening function - Methfessel-Paxton, for higher orders use
     !> Methfessel + n as a value
-    integer :: Methfessel = 2
+    integer :: Methfessel = 3
 
   end type TFillingTypesEnum
 
@@ -242,7 +245,18 @@ contains
 
     w = 1.0_dp/kT
     electronCount=0.0_dp
-    if (distrib /= fillingTypes%Fermi) then
+    if (distrib == fillingTypes%Marzari) then
+      do ispin = 1, size(eigenvals,dim=3)
+        do i = 1, size(kWeight)
+          do j = 1, size(eigenvals,dim=1)
+            x = ( eigenvals(j,i,ispin) - Ef ) * w
+            x = x + sqrt(0.5_dp)
+            x = 0.5_dp - 0.5_dp*erf(x) - sqrt(0.5_dp) * exp(-x**2) / sqrt(pi)
+            electronCount = electronCount + kWeight(i) *x
+          end do
+        end do
+      end do
+    else if (distrib >= fillingTypes%Gaussian) then
       MPorder = distrib - fillingTypes%Methfessel - 1
       allocate(A(0:MPorder))
       allocate(hermites(0:2*MPorder))
@@ -260,7 +274,7 @@ contains
             if (eigenvals(k,i,ispin)>(Ef+3.0_dp*w)) then
               exit
             end if
-            x = ( eigenvals(k,i,ispin) - Ef ) / kT
+            x = ( eigenvals(k,i,ispin) - Ef ) * w
             call hX(hermites,MPorder*2,x)
             occ = 0.5_dp * erfcwrap(x)
             do l=1, MPorder
@@ -274,7 +288,7 @@ contains
       do ispin = 1, size(eigenvals,dim=3)
         do i = 1, size(kWeight)
           do j = 1, size(eigenvals,dim=1)
-            x = ( eigenvals(j,i,ispin) - Ef ) / kT
+            x = ( eigenvals(j,i,ispin) - Ef ) * w
             ! Where the compiler does not handle inf gracefully, trap the exponential function for
             ! small input values
 #:if EXP_TRAP
@@ -407,8 +421,24 @@ contains
     w = 1.0_dp / kT
     E0(:) = 0.0_dp
 
-    ! The Gaussian and Methfessel-Paxton broadening functions first
-    if (distrib /= fillingTypes%Fermi) then
+    if (distrib == fillingTypes%Marzari) then
+      ! Marzari-Vanderbilt
+      do iSpin = 1, size(eigenvals, dim=3)
+        do i = 1, kpts
+          do j = 1, size(eigenvals, dim=1)
+            x = ( eigenvals(j,i,ispin) - Ef ) * w
+            TS(iSpin) = TS(iSpin) + exp(-(x-sqrt(0.5_dp))**2)*(1.0_dp-sqrt(2.0_dp)*x)
+            x = x + sqrt(0.5_dp)
+            filling(j, i, iSpin) = (0.5_dp * (1.0_dp-erf(x)) - sqrt(0.5_dp) * exp(-x**2) / sqrt(pi))
+            Eband(iSpin) = Eband(iSpin) &
+                & + kWeights(i) * (filling(j, i, iSpin) * eigenvals(j, i, iSpin))
+          end do
+        end do
+      end do
+      TS(:) = 0.5_dp * kT * TS / sqrt(pi)
+      E0(:) = Eband - 0.5_dp * TS
+    else if (distrib >= fillingTypes%Gaussian) then
+      ! The Gaussian and Methfessel-Paxton broadening functions
       MPorder = distrib - fillingTypes%Methfessel -1
       allocate(A(0:MPorder))
       allocate(hermites(0 : 2 * MPorder))
@@ -427,7 +457,7 @@ contains
             if (eigenvals(k, i, iSpin) > (Ef + 3.0_dp * w)) then
               exit
             end if
-            x = (eigenvals(k,i,iSpin) - Ef) / kT
+            x = (eigenvals(k,i,iSpin) - Ef) * w
             call hX(hermites, MPorder * 2, x)
             ! Gauusian broadened occupancy
             occ = 0.5_dp * erfcwrap(x)
@@ -455,7 +485,7 @@ contains
       do iSpin = 1, size(eigenvals, dim=3)
         do i = 1, kpts
           do j = 1, size(eigenvals, dim=1)
-            x = (eigenvals(j, i, iSpin) - Ef) / kT
+            x = (eigenvals(j, i, iSpin) - Ef) * w
             ! Where the compiler does not handle inf gracefully, trap the exponential function for
             ! small values
 #:if EXP_TRAP

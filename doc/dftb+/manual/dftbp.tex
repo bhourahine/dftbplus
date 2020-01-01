@@ -1896,7 +1896,7 @@ quality of the solutions).
 \subsection{Filling}
 \label{sec:dftbp.Filling}
 
-There are currently two types of filling supported (see below). Both have common
+There are currently three types of filling supported (see below). Both have common
 options:
 
 \begin{ptable}
@@ -1944,6 +1944,7 @@ Example:
 
 \subsubsection{MethfesselPaxton\{\}}
 \label{sec:dftbp.MethfesselPaxton}
+\index{MethfesselPaxton}
 
 Produces a Fermi-like distribution but with much lower electron
 entropy~\cite{methfessel-PRB-40-3616}. This is useful for systems that require
@@ -1963,6 +1964,14 @@ position of the Fermi-level is not necessary unique for a given number of electr
 different fillings, band entropies, and Mermin free energies may result, depending which one has
 been found by the Fermi-level search algorithm. The differences, however, are usually not physically
 significant.
+
+\subsubsection{MarzariVanderbilt\{\}}
+\label{sec:dftbp.MarzariVanderbilt}
+\index{MarzariVanderbilt}
+
+Produces a Fermi-like distribution but with much lower electron
+entropy~\cite{PhysRevLett.82.3296}. This is useful for systems that require high
+electron temperatures (for example when calculating metallic systems).
 
 \subsection{SlaterKosterFiles}
 \label{sec:dftbp.SlaterKosterFiles}

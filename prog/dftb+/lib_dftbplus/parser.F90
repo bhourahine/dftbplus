@@ -1736,6 +1736,8 @@ contains
     select case (char(buffer))
     case ("fermi")
       ctrl%iDistribFn = fillingTypes%Fermi ! Fermi function
+    case ("marzarivanderbilt")
+      ctrl%iDistribFn = fillingTypes%marzari ! Marzari-Vanderbilt function
     case ("methfesselpaxton")
       ! Set the order of the Methfessel-Paxton step function approximation, defaulting to 2nd order
       call getChildValue(value1, "Order", ctrl%iDistribFn, 2)
