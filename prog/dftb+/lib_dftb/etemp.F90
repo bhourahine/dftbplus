@@ -250,7 +250,7 @@ contains
         do i = 1, size(kWeight)
           do j = 1, size(eigenvals,dim=1)
             x = ( eigenvals(j,i,ispin) - Ef ) * w
-            x = x + sqrt(0.5_dp)
+            x = x - sqrt(0.5_dp)
             x = 0.5_dp - 0.5_dp*erf(x) - sqrt(0.5_dp) * exp(-x**2) / sqrt(pi)
             electronCount = electronCount + kWeight(i) *x
           end do
@@ -428,7 +428,7 @@ contains
           do j = 1, size(eigenvals, dim=1)
             x = ( eigenvals(j,i,ispin) - Ef ) * w
             TS(iSpin) = TS(iSpin) + exp(-(x-sqrt(0.5_dp))**2)*(1.0_dp-sqrt(2.0_dp)*x)
-            x = x + sqrt(0.5_dp)
+            x = x - sqrt(0.5_dp)
             filling(j, i, iSpin) = (0.5_dp * (1.0_dp-erf(x)) - sqrt(0.5_dp) * exp(-x**2) / sqrt(pi))
             Eband(iSpin) = Eband(iSpin) &
                 & + kWeights(i) * (filling(j, i, iSpin) * eigenvals(j, i, iSpin))
