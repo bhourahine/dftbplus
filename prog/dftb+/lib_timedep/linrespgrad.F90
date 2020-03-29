@@ -413,16 +413,8 @@ contains
     ! to empty states
     call getSPExcitations(grndEigVal, filling, wij, getij)
 
-    ! put them in ascending energy order
-    if (tOscillatorWindow) then
-      ! use a stable sort so that degenerate transitions from the same single particle state are
-      ! grouped together in the results, allowing these to be selected together (since how intensity
-      ! is shared out over degenerate transitions is arbitrary between eigensolvers/platforms).
-      call merge_sort(win, wij, 1.0_dp*epsilon(1.0))
-    else
-      ! do not require stability, use the usual routine to sort, saving an O(N) workspace
-      call index_heap_sort(win, wij)
-    end if
+    ! Sort transitions by energy
+    call index_heap_sort(win, wij)
     wij = wij(win)
 
     ! dipole strength of transitions between K-S states
