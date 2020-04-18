@@ -45,7 +45,7 @@ module dftbp_parser
   use dftbp_forcetypes, only : forceTypes
   use dftbp_mixer, only : mixerTypes
   use dftbp_geoopt, only : geoOptTypes
-  use dftbp_halogenx, only : halogenXSpecies1, halogenXSpecies2
+  use dftbp_halogenx, only : halogenXAllowed
 #:if WITH_SOCKETS
   use dftbp_ipisocket, only : IPI_PROTOCOLS
 #:endif
@@ -1635,27 +1635,9 @@ contains
         end if
 
         ! Halogen correction to the DFTB3 model
-        block
-          logical :: tHalogenInteraction
-          integer :: interType, iSp1, iSp2
-
-          if (.not. geo%tPeriodic) then
-            tHalogenInteraction = .false.
-            iSp1Loop: do iSp1 = 1, geo%nSpecies
-              if (any(geo%speciesNames(iSp1) == halogenXSpecies1)) then
-                do iSp2 = 1, geo%nSpecies
-                  if (any(geo%speciesNames(iSp2) == halogenXSpecies2)) then
-                    tHalogenInteraction = .true.
-                    exit iSp1Loop
-                  end if
-                end do
-              end if
-            end do iSp1Loop
-            if (tHalogenInteraction) then
-              call getChildValue(node, "HalogenXCorr", ctrl%tHalogenX, .false.)
-            end if
-          end if
-        end block
+        if (halogenXAllowed(geo)) then
+          call getChildValue(node, "HalogenXCorr", ctrl%tHalogenX, .false.)
+        end if
 
       end if
     end if

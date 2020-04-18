@@ -15,12 +15,12 @@ module dftbp_halogenx
   use dftbp_vdwdata
   use dftbp_constants, only : AA__Bohr, Bohr__AA, kcal_mol__Hartree
   use dftbp_periodic, only : TNeighbourList, getNrOfNeighboursForAll
+  use dftbp_typegeometryhsd, only : TGeometry
   use dftbp_message
   implicit none
   private
 
-  public :: THalogenX, THalogenX_init
-  public :: halogenXSpecies1, halogenXSpecies2
+  public :: THalogenX, THalogenX_init, halogenXAllowed
 
 
   !> Type for repulsive pairwise additions
@@ -44,12 +44,10 @@ module dftbp_halogenx
   end type THalogenX
 
   !> Possible types for the first species in the interaction
-  character(*), parameter :: halogenXSpecies1(2) = [character(1) ::&
-      & 'O', 'N']
+  character(*), parameter :: halogenXSpecies1(2) = [character(1) :: 'O', 'N']
 
   !> Possible types for the second species in the interaction
-  character(*), parameter :: halogenXSpecies2(3) = [character(2) ::&
-      & 'Cl', 'Br', 'I']
+  character(*), parameter :: halogenXSpecies2(3) = [character(2) :: 'Cl', 'Br', 'I']
 
   !> energy in kcal/mol for pair truncation
   real(dp), parameter :: minInteraction = 1.0E-14_dp
@@ -443,5 +441,30 @@ contains
     end if
 
   end function halogendSigma
+
+
+  !> Identifier function for the relevance of halogen-X corrections
+  pure function halogenXAllowed(geo) result (tHalogenInteraction)
+
+    !> Geometry structure, including boundary conditions and species names
+    type(TGeometry), intent(in) :: geo
+
+    logical :: tHalogenInteraction
+    integer :: iSp
+
+    tHalogenInteraction = .false.
+    if (.not. geo%tPeriodic) then
+      do iSp = 1, size(halogenXSpecies1)
+        tHalogenInteraction = tHalogenInteraction .or. any(geo%speciesNames==halogenXSpecies1(iSp))
+      end do
+      if (.not. tHalogenInteraction) then
+        return
+      end if
+      do iSp = 1, size(halogenXSpecies2)
+        tHalogenInteraction = tHalogenInteraction .or. any(geo%speciesNames==halogenXSpecies2(iSp))
+      end do
+    end if
+
+  end function halogenXAllowed
 
 end module dftbp_halogenx
