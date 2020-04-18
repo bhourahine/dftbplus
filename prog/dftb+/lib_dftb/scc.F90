@@ -16,7 +16,7 @@ module dftbp_scc
   use dftbp_chargeconstr
   use dftbp_commontypes
   use dftbp_constants
-  use dftbp_coulomb, only : TCoulombCont, TCoulombInput, init, sumInvR
+  use dftbp_coulomb, only : TCoulombCont, TCoulombInput, TCoulombCont_init, sumInvR
   use dftbp_dynneighlist
   use dftbp_environment
   use dftbp_fileid
@@ -36,7 +36,7 @@ module dftbp_scc
 
   private
 
-  public :: TSccInp, TScc, initialize
+  public :: TSccInp, TScc, SCC_init
 
 
   !> Data necessary to initialize the SCC module
@@ -261,17 +261,11 @@ module dftbp_scc
   end type TScc
 
 
-  !> Initialize SCC container from input data
-  interface initialize
-    module procedure Scc_initialize
-  end interface initialize
-
-
 contains
 
 
   !> Initialize SCC container from input data
-  subroutine Scc_initialize(this, env, inp)
+  subroutine Scc_init(this, env, inp)
 
     !> Resulting instance
     type(TScc), intent(out) :: this
@@ -296,10 +290,10 @@ contains
     @:ASSERT(allocated(inp%extCharges) .or. .not. allocated(inp%blurWidths))
 
     if (allocated(inp%latVecs)) then
-      call init(this%coulombCont, inp%coulombInput, env, this%nAtom, &
-          & inp%latVecs, inp%recVecs, inp%volume)
+      call TCoulombCont_init(this%coulombCont, inp%coulombInput, env, this%nAtom, inp%latVecs,&
+          & inp%recVecs, inp%volume)
     else
-      call init(this%coulombCont, inp%coulombInput, env, this%nAtom)
+      call TCoulombCont_init(this%coulombCont, inp%coulombInput, env, this%nAtom)
     end if
 
     allocate(this%shiftPerAtom(this%nAtom))
@@ -397,7 +391,7 @@ contains
 
     this%tInitialised = .true.
 
-  end subroutine Scc_initialize
+  end subroutine Scc_init
 
 
   !> Returns a minimal cutoff for the neighbourlist, which must be passed to various functions in

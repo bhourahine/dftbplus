@@ -1485,7 +1485,7 @@ contains
 
       sccInp%coulombInput%ewaldAlpha = input%ctrl%ewaldAlpha
       sccInp%coulombInput%tolEwald = input%ctrl%tolEwald
-      call initialize(sccCalc, env, sccInp)
+      call Scc_init(sccCalc, env, sccInp)
       deallocate(sccInp)
 
       ! Longest cut-off including the softening part of gamma
