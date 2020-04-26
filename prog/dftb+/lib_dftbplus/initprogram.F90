@@ -25,6 +25,7 @@ module dftbp_initprogram
   use dftbp_elsisolver, only : TElsiSolver_init, TElsiSolver_final
   use dftbp_elsiiface
   use dftbp_gpuinfo, only : gpuInfo
+  use dftbp_boundaryconditions, only : TBoundaryConditions, boundaryTypes, BoundaryConditions_init
   use dftbp_periodic
   use dftbp_accuracy
   use dftbp_intrinsicpr
@@ -183,6 +184,9 @@ module dftbp_initprogram
 
   !> Coords in central cell (3, nAtom)
   real(dp), allocatable, target :: coord0(:,:)
+
+  !> Boundary condition on the calculation
+  type(TBoundaryConditions) :: boundaryConds
 
   !> if calculation is periodic
   logical :: tPeriodic
@@ -1186,6 +1190,15 @@ contains
     tPeriodic = input%geom%tPeriodic
     tHelical = input%geom%tHelical
 
+    if (allocated(input%geom%latVecs)) then
+      latVec = input%geom%latVecs
+    end if
+  #:if WITH_TRANSPORT
+    call BoundaryConditions_init(boundaryConds, input%transpar, latVec)
+  #:else
+    call BoundaryConditions_init(boundaryConds, latVec)
+  #:endif
+
     ! start by assuming stress can be calculated if periodic
     tStress = tPeriodic ! .or. tHelical
 
@@ -1257,9 +1270,6 @@ contains
 
     if (tPeriodic) then
       tLatticeChanged = .true.
-      allocate(latVec(3, 3))
-      @:ASSERT(all(shape(input%geom%latVecs) == shape(latVec)))
-      latVec(:,:) = input%geom%latVecs(:,:)
       allocate(recVec(3, 3))
       allocate(invLatVec(3, 3))
       invLatVec = latVec(:,:)
@@ -1269,13 +1279,10 @@ contains
       CellVol = abs(determinant33(latVec))
       recCellVol = abs(determinant33(recVec))
     else if (tHelical) then
-      allocate(latVec(size(input%geom%latVecs,dim=1), 1))
-      latVec(:,:) = input%geom%latVecs(:,:)
       allocate(recVec(1, 1))
       recVec = 1.0_dp / latVec(1,1)
       allocate(invLatVec(0, 0))
     else
-      allocate(latVec(0, 0))
       allocate(recVec(0, 0))
       allocate(invLatVec(0, 0))
       CellVol = 0.0_dp
