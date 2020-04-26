@@ -1191,12 +1191,15 @@ contains
     tHelical = input%geom%tHelical
 
     if (allocated(input%geom%latVecs)) then
-      latVec = input%geom%latVecs
+      allocate(latVec(size(input%geom%latVecs,dim=1), size(input%geom%latVecs,dim=2)))
+      latVec(:,:) = input%geom%latVecs
+    else
+      allocate(latVec(0,0))
     end if
   #:if WITH_TRANSPORT
-    call BoundaryConditions_init(boundaryConds, input%transpar, latVec)
+    call BoundaryConditions_init(boundaryConds, input%transpar, input%geom%latVecs)
   #:else
-    call BoundaryConditions_init(boundaryConds, latVec)
+    call BoundaryConditions_init(boundaryConds, input%geom%latVecs)
   #:endif
 
     ! start by assuming stress can be calculated if periodic
