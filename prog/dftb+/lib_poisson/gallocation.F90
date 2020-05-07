@@ -30,8 +30,8 @@ module gallocation
   use dftbp_accuracy, only : dp
 
   integer, parameter :: long = int64
-  integer, save :: iolog
-  integer(int64), save :: alloc_mem, peak_mem
+  integer :: iolog
+  integer(int64) :: alloc_mem, peak_mem
 
   public log_gallocate, log_gdeallocate, writePoissMemInfo, writePoissPeakInfo
 

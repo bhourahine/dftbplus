@@ -9,7 +9,6 @@ set(sources-fpp
   ${curdir}/magmahelper.F90
   ${curdir}/mpifx.F90
   ${curdir}/plumed.F90
-  ${curdir}/poisson_int.F90
   ${curdir}/scalapackfx.F90
   ${curdir}/xmlf90.F90)
 

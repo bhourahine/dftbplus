@@ -377,7 +377,7 @@ subroutine mudpack_drv(env, SCC_in, V_L_atm, grad_V, iErr)
 
  real(kind=dp), SAVE, ALLOCATABLE, DIMENSION (:,:,:) :: phi
  real(kind=dp), ALLOCATABLE, DIMENSION (:) :: work
- real(kind=dp), SAVE, ALLOCATABLE, DIMENSION (:,:,:) :: rhs 
+ real(kind=dp), SAVE, ALLOCATABLE, DIMENSION (:,:,:) :: rhs
 
  Type(super_array), ALLOCATABLE, DIMENSION(:) :: bulk
 

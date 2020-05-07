@@ -15,30 +15,30 @@ module structure
   implicit none
   private
   
-  integer,  public, save :: natoms
-  integer, allocatable, public, save :: izp(:)       ! specie
-  integer,  public, save :: nlat(3)
-  integer,  public, save :: ntypes
+  integer,  public :: natoms
+  integer, allocatable, public :: izp(:)       ! specie
+  integer,  public :: nlat(3)
+  integer,  public :: ntypes
   
-  real(kind=dp), allocatable, public, save :: x(:,:)
+  real(kind=dp), allocatable, public :: x(:,:)
  
-  real(kind=dp), allocatable, public, save :: ss_x(:,:)  !supercell coords
-  integer,  public, save :: ss_natoms                !supercell atoms
-  integer, allocatable, public, save :: ss_izp(:)
-  integer, public, save :: ss_f(3)
+  real(kind=dp), allocatable, public :: ss_x(:,:)  !supercell coords
+  integer,  public :: ss_natoms                !supercell atoms
+  integer, allocatable, public :: ss_izp(:)
+  integer, public :: ss_f(3)
   
-  integer, public, allocatable, save :: lmax(:)        !(MAXTYP)
-  real(dp), public, allocatable, save :: uhubb(:,:)    !(NORB,MAXTYP)
-  
-  
-  real(kind=dp),  public, save :: boxsiz(3,3), xnullvec(3)
-  logical,  public, save :: period
-  logical,  public, save :: period_dir(3)
+  integer, public, allocatable :: lmax(:)        !(MAXTYP)
+  real(dp), public, allocatable :: uhubb(:,:)    !(NORB,MAXTYP)
   
   
-  real(kind=dp), allocatable, public, save :: dQmat(:,:) ! nshells,natoms
+  real(kind=dp),  public :: boxsiz(3,3), xnullvec(3)
+  logical,  public :: period
+  logical,  public :: period_dir(3)
   
-  character(3), public, save :: atnames(92)
+  
+  real(kind=dp), allocatable, public :: dQmat(:,:) ! nshells,natoms
+  
+  character(3), public :: atnames(92)
   
   !! Renormalization volumes: to ensure charge neutrality
   real(kind=dp), public, allocatable :: renorm(:,:)
