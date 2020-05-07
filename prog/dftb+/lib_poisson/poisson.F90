@@ -19,6 +19,9 @@ module poisson
   use bulkpot
   use fancybc
   use mpi_poisson
+#:if WITH_MPI
+  use libmpifx_module
+#:endif
   use dftbp_globalenv, only : stdOut
   use dftbp_accuracy, only : lc, dp
   use dftbp_environment, only : TEnvironment, globalTimers
@@ -876,7 +879,7 @@ subroutine set_rhs(env, iparm, fparm, dlx, dly, dlz, rhs, bulk)
  #:if WITH_MPI
   !---------------------------------------------------------------------
   ! MPI parallelization of the r.h.s. assembly (charge density)
-  ! This is done slicing the grid along the z-direction, iparm(16)
+  ! This is done by slicing the grid along the z-direction, iparm(16)
   ! Parallelization is done along z since this corresponds to the slowest
   ! index in rhs(:,:,:), therefore gather is done on a contiguus vector
   !

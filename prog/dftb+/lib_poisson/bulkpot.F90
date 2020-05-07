@@ -616,6 +616,7 @@ Subroutine compbulk_pot_mud(phi_bulk,iparm,fparm, iErr)
   end do
 
 end Subroutine compbulk_pot_mud
+
 !%--------------------------------------------------------------------------
 Subroutine bulk_bndyc(kbdy,xory,yorz,alfa,gbdy)
 
@@ -915,5 +916,3 @@ end function boundary2string
 
 
 end Module bulkpot
-!%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-

@@ -16,7 +16,7 @@ module structure
   private
   
   integer,  public :: natoms
-  integer, allocatable, public :: izp(:)       ! specie
+  integer, allocatable, public :: izp(:) ! species
   integer,  public :: nlat(3)
   integer,  public :: ntypes
   
@@ -369,4 +369,3 @@ module structure
    
    
  end module structure
- 

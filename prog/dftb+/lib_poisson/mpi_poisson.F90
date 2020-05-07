@@ -15,7 +15,6 @@ module mpi_poisson
   implicit none
   private  
 
-  public :: mpifx_gatherv
   public :: poiss_mpi_init, poiss_mpi_split
 
   !! mpifx communicator as received by calling program
