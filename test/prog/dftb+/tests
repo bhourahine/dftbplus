@@ -6,27 +6,6 @@
 #:set LONG_TEST = not defined('TRAVIS')
 
 response/H2Oscc_dx                     #? MPI_PROCS <= 1
-response/CH4                           #? MPI_PROCS <= 1
-response/H2O                           #? MPI_PROCS <= 1
-response/H2Oscc                        #? MPI_PROCS <= 1
-response/OHspin                        #? MPI_PROCS <= 1
-response/CH3+u                         #? MPI_PROCS <= 1
-response/H2Oonsite                     #? MPI_PROCS <= 1
-response/C60                           #? MPI_PROCS <= 4 or (not WITH_MPI)
-response/C60+                          #? (not WITH_MPI) or (MPI_PROCS <= 4 and MPI_PROCS % 2 == 0)
-response/H2Pauli                       #? MPI_PROCS <= 1
-response/CH3+u_noncol                  #? MPI_PROCS <= 1
-response/OH_noncol                     #? MPI_PROCS <= 1
-response/Au2                           #? MPI_PROCS <= 4 or (not WITH_MPI)
-response/2H2O-3rdFull                  #? MPI_PROCS <= 1
-response/C18H12-LCnb                   #? not WITH_MPI
-response/Thymine-T1_LC                 #? not WITH_MPI 
-response/Thymine-charge_LC             #? not WITH_MPI
-response/CH4_dynamic                   #? MPI_PROCS <= 1
-response/OH_dynamic                    #? MPI_PROCS <= 1
-response/Au2_dynamic                   #? MPI_PROCS <= 4 or (not WITH_MPI)
-
-response/Si_2_k                        #? not WITH_MPI
 
 non-scc/Si_384_GPU                     #? WITH_GPU and not WITH_MPI
 scc/SiC_512_GPU                        #? WITH_GPU and not WITH_MPI

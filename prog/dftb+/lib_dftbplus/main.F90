@@ -88,8 +88,6 @@ module dftbp_main
   use dftbp_initprogram, only : TRefExtPot
   use dftbp_qdepextpotproxy, only : TQDepExtPotProxy
   use dftbp_taggedoutput, only : TTaggedWriter
-  use dftbp_perturbderivs
-  use dftbp_perturbkderivs
   use dftbp_perturbxderivs
   use dftbp_reks
   use dftbp_plumed, only : TPlumedCalc, TPlumedCalc_final
@@ -290,27 +288,6 @@ contains
     end if
 
   #:endif
-
-    ! response properties from perturbation-like expressions
-    if (tKDerivs .and. tPeriodic .and. allocated(eigVecsCplx)) then
-      call dPsidK(env, parallelKS, eigen, eigVecsCplx, ham, over, orb, nAtom, species,&
-          & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, coord, kPoint,&
-          & kWeight, cellVec, iCellVec, latVec, taggedWriter, tWriteAutotest, autotestTag,&
-          & tWriteResultsTag, resultsTag, tWriteDetailedOut, fdDetailedOut)
-    end if
-
-    if (tPolarisability) then
-      if (.not.(tPeriodic .or. tNegf)) then
-        call staticPerturWrtE(env, parallelKS, filling, eigen, eigVecsReal, eigvecsCplx, ham,&
-            & over, orb, nAtom, species, speciesName, neighbourList, nNeighbourSK, denseDesc,&
-            & iSparseStart, img2CentCell, coord, sccCalc, maxSccIter, sccTol, nMixElements,&
-            & nIneqOrb, iEqOrbitals, tempElec, Ef, tFixEf, spinW, thirdOrd, tDFTBU, UJ, nUJ, iUJ,&
-            & niUJ, iEqBlockDftbu, onSiteElements, iEqBlockOnSite, rangeSep, nNeighbourLC,&
-            & pChrgMixer, taggedWriter, tWriteAutotest, autotestTag, tWriteResultsTag,&
-            & resultsTag, tWriteDetailedOut, fdDetailedOut, kPoint, kWeight, iCellVec, cellVec,&
-            & tPeriodic, omegaPolarisability)
-      end if
-    end if
 
     if (allocated(pipekMezey)) then
       ! NOTE: the canonical DFTB ground state orbitals are over-written after this point

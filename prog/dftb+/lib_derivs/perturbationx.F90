@@ -62,7 +62,7 @@ contains
       & potential, qOrb, q0, ham, over, skHamCont, skOverCont, nonSccDeriv, orb, nAtom, species,&
       & speciesnames, neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, coord,&
       & sccCalc, maxSccIter, sccTol, nMixElements, nIneqMixElements, iEqOrbitals, tempElec, Ef,&
-      & tFixEf, spinW, thirdOrd, tDFTBU,UJ, nUJ, iUJ, niUJ, iEqBlockDftbu, onsMEs, iEqBlockOnSite,&
+      & tFixEf, spinW, thirdOrd, tDFTBU, UJ, nUJ, iUJ, niUJ, iEqBlockDftbu, onsMEs, iEqBlockOnSite,&
       & rangeSep, nNeighbourLC, pChrgMixer, taggedWriter, tWriteAutoTest, autoTestTagFile,&
       & tWriteTaggedOut, taggedResultsFile, tWriteDetailedOut, fdDetailedOut, kPoint, kWeight,&
       & iCellVec, cellVec, tPeriodic, tMulliken)

@@ -502,9 +502,6 @@ module dftbp_initprogram
   !> Should polarisability be calculated
   logical :: tPolarisability
 
-  !> Should derivatives of eigenstates wrt to k be evaluated
-  logical :: tKDerivs
-
   !> Should derivatives wrt to atomic coordinates be evaluated
   logical :: tXDerivs
 
@@ -2164,43 +2161,16 @@ contains
           & spin orbit calculations")
     end if
 
-    !> k derivatives (first steps for properties like one method of Berry phase evaluation or for
-    !> dielectric tensors)
-    tKDerivs = input%ctrl%tKDerivs
-
     !> x derivatives (first steps for properties vibrational modes and dq/dx)
     tXDerivs = input%ctrl%tXDerivs
 
-    !> Polarisability of the system
-    tPolarisability = input%ctrl%tPolarisability
-    ii = 0
-    jj = 1
-    if (input%ctrl%tStaticPolarisability) then
-      ii = 1
-      jj = 2
-    end if
-    if (allocated(input%ctrl%omegaPolarisability)) then
-      ii = ii + size(input%ctrl%omegaPolarisability)
-    end if
-    if (ii > 0) then
-      ! place any static (0 energy case) at start of array
-      allocate(omegaPolarisability(ii))
-      omegaPolarisability(:) = 0.0_dp
-      if (jj <= ii) then
-         omegaPolarisability(jj:) = input%ctrl%omegaPolarisability
-      end if
-    end if
-
-    if (tPolarisability) then
+    if (tXDerivs) then
       if (.not. electronicSolver%providesEigenvals) then
         call error("Currently the perturbation expresions require a solver that provides&
             & eigenstates")
       end if
       if (tNegf) then
         call error("Currently the perturbation expresions for NEGF are not implemented")
-      end if
-      if (tPeriodic) then
-        call error("Currently the perturbation expresions periodic systems are not implemented")
       end if
       if (t3rd) then
         call error("Only full 3rd order currently supported for perturbation")

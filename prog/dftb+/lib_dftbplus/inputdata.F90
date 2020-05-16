@@ -190,20 +190,8 @@ module dftbp_inputdata
     !> Type for PM localisation
     type(TPipekMezeyInp), allocatable :: pipekMezeyInp
 
-    !> Should polarisability be calculated
-    logical :: tPolarisability = .false.
-
-    !> Should derivatives wrt to k be evaluated for band states
-    logical :: tKDerivs = .false.
-
     !> Should derivatives wrt to coords be evaluated
     logical :: tXDerivs = .false.
-
-    !> Should static polarisability be calculated
-    logical :: tStaticPolarisability = .false.
-
-    !> Energies for frequency driving in dynamic polarizability
-    real(dp), allocatable :: omegaPolarisability(:)
 
     !> printing of atom resolved energies
     logical :: tAtomicEnergy = .false.
