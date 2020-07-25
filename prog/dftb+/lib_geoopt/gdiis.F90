@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -18,11 +18,11 @@ module dftbp_gdiis
 
 
   !> Contains data for the DIIS mimimizer
-  type ODIIS
+  type TDIIS
     private
 
     !> DIIS object itself
-    type(ODIISMixer) :: pDIIS
+    type(TDIISMixer) :: pDIIS
 
     !> Vector of current coordinate
     real(dp), allocatable :: x(:)
@@ -35,7 +35,7 @@ module dftbp_gdiis
 
     !> If object is initialized
     logical :: tInitialized
-  end type ODIIS
+  end type TDIIS
 
 
   !> Creates gDIIS instance
@@ -55,17 +55,17 @@ module dftbp_gdiis
     module procedure gDIIS_next
   end interface
 
-  public :: ODIIS
+  public :: TDIIS
   public :: init, reset, next
 
 contains
 
 
   !> Creates a DIIS geometry optimiser instance
-  subroutine gDIIS_init(self, nElem, tol, alpha, nGens)
+  subroutine gDIIS_init(this, nElem, tol, alpha, nGens)
 
     !> DIIS instance on exit
-    type(ODIIS), intent(out) :: self
+    type(TDIIS), intent(out) :: this
 
     !> Nr. of elements in the vectors
     integer, intent(in) :: nElem
@@ -79,26 +79,26 @@ contains
     !> Number of vectors to use in building DIIS space
     integer, intent(in) :: nGens
 
-    self%nElem = nElem
-    self%tolerance = tol
-    allocate(self%x(self%nElem))
-    call init(self%pDIIS,nGens,alpha,.true.,alpha)
-    self%tInitialized = .true.
+    this%nElem = nElem
+    this%tolerance = tol
+    allocate(this%x(this%nElem))
+    call init(this%pDIIS,nGens,alpha,.true.,alpha)
+    this%tInitialized = .true.
 
   end subroutine gDIIS_init
 
 
   !> Resets optimiser
-  subroutine gDIIS_reset(self,x)
+  subroutine gDIIS_reset(this,x)
 
     !> Minimiser
-    type(ODIIS), intent(inout) :: self
+    type(TDIIS), intent(inout) :: this
 
     !> Point to start from
     real(dp) :: x(:)
 
-    call reset(self%pDIIS, self%nElem)
-    self%x(:) = x(:)
+    call reset(this%pDIIS, this%nElem)
+    this%x(:) = x(:)
 
   end subroutine gDIIS_reset
 
@@ -106,10 +106,10 @@ contains
   !> Passes calculated function value and gradient to the minimizare and gives a new coordinate
   !> back.  When calling the first time, funciton value and gradient for the starting point of the
   !> minimization should be passed.
-  subroutine gDIIS_next(self,dx, xNew, tConverged)
+  subroutine gDIIS_next(this,dx, xNew, tConverged)
 
     !> minimiser
-    type(ODIIS), intent(inout) :: self
+    type(TDIIS), intent(inout) :: this
 
     !> Gradient in the last point
     real(dp), intent(in) :: dx(:)
@@ -120,19 +120,19 @@ contains
     !> True, if gradient goes below the specified tolerance
     logical,  intent(out) :: tConverged
 
-    @:ASSERT(self%tInitialized)
-    @:ASSERT(size(xNew) == self%nElem)
-    @:ASSERT(size(dx) == self%nElem)
+    @:ASSERT(this%tInitialized)
+    @:ASSERT(size(xNew) == this%nElem)
+    @:ASSERT(size(dx) == this%nElem)
 
-    xNew = self%x
-    call mix(self%pDIIS,self%x,dx)
-    if (maxval(abs(xNew-self%x)) < self%tolerance &
-        & .or. (maxval(abs(dx)) < self%tolerance)) then
+    xNew = this%x
+    call mix(this%pDIIS,this%x,dx)
+    if (maxval(abs(xNew-this%x)) < this%tolerance &
+        & .or. (maxval(abs(dx)) < this%tolerance)) then
       tConverged = .true.
     else
       tConverged = .false.
     end if
-    xNew = self%x
+    xNew = this%x
 
   end subroutine gDIIS_next
 

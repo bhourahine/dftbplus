@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -26,14 +26,15 @@ module dftbp_dispuff
   use dftbp_constants, only: pi
   use dftbp_dispiface
   use dftbp_dispcommon
+  use dftbp_environment, only : TEnvironment
   implicit none
   private
 
-  public :: DispUffInp, DispUff, DispUff_init
+  public :: TDispUffInp, TDispUff, DispUff_init
 
 
   !> Input structure for the van der Waals initialization.
-  type :: DispUffInp
+  type :: TDispUffInp
 
     !> potential depths (sized as nSpecies)
     real(dp), allocatable :: energies(:)
@@ -41,11 +42,11 @@ module dftbp_dispuff
 
     !> van der Waals radii (sized as nSpecies)
     real(dp), allocatable :: distances(:)
-  end type DispUffInp
+  end type TDispUffInp
 
 
   !> Internal state of the van der Waals dispersion module.
-  type, extends(DispersionIface) :: DispUff
+  type, extends(TDispersionIface) :: TDispUff
     private
 
     !> Nr. of atoms, species
@@ -103,7 +104,7 @@ module dftbp_dispuff
     procedure :: addGradients
     procedure :: getStress
     procedure :: getRCutoff
-  end type DispUff
+  end type TDispUff
 
 contains
 
@@ -112,10 +113,10 @@ contains
   subroutine DispUff_init(this, inp, nAtom, species0, latVecs)
 
     !> data structure to initialise
-    type(DispUff), intent(out) :: this
+    type(TDispUff), intent(out) :: this
 
     !> Specific input parameters for Slater-Kirkwood.
-    type(DispUffInp), intent(in) :: inp
+    type(TDispUffInp), intent(in) :: inp
 
     !> Nr. of atoms in the system.
     integer, intent(in) :: nAtom
@@ -135,11 +136,11 @@ contains
     @:ASSERT(all(inp%energies >= 0.0_dp))
     @:ASSERT(all(inp%distances >= 0.0_dp))
     @:ASSERT(present(latVecs) .eqv. present(species0))
-#:call ASSERT_CODE
+  #:block DEBUG_CODE
     if (present(latVecs)) then
       @:ASSERT(all(shape(latVecs) == [3, 3]))
     end if
-#:endcall ASSERT_CODE
+  #:endblock DEBUG_CODE
 
     this%nSpecies = size(inp%energies)
     this%nAtom = nAtom
@@ -190,13 +191,16 @@ contains
   end subroutine DispUff_init
 
   !> Notifies the objects about changed coordinates.
-  subroutine updateCoords(this, neigh, img2CentCell, coords, species0)
+  subroutine updateCoords(this, env, neigh, img2CentCell, coords, species0)
 
     !> Instance of dispersion to update
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> Updated neighbour list.
     type(TNeighbourList), intent(in) :: neigh
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Updated mapping to central cell.
     integer, intent(in) :: img2CentCell(:)
@@ -233,7 +237,7 @@ contains
   subroutine updateLatVecs(this, latVecs)
 
     !> Instance to update
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> New lattice vectors
     real(dp), intent(in) :: latVecs(:,:)
@@ -261,7 +265,7 @@ contains
   subroutine getEnergies(this, energies)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> Contains the atomic energy contributions on exit.
     real(dp), intent(out) :: energies(:)
@@ -277,7 +281,7 @@ contains
   subroutine addGradients(this, gradients)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> The vector to increase by the gradients.
     real(dp), intent(inout) :: gradients(:,:)
@@ -293,7 +297,7 @@ contains
   subroutine getStress(this, stress)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> tensor from the dispersion
     real(dp), intent(out) :: stress(:,:)
@@ -309,7 +313,7 @@ contains
   function getRCutoff(this) result(cutoff)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> Cutoff distance
     real(dp) :: cutoff
@@ -372,11 +376,11 @@ contains
     real(dp) :: rr, r2, r5, r6, r10, r12, k1, k2, dE, dGr, u0, u1, u2, f6
     real(dp) :: gr(3), vec(3)
 
-#:call ASSERT_CODE
+  #:block DEBUG_CODE
     if (present(stress)) then
       @:ASSERT(all(shape(stress) == [3, 3]))
     end if
-#:endcall ASSERT_CODE
+  #:endblock DEBUG_CODE
 
     ! Cluster case => explicit sum of the contributions
     if (present(removeR6)) then

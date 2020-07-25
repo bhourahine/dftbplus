@@ -7,7 +7,7 @@
 !**************************************************************************
 module fancybc
 
-  use gprecision
+  use dftbp_accuracy, only : dp
   use parameters
   use bulkpot , only : super_array
   use mpi_poisson
@@ -181,7 +181,6 @@ subroutine gate_bound(iparm,fparm,dlx,dly,dlz,rhs)
  real(kind=dp) :: fparm(8)
  real(kind=dp) :: dlx,dly,dlz
  real(kind=dp) :: rhs(iparm(14),iparm(15),iparm(16))
- logical :: period 
 
  real(kind=dp) :: x_x,y_y,z_z,xi,yj,zk
  real(kind=dp) :: x_min_gate,x_max_gate,y_min_gate,y_max_gate
@@ -264,10 +263,9 @@ Subroutine coef_cilgate(x,y,z,cxx,cyy,czz,cx,cy,cz,ce)
  
  real(kind=dp) :: cxx,cyy,czz,cx,cy,cz,ce
  real(kind=dp) :: x,y,z,a,b,a1,a2,b1,b2
- real(kind=dp) :: x_min_gate,x_max_gate,y_min_gate,y_max_gate
- real(kind=dp) :: z_min_gate,z_max_gate,d_cntr
- real(kind=dp) :: x_min_ox,x_max_ox,y_min_ox,y_max_ox
- real(kind=dp) :: z_min_ox,z_max_ox
+ real(kind=dp) :: x_min_gate,x_max_gate
+ real(kind=dp) :: d_cntr
+ real(kind=dp) :: x_min_ox,x_max_ox
  real(kind=dp) :: x_x,y_y,z_z,zero(3)
  integer :: i_x, i_y, i_z
 
@@ -431,7 +429,6 @@ subroutine cilgate_bound(iparm,fparm,dlx,dly,dlz,rhs)
  real(kind=dp) :: fparm(8)
  real(kind=dp) :: dlx,dly,dlz
  real(kind=dp) :: rhs(iparm(14),iparm(15),iparm(16))
- logical :: period 
 
  integer :: i,j,k
  real(kind=dp) :: xi,yj,zk
@@ -891,7 +888,7 @@ Subroutine mix_bndyc(kbdy,xory,yorz,alfa,gbdy)
  integer :: kbdy
  real(kind=dp) :: xory,yorz,alfa,gbdy
 
- integer :: m, ii, jj, i_z, i_y
+ integer :: m, i_z, i_y
  real(dp) :: R, yy, zz
  ! kbdy=1: xa; xory = y
  ! kbdy=2: xb; yorz = z
@@ -932,7 +929,7 @@ Subroutine mix_bndyc(kbdy,xory,yorz,alfa,gbdy)
           R=sqrt((zz-cntr_cont(i_z,m))**2+(yy-cntr_cont(i_y,m))**2)
           if(R.le.R_cont(m)) then
              alfa = 1.d6
-             gbdy = 1.d6 !* bulk_pot(m)%val(ii,jj,1)
+             gbdy = 1.d6 ! bulk_pot(m)%val(ii,jj,1)
           endif
           
        case(2) 
@@ -941,7 +938,7 @@ Subroutine mix_bndyc(kbdy,xory,yorz,alfa,gbdy)
              yy.ge.cntr_cont(i_y,m)-R_cont(m).and.yy.le.cntr_cont(i_y,m)+R_cont(m)) then
 
              alfa = 1.d6
-             gbdy = 1.d6 !* bulk_pot(m)%val(ii,jj,1)             
+             gbdy = 1.d6 ! bulk_pot(m)%val(ii,jj,1)
              
           endif
           

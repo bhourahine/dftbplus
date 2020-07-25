@@ -1,14 +1,19 @@
 set(curdir "lib_dftb")
 
 set(sources-fpp
+  ${curdir}/bondpopulations.F90
   ${curdir}/boundaryconditions.F90
+  ${curdir}/boundarycond.F90
   ${curdir}/chargeconstr.F90
   ${curdir}/charges.F90
   ${curdir}/cluster.F90
+  ${curdir}/coordnumber.F90
   ${curdir}/coulomb.F90
   ${curdir}/densitymatrix.F90
   ${curdir}/dftbplusu.F90
+  ${curdir}/dftd4param.F90
   ${curdir}/dispcommon.F90
+  ${curdir}/dispdftd4.F90
   ${curdir}/dispersions.F90
   ${curdir}/dispiface.F90
   ${curdir}/dispslaterkirkw.F90
@@ -18,13 +23,16 @@ set(sources-fpp
   ${curdir}/elstatpot.F90
   #${curdir}/emfields.F90
   ${curdir}/energies.F90
+  ${curdir}/encharges.F90
   ${curdir}/etemp.F90
   ${curdir}/externalcharges.F90
+  ${curdir}/evaluateenergies.F90
   ${curdir}/forces.F90
   ${curdir}/h5correction.F90
   ${curdir}/halogenx.F90
   ${curdir}/matrixindexing.F90
   ${curdir}/neighbourlists.F90
+  ${curdir}/hamiltonian.F90
   ${curdir}/nonscc.F90
   ${curdir}/onscorrection.F90
   ${curdir}/orbitalequiv.F90

@@ -64,7 +64,7 @@ contains
     integer, allocatable, intent(inout), optional :: species(:)
 
     integer :: ii, jj, kk, iAt1, iAt2, nAtom, nAtomNear, nn1, maxNeighbour
-    type(listInt), allocatable :: candidates(:)
+    type(TListInt), allocatable :: candidates(:)
     integer, allocatable :: iSurroundAt(:), boxIndex(:), indx(:)
     real(dp) ::  minimum(3), maximum(3), diff(3), cutPlus, cTmp(3), rTmp
     integer :: iBox
