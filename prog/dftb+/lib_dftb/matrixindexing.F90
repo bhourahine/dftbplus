@@ -13,6 +13,7 @@
 module dftbp_matrixindexing
   use dftbp_accuracy
   use dftbp_commontypes
+  use dftbp_assert
   implicit none
 
   private

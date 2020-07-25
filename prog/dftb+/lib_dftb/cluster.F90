@@ -16,6 +16,7 @@ module dftbp_cluster
   use dftbp_memman
   use dftbp_neighbourlists
   use dftbp_matrixindexing
+  use dftbp_assert
   implicit none
 
   private
