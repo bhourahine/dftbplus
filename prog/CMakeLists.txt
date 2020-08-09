@@ -1,6 +1,7 @@
 add_subdirectory(dftb+)
 add_subdirectory(misc)
 add_subdirectory(modes)
+add_subdirectory(timeproptools)
 add_subdirectory(waveplot)
 
 if(WITH_TRANSPORT)

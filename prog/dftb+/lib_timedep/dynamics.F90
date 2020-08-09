@@ -69,6 +69,7 @@ module dftbp_timeprop
   public :: runDynamics, TElecDynamics_init
   public :: TElecDynamicsInp, TElecDynamics
   public :: pertTypes, envTypes, tdSpinTypes
+  public :: readRestartFile, writeRestartFile
 
   !> Data type to  initialize electronic dynamics variables from parser
   type TElecDynamicsInp
