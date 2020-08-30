@@ -15,3 +15,6 @@
 	url = https://github.com/jhrmnn/libmbd.git
     branch = master
 
+[submodule "external/nanoflann/origin"]
+	path = external/nanoflann/origin
+	url = git@github.com:jlblancoc/nanoflann.git

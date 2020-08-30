@@ -11,6 +11,18 @@ dftbp_load_build_settings()
 
 project(dftbplus VERSION ${DFTBPLUS_VERSION} LANGUAGES Fortran C)
 
+# C++ if available, needed for nanoflann library
+include(CheckLanguage)
+check_language(CXX)
+if(CMAKE_CXX_COMPILER)
+  enable_language(CXX)
+  # specify the C++ standard
+  set(CMAKE_CXX_STANDARD 11)
+  set(CMAKE_CXX_STANDARD_REQUIRED TRUE)
+else()
+  message(STATUS "No C++ compiler found")
+endif()
+
 # By default, use intrinsic Fortran 2008 erf/erfc
 set(INTERNAL_ERFC CACHE BOOL 0)
 
@@ -168,6 +180,13 @@ if(WITH_TRANSPORT)
   add_subdirectory(external/libnegf ${exclude})
 endif()
 add_subdirectory(external/mudpack)
+
+if(CMAKE_CXX_COMPILER)
+  add_subdirectory(external/nanoflann)
+  set(WITH_NANOFLANN TRUE)
+else()
+  set(WITH_NANOFLANN FALSE)
+endif()
 
 #
 # Add internal components
