@@ -133,6 +133,16 @@ dftbp_create_library_targets("${OTHER_LIBRARIES}" "${OTHER_LIBRARY_DIRS}")
 list(APPEND EXPORTED_EXTERNAL_LIBRARIES ${OTHER_LIBRARIES})
 list(APPEND EXPORTED_EXTERNAL_LIBRARY_DIRS ${OTHER_LIBRARY_DIRS})
 
+if(CMAKE_CXX_COMPILER)
+  add_subdirectory(external/nanoflann EXCLUDE_FROM_ALL)
+  set(WITH_NANOFLANN TRUE)
+  list(APPEND FYPP_FLAGS -DWITH_NANOFLANN)
+  message(STATUS "nanoflann enabled ${FYPP_FLAGS}")
+else()
+  set(WITH_NANOFLANN FALSE)
+endif()
+
+
 #
 # Preprocessor details
 #
@@ -141,7 +151,6 @@ dftbp_add_fypp_defines(FYPP_FLAGS)
 
 set(PYTHON_INTERPRETER "python3" CACHE STRING
   "Python interpreter to use for installing and test python components")
-
 
 #
 # Add optional external components
@@ -180,13 +189,6 @@ if(WITH_TRANSPORT)
   add_subdirectory(external/libnegf ${exclude})
 endif()
 add_subdirectory(external/mudpack)
-
-if(CMAKE_CXX_COMPILER)
-  add_subdirectory(external/nanoflann)
-  set(WITH_NANOFLANN TRUE)
-else()
-  set(WITH_NANOFLANN FALSE)
-endif()
 
 #
 # Add internal components

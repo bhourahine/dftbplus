@@ -32,7 +32,7 @@
 #:set INTERNAL_ERFC = defined('INTERNAL_ERFC')
 #:set WITH_TRANSPORT = defined('WITH_TRANSPORT')
 #:set EMULATE_F08_MATH = defined('EMULATE_F08_MATH')
-
+#:set WITH_NANOFLANN = defined('WITH_NANOFLANN')
 
 #!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 #! ASSERT and DEBUG related macros

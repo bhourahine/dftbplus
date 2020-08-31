@@ -82,6 +82,12 @@ if(WITH_SOCKETS)
     $<BUILD_INTERFACE:$<TARGET_PROPERTY:fsockets_objlib,INTERFACE_INCLUDE_DIRECTORIES>>)
 endif()
 
+if(WITH_NANOFLANN)
+  target_sources(dftbplus PRIVATE $<TARGET_OBJECTS:nanoflann_objlib>)
+  target_include_directories(dftbplus PUBLIC
+    $<BUILD_INTERFACE:$<TARGET_PROPERTY:nanoflann_objlib,INTERFACE_INCLUDE_DIRECTORIES>>)
+endif()
+
 if(WITH_DFTD3)
   target_link_libraries(dftbplus PUBLIC dftd3)
 endif()

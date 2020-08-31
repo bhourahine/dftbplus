@@ -115,6 +115,9 @@ module dftbp_initprogram
 #:endif
   use poisson_init
   use dftbp_transportio
+#:if WITH_NANOFLANN
+  use nanoflann, only : kdtree_wrap
+#:endif
   implicit none
 
 
@@ -1542,6 +1545,12 @@ contains
     allocate(coord0(3, nAtom))
     @:ASSERT(all(shape(coord0) == shape(input%geom%coords)))
     coord0(:,:) = input%geom%coords(:,:)
+
+  #:if WITH_NANOFLANN
+    if (.not. tPeriodic) then
+      !call kdtree_wrap(coord0, cutOff%mCutOff)
+    end if
+  #:endif
 
     tCoordsChanged = .true.
 
