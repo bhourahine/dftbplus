@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -12,41 +12,42 @@
 !> thermostat!
 !> Berendsen et al. J. Chem. Phys. 81 3684-3690 (1984).
 !> Harvey, Tan and Cheatham, J. Comp. Chem. 19 726-740 (1998).
-module berendsentherm
-  use assert
-  use accuracy
-  use mdcommon
-  use ranlux
-  use tempprofile
+module dftbp_berendsentherm
+  use dftbp_assert
+  use dftbp_accuracy
+  use dftbp_mdcommon
+  use dftbp_ranlux
+  use dftbp_tempprofile
+  use dftbp_message
   implicit none
   private
 
-  public :: OBerendsenThermostat
+  public :: TBerendsenThermostat
   public :: init, getInitVelocities, updateVelocities, state
 
 
   !> Data for the Berendsen thermostat
-  type OBerendsenThermostat
+  type TBerendsenThermostat
     private
 
     !> Nr. of atoms
     integer :: nAtom
 
     !> Random number generator
-    type(ORanlux), allocatable :: pRanlux
+    type(TRanlux), allocatable :: pRanlux
 
     !> Mass of the atoms
     real(dp), allocatable :: mass(:)
 
     !> Temperature generator
-    type(OTempProfile), pointer :: pTempProfile
+    type(tTempProfile), pointer :: pTempProfile
 
     !> coupling strength to friction term
     real(dp) :: couplingParameter
 
     !> MD Framework.
-    type(OMDCommon) :: pMDFrame
-  end type OBerendsenThermostat
+    type(TMDCommon) :: pMDFrame
+  end type TBerendsenThermostat
 
 
   !> initialise object
@@ -76,43 +77,43 @@ contains
 
 
   !> Creates an Berendsen thermostat instance.
-  subroutine Berendsen_init(self, pRanlux, masses, tempProfile, &
+  subroutine Berendsen_init(this, pRanlux, masses, tempProfile, &
       & couplingParameter, pMDFrame)
 
     !> Initialised instance on exit.
-    type(OBerendsenThermostat), intent(out) :: self
+    type(TBerendsenThermostat), intent(out) :: this
 
     !> Pointer to the random generator.
-    type(ORanlux), allocatable, intent(inout) :: pRanlux
+    type(TRanlux), allocatable, intent(inout) :: pRanlux
 
     !> Masses of the atoms.
     real(dp), intent(in) :: masses(:)
 
     !> Temperature profile object.
-    type(OTempProfile), pointer, intent(in) :: tempProfile
+    type(TTempProfile), pointer, intent(in) :: tempProfile
 
     !> Coupling parameter for the thermostat.
     real(dp), intent(in) :: couplingParameter
 
     !> Molecular dynamics generic framework
-    type(OMDCommon), intent(in) :: pMDFrame
+    type(TMDCommon), intent(in) :: pMDFrame
 
-    call move_alloc(pRanlux, self%pRanlux)
-    self%nAtom = size(masses)
-    allocate(self%mass(self%nAtom))
-    self%mass(:) = masses(:)
-    self%pTempProfile => tempProfile
-    self%couplingParameter = couplingParameter
-    self%pMDFrame = pMDFrame
+    call move_alloc(pRanlux, this%pRanlux)
+    this%nAtom = size(masses)
+    allocate(this%mass(this%nAtom))
+    this%mass(:) = masses(:)
+    this%pTempProfile => tempProfile
+    this%couplingParameter = couplingParameter
+    this%pMDFrame = pMDFrame
 
   end subroutine Berendsen_init
 
 
   !> Returns the initial velocities.
-  subroutine Berendsen_getInitVelos(self, velocities)
+  subroutine Berendsen_getInitVelos(this, velocities)
 
     !> BerendsenThermostat instance.
-    type(OBerendsenThermostat), intent(inout) :: self
+    type(TBerendsenThermostat), intent(inout) :: this
 
     !> Contains the velocities on return.
     real(dp), intent(out) :: velocities(:,:)
@@ -120,46 +121,49 @@ contains
     real(dp) :: kT
     integer :: ii
 
-    @:ASSERT(all(shape(velocities) <= (/ 3, self%nAtom /)))
+    @:ASSERT(all(shape(velocities) <= (/ 3, this%nAtom /)))
 
-    call getTemperature(self%pTempProfile, kT)
-    do ii = 1, self%nAtom
-      call MaxwellBoltzmann(velocities(:,ii), self%mass(ii), kT, self%pRanlux)
+    call this%pTempProfile%getTemperature(kT)
+    if (kT < minTemp) then
+      call error("Berendsen thermostat not supported at zero temperature")
+    end if
+    do ii = 1, this%nAtom
+      call MaxwellBoltzmann(velocities(:,ii), this%mass(ii), kT, this%pRanlux)
     end do
-    call restFrame(self%pMDFrame, velocities, self%mass)
-    call rescaleTokT(self%pMDFrame, velocities, self%mass, kT)
+    call restFrame(this%pMDFrame, velocities, this%mass)
+    call rescaleTokT(this%pMDFrame, velocities, this%mass, kT)
 
   end subroutine Berendsen_getInitVelos
 
 
   !> Updates the provided velocities according the current temperature.
   !> Shifts to rest frame coordinates if required - this removes some of the flying icecube effect.
-  subroutine Berendsen_updateVelos(self, velocities)
+  subroutine Berendsen_updateVelos(this, velocities)
 
     !> Thermostat instance.
-    type(OBerendsenThermostat), intent(inout) :: self
+    type(TBerendsenThermostat), intent(inout) :: this
 
     !> Updated velocities on exit.
     real(dp), intent(inout) :: velocities(:,:)
 
     real(dp) :: kTCurrent, kTTarget, scaling
 
-    @:ASSERT(all(shape(velocities) <= (/ 3, self%nAtom /)))
+    @:ASSERT(all(shape(velocities) <= (/ 3, this%nAtom /)))
 
-    call getTemperature(self%pTempProfile, kTTarget)
-    call evalkT(self%pMDFrame, kTCurrent,velocities,self%mass)
-    scaling = sqrt(1.0_dp + self%couplingParameter*(kTTarget/kTCurrent-1.0_dp))
+    call this%pTempProfile%getTemperature(kTTarget)
+    call evalkT(this%pMDFrame, kTCurrent,velocities,this%mass)
+    scaling = sqrt(1.0_dp + this%couplingParameter*(kTTarget/kTCurrent-1.0_dp))
     velocities(:,:) = scaling * velocities(:,:)
-    call restFrame(self%pMDFrame, velocities, self%mass)
+    call restFrame(this%pMDFrame, velocities, this%mass)
 
   end subroutine Berendsen_updateVelos
 
 
   !> Outputs internals of thermostat
-  subroutine Berendsen_state(self, fd)
+  subroutine Berendsen_state(this, fd)
 
     !> thermostat object
-    type(OBerendsenThermostat), intent(in) :: self
+    type(TBerendsenThermostat), intent(in) :: this
 
     !> file unit
     integer,intent(in) :: fd
@@ -168,4 +172,4 @@ contains
 
   end subroutine Berendsen_state
 
-end module berendsentherm
+end module dftbp_berendsentherm

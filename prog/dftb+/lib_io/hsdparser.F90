@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -12,16 +12,16 @@
 !> The HSD format is a more or less user friendly input format, which can be easily converted to a
 !> simplified XML format. The parser returns a DOM-tree, which can be further processed. The
 !> returned tree contains also information about the original name and position of the keywords in
-!> the original HSD format, in order to enable user friendly error messages, if inconsistent data is
+!> the original HSD format, in order to enable user friendly error messages if inconsistent data are
 !> detected during the processing of the DOM-tree.
 !>
 !> For the specification of the HSD format see the sample input
-module hsdparser
-  use assert
-  use message
-  use charmanip
-  use xmlutils
-  use xmlf90
+module dftbp_hsdparser
+  use dftbp_assert
+  use dftbp_message
+  use dftbp_charmanip
+  use dftbp_xmlutils
+  use dftbp_xmlf90
   implicit none
   private
 
@@ -153,7 +153,7 @@ module hsdparser
   !> Format of the input line
   character(len=lc) :: lineFormat = ""
 
-  public :: parseHSD, dumpHSD, dumpHSDAsXML, newline
+  public :: parseHSD, dumpHSD, newline
   public :: getNodeHSDName, getHSDPath
   public :: attrStart, attrEnd, attrFile, attrName, attrModifier, attrList
 
@@ -383,26 +383,7 @@ contains
 
       case(1)
         !! XML inclusion
-        if (associated(curNode)) then
-          if (sepPos /= 1) then
-            call parsingError("Invalid character before file inclusion &
-                &operator", curFile, curLine)
-          end if
-          strLine = adjustl(unquote(strLine))
-          word = adjustl(strLine(len(sIncludeXML)+1:len_trim(strLine)))
-          if (len_trim(word) /= 0) then
-            if (depth == 0 .and. fileDepth == 0 &
-                &.and. .not. associated(getFirstChild(curNode))) then
-              call replaceTreeFromFile(curNode, trim(word))
-            else
-              call parsingError("XML inclusion must be the first statement &
-                  &in the first input file.", curFile, curLine)
-            end if
-          else
-            call parsingError("No file name specified after the inclusion &
-                &operator.", curFile, curLine)
-          end if
-        end if
+        call error("Mixed XML input in HSD input no longer supported")
 
       case(2, 3)
         !! File inclusion operator -> append content of new file to current node
@@ -677,7 +658,7 @@ contains
     character(len=*), intent(in) :: message
 
     !> Name of the current file
-    character(len=lc), intent(in) :: file
+    character(*), intent(in) :: file
 
     !> Number of current line
     integer, intent(in) :: line
@@ -685,79 +666,16 @@ contains
     character(len=lc) :: msgArray(2)
 
     !! Watch out to trunk away enough from the file name to prevent overflow
-    write (msgArray(1), 9991) trim(file(1:lc-40)), line
+    if (len_trim(file) > lc - 40) then
+      write (msgArray(1), 9991) trim(file(1:lc-40)), line
+    else
+      write (msgArray(1), 9991) trim(file), line
+    end if
 9991 format("HSD parser error: File '",A,"', Line",I5,".")
     write (msgArray(2), "(A)") trim(message(:min(lc, len(message))))
     call error(msgArray)
 
   end subroutine parsingError
-
-
-  !> Dumps the DOM-tree of a HSD document to a file.
-  !>
-  !> This routine pretty prints the XML-tree in the specified file.  Attributes related to the HSD
-  !> document (e.g. line number, file etc.)  are not printed.
-  subroutine dumpHSDAsXML(myDoc, fileName)
-
-    !> DOM-tree of a HSD document
-    type(fnode), pointer :: myDoc
-
-    !> File for the XML-dump.
-    character(len=*), intent(in) :: fileName
-
-    type(xmlf_t) :: xf
-    type(fnode), pointer :: fp
-
-    call xml_OpenFile(fileName, xf, indent=.true.)
-    call xml_AddXMLDeclaration(xf)
-    fp => getFirstChild(myDoc)
-    if (associated(fp)) then
-      call dumpHSDAsXML_recursive(xf, fp)
-    end if
-    call xml_Close(xf)
-
-  end subroutine dumpHSDAsXML
-
-
-  !> Recursive workhorse for dumpHSD
-  recursive subroutine dumpHSDAsXML_recursive(xf, node)
-
-    !> XML pretty printer data
-    type(xmlf_t), intent(inout) :: xf
-
-    !> Node to prety print
-    type(fnode), pointer :: node
-
-    type(string) :: txt, name, nodeValue
-    type(fnode), pointer :: fp
-    type(fnamedNodeMap), pointer :: attribs
-    integer :: ii
-
-    call getNodeName(node, txt)
-    if (getNodeType(node) == TEXT_NODE) then
-      call getNodeValue(node, nodeValue)
-      call xml_AddPCData(xf, trim2(char(nodeValue)))
-    else
-      call xml_NewElement(xf, char(txt))
-      attribs => getAttributes(node)
-      do ii = 0, getLength(attribs) - 1
-        fp => item(attribs, ii)
-        call getNodeName(fp, name)
-        !! Currently only the modifier and single attributes are dumped
-        if (name == attrModifier .or. name == attrList) then
-          call getNodeValue(fp, nodeValue)
-          call xml_AddAttribute(xf, char(name), char(nodeValue))
-        end if
-      end do
-      fp => getFirstChild(node)
-      do while (associated(fp))
-        call dumpHSDAsXML_recursive(xf, fp)
-        fp => getNextSibling(fp)
-      end do
-      call xml_EndElement(xf, char(txt))
-    end if
-
-  end subroutine dumpHSDAsXML_recursive
 
 
   !> Replaces the tree
@@ -791,13 +709,17 @@ contains
 
 
   !> Dumps a HSD tree in a file.
-  subroutine dumpHSD_file(myDoc, file)
+  subroutine dumpHSD_file(myDoc, file, subnode)
 
     !> The DOM tree
     type(fnode), pointer :: myDoc
 
     !> Name of the file
     character(len=*), intent(in) :: file
+
+    !> Whether passed node is an arbitrary node within the tree (or the tree top node otherwise).
+    !> Default: .false.
+    logical, optional, intent(in) :: subnode
 
     integer :: fd
     integer :: iostat
@@ -808,14 +730,14 @@ contains
       fileName = file
       call parsingError("Error in opening file for the HSD output.", fileName, -1)
     end if
-    call dumpHSD_opened(myDoc, fd)
+    call dumpHSD_opened(myDoc, fd, subnode)
     close(fd)
 
   end subroutine dumpHSD_file
 
 
   !> Dumps a DOM-tree representing a HSD input in HSD format to an opened file.
-  subroutine dumpHSD_opened(myDoc, fd)
+  subroutine dumpHSD_opened(myDoc, fd, subnode)
 
     !> The DOM tree
     type(fnode), pointer :: myDoc
@@ -823,11 +745,25 @@ contains
     !> File descriptor for an open file where output should go.
     integer, intent(in) :: fd
 
+    !> Whether passed node is an arbitrary node within the tree (or the tree top node otherwise).
+    !> Default: .false.
+    logical, optional, intent(in) :: subnode
+
     type(fnode), pointer :: rootNode
     type(fnode), pointer :: child
     type(string) :: buffer
+    logical :: subnode_
 
-    rootNode => getFirstChild(myDoc)
+    if (present(subnode)) then
+      subnode_ = subnode
+    else
+      subnode_ = .false.
+    end if
+    if (subnode_) then
+      rootNode => myDoc
+    else
+      rootNode => getFirstChild(myDoc)
+    end if
     if (.not. associated(rootNode)) then
       return
     end if
@@ -1025,4 +961,4 @@ contains
 
   end subroutine getHSDPath_recursive
 
-end module hsdparser
+end module dftbp_hsdparser

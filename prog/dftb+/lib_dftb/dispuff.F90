@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -15,35 +15,37 @@
 !>
 !> To Do: Take the reciprocal lattice vectors from outside.
 !>
-module dispuff_module
-  use assert
-  use accuracy
-  use simplealgebra, only : determinant33
-  use lapackroutines, only : matinv
-  use periodic, only: TNeighbourList, getNrOfNeighboursForAll, getLatticePoints
-  use constants, only: pi
-  use dispiface
-  use dispcommon
+module dftbp_dispuff
+  use dftbp_accuracy
+  use dftbp_assert
+  use dftbp_constants, only: pi
+  use dftbp_dispiface
+  use dftbp_dispcommon
+  use dftbp_environment, only : TEnvironment
+  use dftbp_lapackroutines, only : matinv
+  use dftbp_periodic, only: TNeighbourList, getNrOfNeighboursForAll, getLatticePoints
+  use dftbp_schedule, only : distributeRangeInChunks, assembleChunks
+  use dftbp_simplealgebra, only : determinant33
   implicit none
   private
 
-  public :: DispUffInp, DispUff, DispUff_init
+  public :: TDispUffInp, TDispUff, DispUff_init
 
 
   !> Input structure for the van der Waals initialization.
-  type :: DispUffInp
+  type :: TDispUffInp
 
     !> potential depths (sized as nSpecies)
     real(dp), allocatable :: energies(:)
 
-
     !> van der Waals radii (sized as nSpecies)
     real(dp), allocatable :: distances(:)
-  end type DispUffInp
+
+  end type TDispUffInp
 
 
   !> Internal state of the van der Waals dispersion module.
-  type, extends(DispersionIface) :: DispUff
+  type, extends(TDispersionIface) :: TDispUff
     private
 
     !> Nr. of atoms, species
@@ -95,13 +97,27 @@ module dispuff_module
     logical :: coordsUpdated = .false.
 
   contains
+
+    !> Notifies the objects about changed coordinates.
     procedure :: updateCoords
+
+    !> Notifies the object about updated lattice vectors.
     procedure :: updateLatVecs
+
+    !> Returns the atomic resolved energies due to the dispersion.
     procedure :: getEnergies
+
+    !> Adds the atomic gradients to the provided vector.
     procedure :: addGradients
+
+    !> Returns the stress tensor.
     procedure :: getStress
+
+    !> Estimates the real space cutoff of the dispersion interaction.
     procedure :: getRCutoff
-  end type DispUff
+
+  end type TDispUff
+
 
 contains
 
@@ -110,10 +126,10 @@ contains
   subroutine DispUff_init(this, inp, nAtom, species0, latVecs)
 
     !> data structure to initialise
-    type(DispUff), intent(out) :: this
+    type(TDispUff), intent(out) :: this
 
     !> Specific input parameters for Slater-Kirkwood.
-    type(DispUffInp), intent(in) :: inp
+    type(TDispUffInp), intent(in) :: inp
 
     !> Nr. of atoms in the system.
     integer, intent(in) :: nAtom
@@ -133,11 +149,11 @@ contains
     @:ASSERT(all(inp%energies >= 0.0_dp))
     @:ASSERT(all(inp%distances >= 0.0_dp))
     @:ASSERT(present(latVecs) .eqv. present(species0))
-#:call ASSERT_CODE
+  #:block DEBUG_CODE
     if (present(latVecs)) then
       @:ASSERT(all(shape(latVecs) == [3, 3]))
     end if
-#:endcall ASSERT_CODE
+  #:endblock DEBUG_CODE
 
     this%nSpecies = size(inp%energies)
     this%nAtom = nAtom
@@ -148,10 +164,12 @@ contains
 
     allocate(dij(this%nSpecies, this%nSpecies))
     allocate(rij(this%nSpecies, this%nSpecies))
-    forall (iSp1=1:this%nSpecies, iSp2=1:this%nSpecies)
-      dij(iSp1,iSp2) = sqrt(inp%energies(iSp1) * inp%energies(iSp2))
-      rij(iSp1,iSp2) = sqrt(inp%distances(iSp1) * inp%distances(iSp2))
-    end forall
+    do iSp1 = 1, this%nSpecies
+      do iSp2 = 1, this%nSpecies
+        dij(iSp1,iSp2) = sqrt(inp%energies(iSp1) * inp%energies(iSp2))
+        rij(iSp1,iSp2) = sqrt(inp%distances(iSp1) * inp%distances(iSp2))
+      end do
+    end do
 
     this%c6 = 2.0_dp * dij * rij**6
     this%c12 = dij * rij**12
@@ -187,14 +205,18 @@ contains
 
   end subroutine DispUff_init
 
+
   !> Notifies the objects about changed coordinates.
-  subroutine updateCoords(this, neigh, img2CentCell, coords, species0)
+  subroutine updateCoords(this, env, neigh, img2CentCell, coords, species0, stat)
 
     !> Instance of dispersion to update
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> Updated neighbour list.
     type(TNeighbourList), intent(in) :: neigh
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Updated mapping to central cell.
     integer, intent(in) :: img2CentCell(:)
@@ -205,33 +227,42 @@ contains
     !> Species of the atoms in the unit cell.
     integer, intent(in) :: species0(:)
 
+    !> Status of operation
+    integer, intent(out), optional :: stat
+
     integer, allocatable :: nNeigh(:)
+
+    if (present(stat)) then
+      stat = 0
+    end if
 
     allocate(nNeigh(this%nAtom))
     call getNrOfNeighboursForAll(nNeigh, neigh, this%rCutoff)
     if (this%tPeriodic) then
-      call getDispEnergyAndGrad_cluster(this%nAtom, coords, species0, nNeigh, neigh%iNeighbour,&
-          & neigh%neighDist2, img2CentCell, this%c6, this%c12, this%cPoly, this%r0, this%energies,&
-          & this%gradients, removeR6=.true., stress=this%stress, vol=this%vol)
+      call getDispEnergyAndGrad_cluster(env, this%nAtom, coords, species0, nNeigh,&
+          & neigh%iNeighbour, neigh%neighDist2, img2CentCell, this%c6, this%c12, this%cPoly,&
+          & this%r0, this%energies, this%gradients, removeR6=.true., stress=this%stress,&
+          & vol=this%vol)
       call getNrOfNeighboursForAll(nNeigh, neigh, this%ewaldRCut)
-      call addDispEGr_per_species(this%nAtom, coords, species0, nNeigh, neigh%iNeighbour,&
+      call addDispEGr_per_species(env, this%nAtom, coords, species0, nNeigh, neigh%iNeighbour,&
           & neigh%neighDist2, img2CentCell, this%c6, this%eta, this%vol, this%gLatPoints,&
           & this%energies, this%gradients, this%stress)
     else
-      call getDispEnergyAndGrad_cluster(this%nAtom, coords, species0, nNeigh, neigh%iNeighbour,&
-          & neigh%neighDist2, img2CentCell, this%c6, this%c12, this%cPoly, this%r0, this%energies,&
-          & this%gradients)
+      call getDispEnergyAndGrad_cluster(env, this%nAtom, coords, species0, nNeigh,&
+          & neigh%iNeighbour, neigh%neighDist2, img2CentCell, this%c6, this%c12, this%cPoly,&
+          & this%r0, this%energies, this%gradients)
     end if
 
     this%coordsUpdated = .true.
 
   end subroutine updateCoords
 
+
   !> Notifies the object about updated lattice vectors.
   subroutine updateLatVecs(this, latVecs)
 
     !> Instance to update
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> New lattice vectors
     real(dp), intent(in) :: latVecs(:,:)
@@ -255,11 +286,12 @@ contains
 
   end subroutine updateLatVecs
 
+
   !> Returns the atomic resolved energies due to the dispersion.
   subroutine getEnergies(this, energies)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> Contains the atomic energy contributions on exit.
     real(dp), intent(out) :: energies(:)
@@ -267,15 +299,16 @@ contains
     @:ASSERT(this%coordsUpdated)
     @:ASSERT(size(energies) == this%nAtom)
 
-    energies(:) = this%energies(:)
+    energies(:) = this%energies
 
   end subroutine getEnergies
+
 
   !> Adds the atomic gradients to the provided vector.
   subroutine addGradients(this, gradients)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> The vector to increase by the gradients.
     real(dp), intent(inout) :: gradients(:,:)
@@ -283,15 +316,16 @@ contains
     @:ASSERT(this%coordsUpdated)
     @:ASSERT(all(shape(gradients) == [3, this%nAtom]))
 
-    gradients(:,:) = gradients(:,:) + this%gradients(:,:)
+    gradients(:,:) = gradients + this%gradients
 
   end subroutine addGradients
+
 
   !> Returns the stress tensor.
   subroutine getStress(this, stress)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> tensor from the dispersion
     real(dp), intent(out) :: stress(:,:)
@@ -303,11 +337,12 @@ contains
 
   end subroutine getStress
 
+
   !> Estimates the real space cutoff of the dispersion interaction.
   function getRCutoff(this) result(cutoff)
 
     !> Instance of dispersion
-    class(DispUff), intent(inout) :: this
+    class(TDispUff), intent(inout) :: this
 
     !> Cutoff distance
     real(dp) :: cutoff
@@ -316,9 +351,13 @@ contains
 
   end function getRCutoff
 
+
   !> Returns the energy per atom and the gradients for the cluster case
-  subroutine getDispEnergyAndGrad_cluster(nAtom, coords, species, nNeighbourSK, iNeighbour,&
+  subroutine getDispEnergyAndGrad_cluster(env, nAtom, coords, species, nNeighbourSK, iNeighbour,&
       & neighDist2, img2CentCell, c6, c12, cPoly, r0, energies, gradients, removeR6, stress, vol)
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Nr. of atoms (without periodic images)
     integer, intent(in) :: nAtom
@@ -362,19 +401,24 @@ contains
     !> If yes, the 1/r^6 term is substracted from every interaction.
     logical , intent(in), optional :: removeR6
 
+    !> Stress tensor
     real(dp), intent(out), optional :: stress(:,:)
 
+    !> Volume of the unit cell
     real(dp), intent(in), optional :: vol
 
+    integer :: iAtFirst, iAtLast
     integer :: iAt1, iAt2, iAt2f, iSp1, iSp2, iNeigh, ii
     real(dp) :: rr, r2, r5, r6, r10, r12, k1, k2, dE, dGr, u0, u1, u2, f6
     real(dp) :: gr(3), vec(3)
+    real(dp), allocatable :: localDeriv(:,:), localSigma(:, :), localEnergies(:)
 
-#:call ASSERT_CODE
+  #:block DEBUG_CODE
     if (present(stress)) then
       @:ASSERT(all(shape(stress) == [3, 3]))
     end if
-#:endcall ASSERT_CODE
+  #:endblock DEBUG_CODE
+    @:ASSERT(present(stress) .eqv. present(vol))
 
     ! Cluster case => explicit sum of the contributions
     if (present(removeR6)) then
@@ -386,16 +430,25 @@ contains
     else
       f6 = 1.0_dp
     end if
-    energies = 0.0_dp
-    gradients = 0.0_dp
-    if (present(stress)) then
-      stress = 0.0_dp
-    end if
-    do iAt1 = 1, nAtom
+
+    call distributeRangeInChunks(env, 1, nAtom, iAtFirst, iAtLast)
+
+    allocate(localEnergies(nAtom), localDeriv(3, nAtom), localSigma(3, 3))
+    localEnergies(:) = 0.0_dp
+    localDeriv(:,:) = 0.0_dp
+    localSigma(:,:) = 0.0_dp
+
+    !$omp parallel do default(none) schedule(runtime) &
+    !$omp reduction(+:localEnergies, localDeriv, localSigma) &
+    !$omp shared(iAtFirst, iAtLast, species, nNeighbourSK, iNeighbour, coords) &
+    !$omp shared(img2CentCell, neighDist2, c6, r0, c12, cPoly, f6) &
+    !$omp private(iAt1, iSp1, iNeigh, iAt2, vec, iAt2f, iSp2, r2, rr, k1, r6) &
+    !$omp private(r12, k2, dE, dGr, r10, r5, u0, u1, u2, gr, ii)
+    do iAt1 = iAtFirst, iAtLast
       iSp1 = species(iAt1)
       do iNeigh = 1, nNeighbourSK(iAt1)
         iAt2 = iNeighbour(iNeigh, iAt1)
-        vec = coords(:,iAt1)-coords(:,iAt2)
+        vec(:) = coords(:,iAt1)-coords(:,iAt2)
         iAt2f = img2CentCell(iAt2)
         iSp2 = species(iAt2f)
         r2 = neighDist2(iNeigh, iAt1)
@@ -408,7 +461,7 @@ contains
           k2 = c12(iSp2, iSp1)
           dE = 0.5_dp * (-(k1 * f6) / r6 + k2 / r12)
           dGr = (6.0_dp * k1 * f6 / r6 - 12.0_dp * k2 / r12) / rr
-        elseif (rr > minNeighDist) then
+        else
           ! Two atoms close: polynomial potential
           r10 = r2**5
           r5 = sqrt(r10)
@@ -417,32 +470,38 @@ contains
           u2 = cPoly(3, iSp2, iSp1)
           dE = 0.5_dp * ((u0 - u1 * r5 - u2 * r10) + (1.0_dp - f6) * k1 / r6)
           dGr = (-5.0_dp * u1 * r5 - 10.0_dp * u2 * r10 - 6.0_dp * k1 * (1.0_dp - f6) / r6) / rr
-        else
-          ! Two atoms at the same position -> forget it
-          dE = 0.0_dp
-          dGr = 0.0_dp
         end if
-        energies(iAt1) = energies(iAt1) + dE
+        localEnergies(iAt1) = localEnergies(iAt1) + dE
         if (iAt1 /= iAt2f) then
-          energies(iAt2f) = energies(iAt2f) + dE
+          localEnergies(iAt2f) = localEnergies(iAt2f) + dE
         end if
         gr(:) =  dGr * (coords(:,iAt1) - coords(:,iAt2)) / rr
-        gradients(:,iAt1) = gradients(:,iAt1) + gr
-        gradients(:,iAt2f) = gradients(:,iAt2f) - gr
-        if (present(stress)) then
-          if (iAt1 /= iAt2f) then
-            do ii = 1, 3
-              stress(:,ii) = stress(:,ii) - gr * vec(ii) / vol
-            end do
-          else
-            do ii = 1, 3
-              stress(:,ii) = stress(:,ii) - 0.5_dp * gr * vec(ii) / vol
-            end do
-          end if
+        localDeriv(:,iAt1) = localDeriv(:,iAt1) + gr
+        localDeriv(:,iAt2f) = localDeriv(:,iAt2f) - gr
+        if (iAt1 /= iAt2f) then
+          do ii = 1, 3
+            localSigma(:,ii) = localSigma(:,ii) - gr * vec(ii)
+          end do
+        else
+          do ii = 1, 3
+            localSigma(:,ii) = localSigma(:,ii) - 0.5_dp * gr * vec(ii)
+          end do
         end if
       end do
     end do
+    !$omp end parallel do
+
+    call assembleChunks(env, localEnergies)
+    call assembleChunks(env, localDeriv)
+    call assembleChunks(env, localSigma)
+
+    energies(:) = localEnergies
+    gradients(:,:) = localDeriv
+    if (present(stress) .and. present(vol)) then
+      stress(:,:) = localSigma / vol
+    end if
 
   end subroutine getDispEnergyAndGrad_cluster
 
-end module dispuff_module
+
+end module dftbp_dispuff

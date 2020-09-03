@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -15,10 +15,10 @@
 !>   mixing parameter. Only a specified amount of previous charges are
 !>   considered.
 !> In order to use the mixer you have to create and reset it.
-module andersonmixer
-  use assert
-  use accuracy
-  use lapackroutines, only : gesv
+module dftbp_andersonmixer
+  use dftbp_assert
+  use dftbp_accuracy
+  use dftbp_lapackroutines, only : gesv
   implicit none
 
   private
@@ -30,7 +30,7 @@ module andersonmixer
   !> which stores a given number of recent vector pairs. The storage should be accessed as an array
   !> with the help of the indx(:) array. Indx(1) gives the index for the most recent stored vector
   !> pairs. (LIFO)
-  type OAndersonMixer
+  type TAndersonMixer
     private
 
     !> General mixing parameter
@@ -68,7 +68,7 @@ module andersonmixer
 
     !> Stored prev. charge differences
     real(dp), allocatable :: prevQDiff(:,:)
-  end type OAndersonMixer
+  end type TAndersonMixer
 
 
   !> Creates an AndersonMixer instance
@@ -88,17 +88,17 @@ module andersonmixer
     module procedure AndersonMixer_mix
   end interface mix
 
-  public :: OAndersonMixer
+  public :: TAndersonMixer
   public :: init, reset, mix
 
 contains
 
 
   !> Creates an Andersom mixer instance.
-  subroutine AndersonMixer_init(self, nGeneration, mixParam, initMixParam, convMixParam, omega0)
+  subroutine AndersonMixer_init(this, nGeneration, mixParam, initMixParam, convMixParam, omega0)
 
     !> Initialized Anderson mixer on exit
-    type(OAndersonMixer), intent(out) :: self
+    type(TAndersonMixer), intent(out) :: this
 
     !> Nr. of generations (including actual) to consider
     integer, intent(in) :: nGeneration
@@ -122,39 +122,39 @@ contains
 
     @:ASSERT(nGeneration >= 2)
 
-    self%nElem = 0
-    self%mPrevVector = nGeneration - 1
+    this%nElem = 0
+    this%mPrevVector = nGeneration - 1
 
-    allocate(self%prevQInput(self%nElem, self%mPrevVector))
-    allocate(self%prevQDiff(self%nElem, self%mPrevVector))
-    allocate(self%indx(self%mPrevVector))
+    allocate(this%prevQInput(this%nElem, this%mPrevVector))
+    allocate(this%prevQDiff(this%nElem, this%mPrevVector))
+    allocate(this%indx(this%mPrevVector))
 
-    self%mixParam = mixParam
-    self%initMixParam = initMixParam
+    this%mixParam = mixParam
+    this%initMixParam = initMixParam
     if (present(convMixParam)) then
       @:ASSERT(size(convMixParam, dim=1) == 2)
-      self%nConvMixParam = size(convMixParam, dim=2)
-      allocate(self%convMixParam(2, self%nConvMixParam))
-      self%convMixParam(:,:) = convMixParam(:,:)
+      this%nConvMixParam = size(convMixParam, dim=2)
+      allocate(this%convMixParam(2, this%nConvMixParam))
+      this%convMixParam(:,:) = convMixParam(:,:)
     else
-      self%nConvMixParam = 0
+      this%nConvMixParam = 0
     end if
     if (present(omega0)) then
-      self%omega02 = omega0**2
-      self%tBreakSym = .true.
+      this%omega02 = omega0**2
+      this%tBreakSym = .true.
     else
-      self%omega02 = 0.0_dp
-      self%tBreakSym = .false.
+      this%omega02 = 0.0_dp
+      this%tBreakSym = .false.
     end if
 
   end subroutine AndersonMixer_init
 
 
   !> Makes the mixer ready for a new SCC cycle
-  subroutine AndersonMixer_reset(self, nElem)
+  subroutine AndersonMixer_reset(this, nElem)
 
     !> Anderson mixer instance
-    type(OAndersonMixer), intent(inout) :: self
+    type(TAndersonMixer), intent(inout) :: this
 
     !> Nr. of elements in the vectors to mix
     integer, intent(in) :: nElem
@@ -163,27 +163,27 @@ contains
 
     @:ASSERT(nElem > 0)
 
-    if (nElem /= self%nElem) then
-      self%nElem = nElem
-      deallocate(self%prevQInput)
-      deallocate(self%prevQDiff)
-      allocate(self%prevQInput(self%nElem, self%mPrevVector))
-      allocate(self%prevQDiff(self%nElem, self%mPrevVector))
+    if (nElem /= this%nElem) then
+      this%nElem = nElem
+      deallocate(this%prevQInput)
+      deallocate(this%prevQDiff)
+      allocate(this%prevQInput(this%nElem, this%mPrevVector))
+      allocate(this%prevQDiff(this%nElem, this%mPrevVector))
     end if
-    self%nPrevVector = -1
+    this%nPrevVector = -1
     ! Create index array for accessing elements in the LIFO way
-    do ii = 1, self%mPrevVector
-      self%indx(ii) = self%mPrevVector + 1 - ii
+    do ii = 1, this%mPrevVector
+      this%indx(ii) = this%mPrevVector + 1 - ii
     end do
 
   end subroutine AndersonMixer_reset
 
 
   !> Mixes charges according to the Anderson method
-  subroutine AndersonMixer_mix(self, qInpResult, qDiff)
+  subroutine AndersonMixer_mix(this, qInpResult, qDiff)
 
     !> Anderson mixer
-    type(OAndersonMixer), intent(inout) :: self
+    type(TAndersonMixer), intent(inout) :: this
 
     !> Input charges on entry, mixed charges on exit.
     real(dp), intent(inout) :: qInpResult(:)
@@ -196,44 +196,44 @@ contains
     real(dp) :: rTmp
     integer :: ii
 
-    @:ASSERT(size(qInpResult) == self%nElem)
-    @:ASSERT(size(qDiff) == self%nElem)
+    @:ASSERT(size(qInpResult) == this%nElem)
+    @:ASSERT(size(qDiff) == this%nElem)
 
-    if (self%nPrevVector < self%mPrevVector) then
-      self%nPrevVector = self%nPrevVector + 1
-      mixParam = self%initMixParam
+    if (this%nPrevVector < this%mPrevVector) then
+      this%nPrevVector = this%nPrevVector + 1
+      mixParam = this%initMixParam
     else
-      mixParam = self%mixParam
+      mixParam = this%mixParam
     end if
 
     ! Determine mixing parameter
     rTmp = sqrt(sum(qDiff**2))
-    do ii = self%nConvMixParam, 1, -1
-      if (rTmp < self%convMixParam(1, ii)) then
-        mixParam = self%convMixParam(2, ii)
+    do ii = this%nConvMixParam, 1, -1
+      if (rTmp < this%convMixParam(1, ii)) then
+        mixParam = this%convMixParam(2, ii)
         exit
       end if
     end do
 
     ! First iteration: store vectors and return simple mixed vector
-    if (self%nPrevVector == 0) then
-      call storeVectors(self%prevQInput, self%prevQDiff, self%indx, &
-          &qInpResult, qDiff, self%mPrevVector)
-      qInpResult(:) = qInpResult(:) + self%initMixParam * qDiff(:)
+    if (this%nPrevVector == 0) then
+      call storeVectors(this%prevQInput, this%prevQDiff, this%indx, &
+          &qInpResult, qDiff, this%mPrevVector)
+      qInpResult(:) = qInpResult(:) + this%initMixParam * qDiff(:)
       return
     end if
 
-    allocate(qInpMiddle(self%nElem))
-    allocate(qDiffMiddle(self%nElem))
+    allocate(qInpMiddle(this%nElem))
+    allocate(qDiffMiddle(this%nElem))
 
     ! Calculate average input charges and average charge differences
     call calcAndersonAverages(qInpMiddle, qDiffMiddle, qInpResult, &
-        &qDiff, self%prevQInput, self%prevQDiff, self%nElem, self%nPrevVector, &
-        &self%indx, self%tBreakSym, self%omega02)
+        &qDiff, this%prevQInput, this%prevQDiff, this%nElem, this%nPrevVector, &
+        &this%indx, this%tBreakSym, this%omega02)
 
     ! Store vectors before overwriting qInpResult
-    call storeVectors(self%prevQInput, self%prevQDiff, self%indx, &
-        &qInpResult, qDiff, self%mPrevVector)
+    call storeVectors(this%prevQInput, this%prevQDiff, this%indx, &
+        &qInpResult, qDiff, this%mPrevVector)
 
     ! Mix averaged input charge and average charge difference
     qInpResult(:) = qInpMiddle(:) + mixParam * qDiffMiddle(:)
@@ -373,4 +373,4 @@ contains
 
   end subroutine storeVectors
 
-end module andersonmixer
+end module dftbp_andersonmixer

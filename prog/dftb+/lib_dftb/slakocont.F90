@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -12,34 +12,34 @@
 !> This module contains the Slater-Koster tables. It decides, which one to call for which
 !> species. It can be easily extended to contain different Slater-Koster schemes for different
 !> species. At the moment, it handles only Slater-Koster data tabulated on an equidistant grid.
-module slakocont
-  use assert
-  use accuracy
-  use slakoeqgrid
+module dftbp_slakocont
+  use dftbp_assert
+  use dftbp_accuracy
+  use dftbp_slakoeqgrid
   implicit none
   private
 
-  public :: OSlakoCont, init
+  public :: TSlakoCont, init
   public :: addTable, getMIntegrals, getCutoff, getSKIntegrals
 
 
   !> A specific Slater-Koster table implementation.
-  type PSlaKo_
+  type TSlaKo_
     integer :: iType = 0
-    type(OSlakoEqGrid), allocatable :: pSlakoEqGrid
-  end type PSlaKo_
+    type(TSlakoEqGrid), allocatable :: pSlakoEqGrid
+  end type TSlaKo_
 
 
   !> Container for Slater-Koster integrals for all pair-interactions
-  type OSlakoCont
+  type TSlakoCont
     private
-    type(PSlaKo_), allocatable :: slakos(:,:)
+    type(TSlaKo_), allocatable :: slakos(:,:)
     integer :: nSpecies
     integer :: mInt
     real(dp) :: cutoff
     logical :: tDataOK
     logical :: tInit = .false.
-  end type OSlakoCont
+  end type TSlakoCont
 
 
   !> Initialises SlakoCont
@@ -75,34 +75,34 @@ contains
 
 
   !> Initialises SlakoCont
-  subroutine SlakoCont_init(self, nSpecies)
+  subroutine SlakoCont_init(this, nSpecies)
 
     !> SlakoCont instance
-    type(OSlakoCont), intent(out) :: self
+    type(TSlakoCont), intent(out) :: this
 
     !> Nr. of species in the system.
     integer, intent(in) :: nSpecies
 
-    @:ASSERT(.not. self%tInit)
+    @:ASSERT(.not. this%tInit)
 
-    self%nSpecies = nSpecies
-    allocate(self%slakos(nSpecies, nSpecies))
-    self%mInt = 0
-    self%cutoff = 0.0_dp
-    self%tDataOK = .false.
-    self%tInit = .true.
+    this%nSpecies = nSpecies
+    allocate(this%slakos(nSpecies, nSpecies))
+    this%mInt = 0
+    this%cutoff = 0.0_dp
+    this%tDataOK = .false.
+    this%tInit = .true.
 
   end subroutine SlakoCont_init
 
 
   !> Adds a Slater-Koster table for a given diatomic pair to the container.
-  subroutine SlakoCont_addTableEqGrid(self, pTable, iSp1, iSp2)
+  subroutine SlakoCont_addTableEqGrid(this, pTable, iSp1, iSp2)
 
     !> SlakoCont instance
-    type(OSlakoCont), intent(inout) :: self
+    type(TSlakoCont), intent(inout) :: this
 
     !> Slater-Koster table to be added
-    type(OSlakoEqGrid), allocatable, intent(inout) :: pTable
+    type(TSlakoEqGrid), allocatable, intent(inout) :: pTable
 
     !> Index of the first interacting species
     integer, intent(in) :: iSp1
@@ -110,12 +110,12 @@ contains
     !> Index of the second interacting species
     integer, intent(in) :: iSp2
 
-    @:ASSERT(self%tInit)
-    self%mInt = max(self%mInt, getNIntegrals(pTable))
-    self%cutoff = max(self%cutoff, getCutoff(pTable))
-    self%slakos(iSp2, iSp1)%iType = 1
-    call move_alloc(pTable, self%slakos(iSp2, iSp1)%pSlakoEqGrid)
-    self%tDataOK = all(self%slakos(:,:)%iType /= 0)
+    @:ASSERT(this%tInit)
+    this%mInt = max(this%mInt, getNIntegrals(pTable))
+    this%cutoff = max(this%cutoff, getCutoff(pTable))
+    this%slakos(iSp2, iSp1)%iType = 1
+    call move_alloc(pTable, this%slakos(iSp2, iSp1)%pSlakoEqGrid)
+    this%tDataOK = all(this%slakos(:,:)%iType /= 0)
 
   end subroutine SlakoCont_addTableEqGrid
 
@@ -124,41 +124,41 @@ contains
   !> container
   !>
   !> This subroutine is "pure", so that it can be used to determine the size of static arrays.
-  pure function SlakoCont_getMIntegrals(self) result(mInt)
+  pure function SlakoCont_getMIntegrals(this) result(mInt)
 
     !> SlakoCont instance
-    type(OSlakoCont), intent(in) :: self
+    type(TSlakoCont), intent(in) :: this
 
     !> Max. number of integrals.
     integer :: mInt
 
     !! Pure procedures can not contain any I/O, therefore the following assertion is commented out
-    !@:ASSERT(self%tInit)
-    mInt = self%mInt
+    !@:ASSERT(this%tInit)
+    mInt = this%mInt
 
   end function SlakoCont_getMIntegrals
 
 
   !> Returns the cutoff for all interactions
-  function SlakoCont_getCutoff(self) result(cutoff)
+  function SlakoCont_getCutoff(this) result(cutoff)
 
     !> SlakoCont instance
-    type(OSlakoCont), intent(in) :: self
+    type(TSlakoCont), intent(in) :: this
 
     !> Cutoff of interaction
     real(dp) :: cutoff
 
-    @:ASSERT(self%tInit)
-    cutoff = self%cutoff
+    @:ASSERT(this%tInit)
+    cutoff = this%cutoff
 
   end function SlakoCont_getCutoff
 
 
   !> Returns the Slater-Koster integrals for a given distance for a given species pair.
-  subroutine SlakoCont_getSKIntegrals(self, sk, dist, sp1, sp2)
+  subroutine SlakoCont_getSKIntegrals(this, sk, dist, sp1, sp2)
 
     !> SlakoCont instance
-    type(OSlakoCont), intent(in) :: self
+    type(TSlakoCont), intent(in) :: this
 
     !> Contains the integrals on exit
     real(dp), intent(out) :: sk(:)
@@ -172,9 +172,9 @@ contains
     !> Index of the second interacting species.
     integer, intent(in) :: sp2
 
-    @:ASSERT(self%tInit .and. self%tDataOK)
-    call getSKIntegrals(self%slakos(sp2, sp1)%pSlakoEqGrid, sk, dist)
+    @:ASSERT(this%tInit .and. this%tDataOK)
+    call getSKIntegrals(this%slakos(sp2, sp1)%pSlakoEqGrid, sk, dist)
 
   end subroutine SlakoCont_getSKIntegrals
 
-end module slakocont
+end module dftbp_slakocont

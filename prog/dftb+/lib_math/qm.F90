@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,20 +8,20 @@
 #:include 'common.fypp'
 
 !> contains some miscellaneous quantum mechanics related bits and pieces.
-module qm
-  use assert
-  use accuracy, only : dp, rsp
+module dftbp_qm
+  use dftbp_assert
+  use dftbp_accuracy, only : dp, rsp
 
   implicit none
 
   private
-  public :: makeSimiliarityTrans
+  public :: makeSimilarityTrans
 
   !> perform a similarity (or unitary) transformation of a matrix X' = U X U^T*
-  interface makeSimiliarityTrans
+  interface makeSimilarityTrans
     module procedure U_cmplx
     module procedure U_real
-  end interface makeSimiliarityTrans
+  end interface makeSimilarityTrans
 
 contains
 
@@ -65,4 +65,4 @@ contains
 
   end subroutine U_real
 
-end module qm
+end module dftbp_qm

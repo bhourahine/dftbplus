@@ -6,7 +6,7 @@ Non-equilibrium Green's function (NEGF) calculations are now available with
 systems with open boundary conditions, i.e.\ systems connected to external
 reservoirs and therefore quantum transport.  A new specific \kwcb{Transport}
 block has been added to specify the geometry of such transport problems.
-Additional solvers have been added to the \kw{Eigensolver} section to either
+Additional solvers have been added to the \kw{Solver} section to either
 fully solve the open boundary problem (using the keyword \kwcb{GreensFunction})
 or the transmission through the system (\kw{TransportOnly}). Finally a
 real-space Poisson solver is available for self consistent charge calculations
@@ -22,10 +22,17 @@ transport calculation must also contain information about the contacts (external
 reservoirs). The contacting leads (or surfaces) are actually semi-infinite
 structures, supporting travelling waves. Unlike finite structures, where mo
 stationary current is possible, travelling waves can only exist in such open
-systems.  The simulation is therefore partitioned into a device region and two
+systems.  The simulation is therefore partitioned into a device region and one
 or more contact regions.
 
-Rules to build a valid input geometry:
+{\bf note}:\\ A single contact can be used to model semi-infinite surfaces or
+the ends of nanowires/tubes. A minimum of two contacts is required to simulate
+devices and to evaluate properties such as current flow. For \is{SCC}
+calculations, the potential shifts within contacts are stored in files. See
+appendix~\ref{app:contactfiles} for the internal format of these files.
+
+\subsection{Rules to build a valid input geometry}
+\index{Rules for transport calculation geometries}
 \begin{enumerate}
 \item \label{rule1} All device atoms must come first in the structure.
 \item \label{rule2} Each contact must comprise of two subsequent unit cells,
@@ -166,7 +173,7 @@ The Device blocks contains the following properties:
   \kw{AtomRange} &2i& &  &  \\
   \kw{PLShiftTolerance} & r & & 1E-5 & \\
   \kw{Temperature} & r & & 0.0 & \\
-  \kw{FermiLevel} &r& &  &  \\
+  \kwl{FermiLevel}{kw:transport.FermiLevel} &r& &  &  \\
   \kw{Potential} & r &  & 0.0 & \\
   \kw{WideBand} & l & & No & \\
   \kw{LevelSpacing} & r & WideBand = Yes & 0.735 & \\
@@ -198,11 +205,11 @@ PLs (tolerance for rule~\ref{rule4} of structures, i.e.\ that accuracy to which
 \item[\is{Temperature}]\modif{\modtype{energy}} Specifies the electronic
   temperature of the contact (see a more detailed discussion after the section 
   \"Analysis\").
-\item[\is{FermiLevel}]\modif{\modtype{energy}} Specifies the Fermi level of the
-  contact.
+\item[\is{FermiLevel}]\modif{\modtype{energy}} Optional overriding of the Fermi
+  energy that is specified in the appropriate contact shift file.
 \item[\is{Potential}]\modif{\modtype{energy}} Specifies any additional
   electrostatic potential applied to the contact. The natural units of this
-  quantity are a potential energy.
+  quantity are a (potential) energy.
 \item[\is{WideBand}] Use the wide band approximation for the contact. If set to
   \is{Yes}, the surface Green's function of the contact is not explicitly
   calculated but is instead assumed to be local and constant according to a
@@ -244,12 +251,16 @@ When \kw{Task}=\is{ContactHamiltonian} the following options can be defined
 \begin{ptable}
   \kw{ContactId} & s &  & & \\
   \kw{ContactSeparation} & r & & 1e3 & \\
+  \kw{WriteBinaryContact} & l& & Yes & \\
 \end{ptable}
 
 \begin{description}
 \item[\is{ContactId}] Id label of the contact to be calculated.
 \item[\is{ContactSeparation}]\modif{\modtype{length}} Dummy separation in
   transverse direction (see the following explanation).
+\item[\is{WriteBinaryContact}] Controls whether the contact shift file is
+  written as a text file (file extension \verb|.dat|) or a binary file
+  (\verb|.bin|).
 \end{description}
 
 The contact calculation computes the {\em bulk} Hamiltonian, self-consistent
@@ -324,18 +335,17 @@ KpointsAndWeights = SupercellFolding {
 
 This could seem confusing, but the underlining reasons is that in the cluster
 calculation the reciprocal lattice is set up by the code itself, while in the
-periodic calculation is set up by the user who can chose any arbitrary
+periodic calculation is set up by the user, who can chose any arbitrary
 direction.  Refer to the transport cookbook and to the distributed examples for
 further clarification.
 
-\htcbsubsection{Task = UploadContacts} After the contact calculations, it is
-possible to perform actual transport calculations. This is activated simply
-specifying \kw{Task = UploadContacts}, without additional options ({\bf Note} if
-no task is specified, \dftbp{} assumes \is{UploadContacts} is the required task
-in the transport block). In order to set up a proper transport calculation the
-user should also define the contacts' Fermi levels (as printed in the files
-previously produced by using \is{ContactHamiltonian} tasks) and any required
-potential shift for each contact.
+\htcbsubsection{Task = UploadContacts}\index{UploadContacts} After the
+contact calculations are completed, it is now possible to perform
+actual transport calculations. This is activated simply specifying
+\kw{Task = UploadContacts}, without additional options ({\bf Note} if
+no task is specified, \dftbp{} assumes \is{UploadContacts} is the
+required task in the transport block). If you require potential shifts
+of the contacts, these should also be set for each contact.
 \begin{verbatim}
 Transport {
   Device {
@@ -344,13 +354,12 @@ Transport {
   Contact {
     Id = "source"
     AtomRange = 9 24
-    FermiLevel [eV] = -8.4123
-    Potential = 0.0
+    # No specified shift in contact, effectively:
+    # Potential = 0.0
   }
   Contact {
     Id = "drain"
     AtomRange = 25 40
-    FermiLevel [eV] = -8.4123
     Potential = 1.0
   }
   Task = UploadContacts
@@ -371,6 +380,18 @@ chosen:
   }
 \end{verbatim}
 
+When \kw{Task}=\is{UploadHamiltonian} the following options can be defined
+
+\begin{ptable}
+  \kw{ReadBinaryContact} & l& & Yes & \\
+\end{ptable}
+
+\begin{description}
+\item[\is{ReadBinaryContact}] Controls whether the contact shift file should be
+  read as a text file (file extension \verb|.dat|) or a binary file
+  (\verb|.bin|).
+\end{description}
+
 \htsection{GreensFunction}
 
 For calculations in open systems, instead of calculating the eigenstates of the
@@ -379,7 +400,7 @@ system. The Green's function (GF) solver can also be used for conventional
 supercell/cluster boundary conditions if required.
 
 In order to activate Green's function calculations the user must define the
-keyword \is{EigenSolver = GreensFunction} in the \is{Hamiltonian} section. The
+keyword \is{Solver = GreensFunction} in the \is{Hamiltonian} section. The
 GF solver, either under equilibrium (no bias applied) or under non-equilibrium
 conditions, builds the density-matrix of the device region such that it is
 consistent with any contacts that are present. Strictly speaking the GF does not
@@ -454,9 +475,11 @@ only (see section~\ref{sec:transport.geometry}).
   the Fermi level of the system must be known and provided to fill up the
   electronic states.
 
-\item[\is{FermiLevel}]\modif{\modtype{energy}} Required to set the Fermi level
-  used by the Green's solver to fill up the electronic states, unless already
-  specified by there being contacts already present.
+\item[\is{FermiLevel}]\modif{\modtype{energy}} Required to set the
+  Fermi level that is used by the Green's solver to fill up the
+  electronic states. This should be set unless the Fermi level is
+  already specified by the presence of contacts to the (device region)
+  system.
 
 \item[\is{LocalCurrents}] if set to Yes, local bond-currents are computed using
   the non-equilibrium density matrix.  This task is currently limited to
@@ -477,7 +500,7 @@ only (see section~\ref{sec:transport.geometry}).
 GreensFunction section example:
 
 \begin{verbatim}
-Eigensolver = GreensFunction {
+Solver = GreensFunction {
   FirstLayerAtoms = 1 61 92 145
   Delta [eV] = 1E-4
   ContourPoints = 20 20
@@ -489,7 +512,7 @@ Eigensolver = GreensFunction {
 \end{verbatim}
 
 
-\section{Eigensolver = TransportOnly}
+\section{Solver = TransportOnly}
 
 The \is{GreensFunction} block is used to solve the full self-consistent NEGF
 transport problem. However, the block \iscb{TunnelingAndDos} within the
@@ -498,7 +521,7 @@ function according to the Landauer formula, without solving for the full density
 matrix. This can be applied even for calculations where the density matrix and
 charge densities are not computed. Similarly, in these cases the electrostatics
 block should be omitted (i.e.\ the \is{Electrostatics = Poisson}). The keyword
-\is{Eigensolver = TransportOnly} is used to jump straight to the post-SCC
+\is{Solver = TransportOnly} is used to jump straight to the post-SCC
 analysis.  \textbf{Note:} This option cannot be used together with calculations
 which require forces, including geometry relaxations or md calculations.
 
@@ -606,6 +629,7 @@ Cartesian axes, $x$, $y$, $z$.
   \kw{Gate} & m & & none\{\} & \pref{Electrostatic Gates} \\
   \kw{MaxParallelNodes} & m & & none\{\} & \pref{Parallelisations} \\
   \kw{RecomputeAfterDensity} & l & & No & \\
+  \kw{PoissonThickness} & r & contacts = 1 & &\\
 \end{ptableh}
 
 
@@ -614,8 +638,6 @@ Cartesian axes, $x$, $y$, $z$.
   messages and takes values ranging from 1 to 100.
 \item[\is{PoissonBox}]\modif{\modtype{length}} Dimension of the Poisson box
   along the directions $x$, $y$ and $z$.
-
-  
 \item[\is{BoxExtension}]\modif{\modtype{length}} With this value it is possible
   to tune the position of the box interface between the device and contacts.  By
   default (\is{BoxExtension}=0.0) the boundary is placed at the midpoint between
@@ -659,6 +681,9 @@ Cartesian axes, $x$, $y$, $z$.
   calculations it is set to \is{No} by default in order to avoid the extra time
   spent on the Poisson step. This does not affect the SCC loop or other
   calculations apart from the electronic energy and forces.
+\item[\is{PoissonThickness}] In the special case of a single contact (cases like
+  the end of semi-infinite wires or surfaces of crystals), the thickness of the
+  Poisson box normal to the surface of the contact can be set with this command.
 \end{description}
 
 {\bf Note}: The Poisson box can be specified using the keyword
@@ -766,6 +791,10 @@ BoundaryRegion = Circle {
 In some special cases it might be necessary to override the default BCs applied
 by the code to the Poisson equation. Currently this can be done using the
 keywords: \verb|OverrideDefaultBC| and \verb|OverrideBulkBC|.
+
+In the special case of a single contact, the boundary condition on the other
+side of the box to that contact is automatically over-ridden to be of Neumann
+type (but can still then be over-ridden with \is{OverrideDefaultBC}).
 
 \begin{description}
 \item[\is{OverrideDefaultBC}] block is used to override the BCs described
@@ -915,9 +944,6 @@ until speedups are observed.
 \begin{ptable}
  \kw{MaxParallelNodes} & i & & 1 &  \\
 \end{ptable}
-
-\textbf{Note:} At the moment, calculations with more than one process group (see
-section~\ref{sec:dftbp.Parallel}) are not supported.
 
 \section{Analysis}
 \label{sec:transport.Analysis}
