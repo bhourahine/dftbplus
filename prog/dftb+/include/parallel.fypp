@@ -1,0 +1,114 @@
+#!-------------------------------------------------------------------------------------------------!
+#!  DFTB+: general package for performing fast atomistic simulations                               !
+#!  Copyright (C) 2006 - 2020  DFTB+ developers group                                              !
+#!                                                                                                 !
+#!  See the LICENSE file for terms of usage and distribution.                                      !
+#!-------------------------------------------------------------------------------------------------!
+#:mute
+#:if not defined('_PARALLEL_FYPP_')
+#:set _PARALLEL_FYPP_
+
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+#! Wrappers for serial, OMP and MPI parallel matrix building code
+#!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+#! Matrix allocation, sized for atom x atom matrices
+#:if WITH_SCALAPACK
+
+  #:def COPYATMATSHAPE(original, duplicate, env)
+    
+    if (env%blacs%${grid}$%iproc /= -1) then
+      call scalafx_getdescriptor(env%blacs%atomGrid, nAtom, nAtom,&
+          & env%blacs%rowBlockSize, env%blacs%columnBlockSize, ${original}$)
+      call scalafx_getlocalshape(env%blacs%atomGrid, ${original}$, nRowLoc, nColLoc)
+      
+      allocate(this%invRMat(nRowLoc, nColLoc))
+      call scalafx_getdescriptor(env%blacs%atomGrid, 1, nAtom, env%blacs%rowBlockSize,&
+          & env%blacs%columnBlockSize, this%descQVec)
+      call scalafx_getlocalshape(env%blacs%atomGrid, this%descQVec, nRowLoc, nColLoc)
+      allocate(this%shiftPerAtomGlobal(nRowLoc, nColLoc))
+      allocate(this%qGlobal(nRowLoc, nColLoc))
+    end if
+    
+  #:enddef
+
+#:else
+
+  #:def COPYATMATSHAPE(original, matrixDesc)
+  
+    allocate(${duplicate}$(size(${original}$,dim=1), size(${original}$,dim=2)))
+  
+  #:enddef
+  
+#:endif
+
+
+#! Matrix filling
+#:if WITH_MPI
+  
+  #:if WITH_SCALAPACK
+    
+    #:if WITH_OMP
+      
+      #:def ATMATCODE(code)
+      
+        $:code
+      
+      #:enddef
+      
+    #:else
+      
+      #:def ATMATCODE(code)
+      
+        $:code
+      
+      #:enddef
+      
+    #:endif
+    
+  #:else
+    
+    #:if WITH_OMP
+      
+      #:def ATMATCODE(code)
+      
+        $:code
+      
+      #:enddef
+      
+    #:else
+      
+      #:def ATMATCODE(code)
+      
+        $:code
+      
+      #:enddef
+      
+    #:endif
+    
+  #:endif
+
+#:else
+
+  #:if WITH_OMP
+
+    #:def ATMATCODE(code)
+      
+      $:code
+      
+    #:enddef
+
+  #:else
+    
+    #:def ATMATCODE(code)
+      
+      $:code
+      
+    #:enddef
+    
+  #:endif
+
+#:endif
+
+#:endif
+#:endmute
