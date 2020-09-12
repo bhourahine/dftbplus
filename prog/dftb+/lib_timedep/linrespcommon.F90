@@ -10,7 +10,7 @@
 !> Helper routines for the linear response modules.
 module dftbp_linrespcommon
   use dftbp_assert
-  use dftbp_accuracy
+  use dftbp_accuracy, only : dp, elecTolMax
   use dftbp_blasroutines
   use dftbp_sorting
   use dftbp_message
@@ -18,6 +18,7 @@ module dftbp_linrespcommon
   use dftbp_transcharges
   use dftbp_onsitecorrection, only : getOnsME
   use dftbp_constants, only: Hartree__eV, au__Debye
+  use dftbp_degeneracyfind
   implicit none
   public
 
@@ -36,7 +37,7 @@ contains
   !> find (possibly degenerate) transitions with stronger dipole
   !> transition strengths than a tolerance, count them and place at
   !> the start of the appropriate arrays
-  subroutine dipSelect(wij,sposz,win,transd,nxov_r,threshold,grndEigVal, getij)
+  subroutine dipSelect(wij, sposz, win, transd, nxov_r, nmatup, threshold, grndEigVal, getij)
 
     !> Energies of transitions
     real(dp), intent(inout) :: wij(:)
@@ -53,6 +54,9 @@ contains
     !> number of excitations in space
     integer, intent(out) :: nxov_r
 
+    !> number of same spin excitations
+    integer, intent(in) :: nmatup
+
     !> threshold for dipole cutoff
     real(dp), intent(in) :: threshold
 
@@ -62,64 +66,92 @@ contains
     !> Index array of transitions
     integer, intent(in) :: getij(:,:)
 
-    integer :: nxov, ii, jj, iOcc, iVrt, iStart
-    real(dp) :: eOcc, eExc, mu
+    integer :: nxov, ii, jj, nLev, jGrp, kGrp, iOcc, iVrt, iSpin, nSpin
 
-    nxov = size(wij)
-    @:ASSERT(nxov == size(sposz))
-    @:ASSERT(nxov == size(win))
-    @:ASSERT(all(shape(transd) == [nxov,3]))
-    @:ASSERT(size(getij,dim=1) >= nxov)
-    @:ASSERT(size(getij,dim=2) == 2)
+    type(TDegeneracyFind) :: DegeneracyFind(size(grndEigVal, dim=2))
+    logical :: isDegenerate, isDeg, updwn
+    integer, allocatable :: degenerate(:,:,:), tmpDeg1(:,:), tmpDeg2(:,:)
+
     @:ASSERT(threshold >= 0.0_dp)
 
-    call indxov(win, 1, getij, iOcc, iVrt)
-    eOcc = grndEigVal(iOcc,1)
-    eExc = wij(1)
-    iStart = 1
+    nxov = size(wij)
     nxov_r = 0
-    ! Check, to single precision tolerance, for degeneracies when selecting bright transitions
-    do ii = 2, nxov
-      call indxov(win, ii, getij, iOcc, iVrt)
-      ! check if this is a still within a degenerate group, otherwise process the group
-      if ( abs(grndEigVal(iOcc,1)-eOcc) > epsilon(0.0) .or. &
-          & abs(wij(ii)-eExc) > epsilon(0.0) ) then
-        eOcc = grndEigVal(iOcc,1)
-        eExc = wij(ii)
-        mu = 0.0_dp
-        ! loop over transitions in the group and check the oscillator strength
-        do jj = iStart, ii-1
-          call indxov(win, jj, getij, iOcc, iVrt)
-          mu = mu + sposz(jj)
-        end do
-        ! if something in the group is bright, so include them all
-        if (mu>threshold) then
-          do jj = iStart, ii-1
-            nxov_r = nxov_r + 1
-            win(nxov_r) = win(jj)
-            wij(nxov_r) = wij(jj)
-            sposz(nxov_r) = sposz(jj)
-            transd(nxov_r,:) = transd(jj,:)
-          end do
-        end if
-        iStart = ii
-      end if
+
+    nSpin = size(grndEigVal, dim=2)
+
+    isDegenerate = .false.
+    do iSpin = 1, nSpin
+      call DegeneracyFind(iSpin)%init(elecTolMax)
+      call DegeneracyFind(iSpin)%degeneracyTest(grndEigVal(:, iSpin), isDeg)
+      isDegenerate = isDegenerate .or. isDeg
     end do
 
-    ! last group in the transitions
-    mu = 0.0_dp
-    do jj = iStart, nxov
-      call indxov(win, jj, getij, iOcc, iVrt)
-      mu = mu + sposz(jj)
-    end do
-    if (mu>threshold) then
-      do jj = iStart, nxov
-        nxov_r = nxov_r + 1
-        win(nxov_r) = win(jj)
-        wij(nxov_r) = wij(jj)
-        sposz(nxov_r) = sposz(jj)
-        transd(nxov_r,:) = transd(jj,:)
+    if (isDegenerate) then
+
+      select case(nSpin)
+      case(1)
+        tmpDeg1 = DegeneracyFind(1)%degenerateRanges()
+        allocate(degenerate(2,size(tmpDeg1,dim=2),1))
+        degenerate(:,:,1) = tmpDeg1
+        deallocate(tmpDeg1)
+      case(2)
+        tmpDeg1 = DegeneracyFind(1)%degenerateRanges()
+        tmpDeg2 = DegeneracyFind(2)%degenerateRanges()
+        allocate(degenerate(2,max(size(tmpDeg1,dim=2),size(tmpDeg2,dim=2)),2))
+        degenerate(:,:,:) = 0.0_dp
+        degenerate(:,:size(tmpDeg1),1) = tmpDeg1
+        degenerate(:,:size(tmpDeg2),2) = tmpDeg2
+        deallocate(tmpDeg1)
+        deallocate(tmpDeg2)
+      end select
+
+      ii = 1
+      do while (ii <= nxov)
+
+        call indxov(win, ii, getij, iOcc, iVrt)
+        updwn = (win(ii) <= nmatup)
+
+        jGrp = DegeneracyFind(1)%degenerateGroup(iOcc)
+        if (updwn .and. nSpin > 1) then
+          kGrp = DegeneracyFind(2)%degenerateGroup(iVrt)
+        else
+          kGrp = DegeneracyFind(1)%degenerateGroup(iVrt)
+        end if
+
+        if (updwn .and. nSpin > 1) then
+          nLev = (degenerate(2,jGrp,1)-degenerate(1,jGrp,1)+1)&
+              & * (degenerate(2,kGrp,2)-degenerate(1,kGrp,2)+1)
+        else
+          nLev = (degenerate(2,jGrp,1)-degenerate(1,jGrp,1)+1)&
+              & * (degenerate(2,kGrp,1)-degenerate(1,kGrp,1)+1)
+        end if
+
+        if (sum(sposz(ii:ii+nLev-1)) >= threshold) then
+          do jj = 0, nLev-1
+            nxov_r = nxov_r + 1
+            win(nxov_r) = win(ii+jj)
+            wij(nxov_r) = wij(ii+jj)
+            sposz(nxov_r) = sposz(ii+jj)
+            transd(nxov_r,:) = transd(ii+jj,:)
+          end do
+        end if
+
+        ii = ii + nLev
+
       end do
+
+    else
+
+      do ii = 1, nxov
+        if (sposz(ii) >= threshold) then
+          nxov_r = nxov_r + 1
+          win(nxov_r) = win(ii)
+          wij(nxov_r) = wij(ii)
+          sposz(nxov_r) = sposz(ii)
+          transd(nxov_r,:) = transd(ii,:)
+        end if
+      end do
+
     end if
 
   end subroutine dipSelect

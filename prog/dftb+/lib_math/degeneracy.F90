@@ -24,7 +24,7 @@ module dftbp_degeneracyfind
     integer, allocatable :: levelRange(:,:)
     
     !> To which group of states any particular level belongs
-    integer, allocatable :: degenerateGroup(:)
+    integer, allocatable :: levelInGroup(:)
 
     !> Numerical tolerance for deciding degeneracy
     real(dp) :: tolerance
@@ -33,7 +33,10 @@ module dftbp_degeneracyfind
 
     !> Number of groups of degenerate orbitals
     integer :: nGrp
-    
+
+    !> Number of orbitals
+    integer :: nOrbs
+
   contains
 
     !> Initialises instance and set some optional parameters
@@ -45,12 +48,15 @@ module dftbp_degeneracyfind
     !> Are a pair of states in the same degenerate group
     procedure :: areDegenerate
 
-    !> Return number of degenerate levels
-    procedure :: degenerateGroups
+    !> Return number of distinct groups of degenerate levels
+    procedure :: totalDegenerateGroups
 
     !> Returns range of levels in each degenerate group
     procedure :: degenerateRanges
-    
+
+    !> Returns which degenerate group a level is in
+    procedure :: degenerateGroup
+
   end type TDegeneracyFind
 
   !> a few times eps, just in case of minor symmetry breaking
@@ -102,17 +108,18 @@ contains
       allocate(this%levelRange(2, nOrb))
     end if
     this%levelRange(:,:) = 0
-    if (allocated(this%degenerateGroup)) then
-      if (size(this%degenerateGroup) /= nOrb) then
-        deallocate(this%degenerateGroup)
+    if (allocated(this%levelInGroup)) then
+      if (size(this%levelInGroup) /= nOrb) then
+        deallocate(this%levelInGroup)
       end if
     end if
-    if (.not.allocated(this%degenerateGroup)) then
-      allocate(this%degenerateGroup(nOrb))
+    if (.not.allocated(this%levelInGroup)) then
+      allocate(this%levelInGroup(nOrb))
     end if
+    this%nOrbs = nOrb
 
     call degeneracyRanges(this%levelRange, this%nGrp, Levels, this%tolerance,&
-        & grpMembership=this%degenerateGroup)
+        & grpMembership=this%levelInGroup)
 
     maxRange = maxval(this%levelRange(2,:this%nGrp) - this%levelRange(1,:this%nGrp)) + 1
     
@@ -146,23 +153,23 @@ contains
     !> Resulting test
     logical :: areDegenerate
 
-    areDegenerate = (this%degenerateGroup(ii) == this%degenerateGroup(jj))
+    areDegenerate = (this%levelInGroup(ii) == this%levelInGroup(jj))
 
   end function areDegenerate
 
 
   !> Count of degenerate groups of levels
-  pure function degenerateGroups(this)
+  pure function totalDegenerateGroups(this)
 
     !> Instance
     class(TDegeneracyFind), intent(in) :: this
 
     !> Number of degenerate groups of levels
-    integer :: degenerateGroups
+    integer :: totalDegenerateGroups
 
-    degenerateGroups = this%nGrp
+    totalDegenerateGroups = this%nGrp
     
-  end function degenerateGroups
+  end function totalDegenerateGroups
 
 
   !> Returns ranges of levels in degenerate groups (lower:upper, groups)
@@ -178,7 +185,24 @@ contains
     
   end function degenerateRanges
   
-  
+
+  !> Returns the degenerate group a level belongs to
+  pure function degenerateGroup(this, iLev)
+
+    !> Instance
+    class(TDegeneracyFind), intent(in) :: this
+
+    !> Level to check
+    integer, intent(in) :: iLev
+
+    !> Degenerate group of the level
+    integer :: degenerateGroup
+
+    degenerateGroup = this%levelInGroup(iLev)
+
+  end function degenerateGroup
+
+
   ! internal routines
 
   !> Find which groups of eigenvales are degenerate to within a tolerance

@@ -1016,8 +1016,8 @@ contains
     if (tOscillatorWindow .or. tEnergyWindow) then
       if (.not. tEnergyWindow) then
         ! find transitions that are strongly dipole allowed (> oscillatorWindow)
-        call dipselect(wIJ, snglPartOscStrength, win, snglPartTransDip, nXovRD, oscillatorWindow,&
-            & grndEigVal, getIJ)
+        call dipselect(wIJ, snglPartOscStrength, win, snglPartTransDip, nXovRD, nXov,&
+            & oscillatorWindow, grndEigVal, getIJ)
       else
         ! energy window above the lowest nExc single particle transitions
         energyThreshold = wIJ(nExc) + energyWindow
@@ -1028,7 +1028,7 @@ contains
           if (nXovR < nXov) then
             ! find transitions that are strongly dipole allowed (> oscillatorWindow)
             call dipselect(wIJ(nXovR+1:), snglPartOscStrength(nXovR+1:), win(nXovR+1:),&
-                & snglPartTransDip(nXovR+1:,:), nXovD, oscillatorWindow, grndEigVal, getIJ)
+                & snglPartTransDip(nXovR+1:,:), nXovD, nXov, oscillatorWindow, grndEigVal, getIJ)
           end if
         end if
         nXovRD = nXovR + nXovD

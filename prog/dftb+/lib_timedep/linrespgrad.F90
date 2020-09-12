@@ -375,8 +375,8 @@ contains
       if (.not. this%tEnergyWindow) then
 
         ! find transitions that are strongly dipole allowed (> oscillatorWindow)
-        call dipselect(wij, sposz, win, snglPartTransDip, nxov_rd, this%oscillatorWindow,&
-            & grndEigVal, getij)
+        call dipselect(wij, sposz, win, snglPartTransDip, nxov_rd, nxov_ud(1),&
+            & this%oscillatorWindow, grndEigVal, getij)
 
       else
 
@@ -391,7 +391,7 @@ contains
           if (nxov_r < nxov) then
             ! find transitions that are strongly dipole allowed (> oscillatorWindow)
             call dipselect(wij(nxov_r+1:), sposz(nxov_r+1:), win(nxov_r+1:),&
-                & snglPartTransDip(nxov_r+1:,:),nxov_d, this%oscillatorWindow,&
+                & snglPartTransDip(nxov_r+1:,:), nxov_d, nxov_ud(1), this%oscillatorWindow,&
                 & grndEigVal, getij)
           end if
 
@@ -2037,7 +2037,7 @@ contains
         degenerate = DegeneracyFind%degenerateRanges()
         call taggedWriter%write(fdTagged, tagLabels%excEgy, eval(degenerate(1,:)))
         ! sum oscillator strength over any degenerate levels
-        allocate(oDeg(DegeneracyFind%degenerateGroups()))
+        allocate(oDeg(DegeneracyFind%totalDegenerateGroups()))
         do ii = 1, size(oDeg)
           oDeg(ii) = sum(osz(degenerate(1,ii):degenerate(2,ii)))
         end do
