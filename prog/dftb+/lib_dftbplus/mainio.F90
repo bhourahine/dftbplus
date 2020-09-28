@@ -116,6 +116,7 @@ module dftbp_mainio
     module procedure readCplxEigenvecs
   end interface readEigenvecs
 
+
 contains
 
   !> Writes the eigenvectors to disc.
@@ -2521,7 +2522,7 @@ contains
     real(dp), intent(in), optional :: qNetAtom(:)
 
     real(dp), allocatable :: qInputUpDown(:,:,:), qOutputUpDown(:,:,:), qBlockOutUpDown(:,:,:,:)
-    real(dp) :: angularMomentum(3)
+    real(dp) :: angularMomentum(3), cm5Dipole(3)
     integer :: ang
     integer :: nAtom, nKPoint, nSpinHams, nMovedAtom
     integer :: iAt, iSpin, iK, iSp, iSh, iOrb, ii, kk
@@ -2635,6 +2636,17 @@ contains
                 & + cm5Cont%cm5(iAt)
          end do
          write(fd, *)
+         if (.not. tPeriodic) then
+           cm5Dipole(:) = 0.0_dp
+           do ii = 1, size(iAtInCentralRegion)
+             iAt = iAtInCentralRegion(ii)
+             cm5Dipole(:) = cm5Dipole + coord0Out(:,iAt) * (sum(q0(:, iAt, 1) - qOutput(:, iAt, 1))&
+                 & + cm5Cont%cm5(iAt))
+           end do
+           write(fd, "(A, 3F14.8, A)") 'CM5 dipole moment:', cm5Dipole, ' au'
+           write(fd, "(A, 3F14.8, A)") 'CM5 dipole moment:', cm5Dipole * au__Debye, ' Debye'
+           write(fd, *)
+         end if
       end if
     end if
 
