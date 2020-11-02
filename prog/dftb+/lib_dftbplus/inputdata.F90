@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,36 +8,43 @@
 #:include 'common.fypp'
 
 !> Contains data type representing the input data for DFTB
-module dftbp_inputdata_module
+module dftbp_inputdata
+  use dftbp_hamiltoniantypes
   use dftbp_assert
   use dftbp_accuracy
   use dftbp_typegeometry
   use dftbp_message
-  use dftbp_dispersions, only : DispersionInp
-  use dftbp_linresp_module, only : linrespini
+  use dftbp_dispersions, only : TDispersionInp
+  use dftbp_linresp, only : TLinrespini
+  use dftbp_pprpa, only : TppRPAcal
   use dftbp_slakocont
   use dftbp_commontypes
   use dftbp_repcont
   use dftbp_linkedlist
   use dftbp_wrappedintr
   use dftbp_elecsolvers, only : TElectronicSolverInp
-  use dftbp_xlbomd_module
+  use dftbp_timeprop
+  use dftbp_etemp, only : fillingTypes
+  use dftbp_xlbomd
 #:if WITH_SOCKETS
   use dftbp_ipisocket, only : IpiSocketCommInp
 #:endif
   use dftbp_pmlocalisation, only : TPipekMezeyInp
   use dftbp_elstatpot, only : TElStatPotentialsInp
+  use dftbp_reks
+  use dftbp_cm5, only : TCM5Input
+  use dftbp_solvinput, only : TSolvationInp
 
 #:if WITH_TRANSPORT
   use libnegf_vars
-  use poisson_init
 #:endif
+  use poisson_init
 
   implicit none
   private
   save
 
-  public :: control, TGeometry, slater, inputData, XLBOMDInp, TParallelOpts
+  public :: TControl, TGeometry, TSlater, TInputData, TXLBOMDInp, TParallelOpts
   public :: TBlacsOpts
   public :: TRangeSepInp
   public :: init, destruct
@@ -72,21 +79,34 @@ module dftbp_inputdata_module
 
   !> LBFGS input settings
   type TLbfgsInput
+    !> Number of stored steps
     integer :: memory
   end type TLbfgsInput
 
 
   !> Range separation input
   type TRangeSepInp
+
+    !> Threshold for integral screening
     real(dp) :: screeningThreshold
+
+    !> Reduction of cutoff in spatial screening
     real(dp) :: cutoffRed
+
+    !> Separation parameter
     real(dp) :: omega
-    character(lc) :: rangeSepAlg
+
+    !> Choice of range separation method
+    integer :: rangeSepAlg
+
   end type TRangeSepInp
 
 
   !> Main control data for program as extracted by the parser
-  type control
+  type TControl
+
+    !> Choice of electronic hamiltonian
+    integer :: hamiltonian = hamiltonianTypes%none
 
     !> random number generator seed
     integer :: iSeed = 0
@@ -115,7 +135,7 @@ module dftbp_inputdata_module
     logical :: tWriteChrgAscii = .true.
 
     !> should probably be packaged
-    logical :: tGeoOpt = .false.
+    logical :: isGeoOpt = .false.
 
     !> coordinate optimisation
     logical :: tCoordOpt = .false.
@@ -141,8 +161,8 @@ module dftbp_inputdata_module
     !> add new geometries at the end of files
     logical :: tAppendGeo = .false.
 
-    !> use converged SCC forces only
-    logical :: tConvrgForces = .true.
+    !> use converged SCC charges for properties like forces or charge dependent dispersion
+    logical :: isSccConvRequired = .true.
 
     !> geometry step
     integer :: iGeoOpt = 0
@@ -158,6 +178,12 @@ module dftbp_inputdata_module
 
     !> printout of Mulliken
     logical :: tPrintMulliken = .false.
+
+    !> Net atomic charges (i.e. on-site only part of Mulliken charges)
+    logical :: tNetAtomCharges = .false.
+
+    !> Input for CM5 corrected Mulliken charges
+    type(TCM5Input), allocatable :: cm5Input
 
     !> electrostatic potential evaluation and printing
     type(TElStatPotentialsInp), allocatable :: elStatPotentialsInp
@@ -213,6 +239,9 @@ module dftbp_inputdata_module
 
     !> Molecular dynamics
     logical :: tMD = .false.
+
+    !> Use Plumed
+    logical :: tPlumed = .false.
 
     !> Finite difference derivatives calculation?
     logical :: tDerivs = .false.
@@ -287,7 +316,7 @@ module dftbp_inputdata_module
     logical :: tFixEf = .false.
     real(dp), allocatable :: Ef(:)
     logical :: tFillKSep = .false.
-    integer :: iDistribFn = 0
+    integer :: iDistribFn = fillingTypes%Fermi
     real(dp) :: wvScale = 0.0_dp
 
     !> default chain length for Nose-Hoover
@@ -384,7 +413,7 @@ module dftbp_inputdata_module
 
 
     !> Projection of eigenvectors
-    type(listIntR1) :: iAtInRegion
+    type(TListIntR1) :: iAtInRegion
     logical, allocatable :: tShellResInRegion(:)
     logical, allocatable :: tOrbResInRegion(:)
     character(lc), allocatable :: RegionLabel(:)
@@ -404,6 +433,8 @@ module dftbp_inputdata_module
     real(dp), allocatable :: h5ElementPara(:)
     ! H5 correction end
 
+    !> Halogen X correction
+    logical :: tHalogenX = .false.
 
     !> Old repulsive
     logical :: useBuggyRepSum
@@ -443,7 +474,10 @@ module dftbp_inputdata_module
 
 
     !> Dispersion related stuff
-    type(DispersionInp), allocatable :: dispInp
+    type(TDispersionInp), allocatable :: dispInp
+
+    !> Solvation
+    class(TSolvationInp), allocatable :: solvInp
 
 
     !> Local potentials
@@ -457,45 +491,67 @@ module dftbp_inputdata_module
 
 
     !> XLBOMD
-    type(XLBOMDInp), allocatable :: xlbomd
+    type(TXLBOMDInp), allocatable :: xlbomd
 
-    type(linrespini) :: lrespini
+    !> TD Linear response input
+    type(TLinrespini) :: lrespini
+
+    !> ElectronDynamics
+    type(TElecDynamicsInp), allocatable :: elecDynInp
+
+    !> input for particle-particle RPA
+    type(TppRPAcal), allocatable :: ppRPA
 
     !> LBFGS input
     type(TLbfgsInput), allocatable :: lbfgsInp
 
+    !> Range separated input
     type(TRangeSepInp), allocatable :: rangeSepInp
-
 
   #:if WITH_SOCKETS
     !> socket communication
-    type(IpiSocketCommInp), allocatable :: socketInput
+    type(ipiSocketCommInp), allocatable :: socketInput
   #:endif
 
     type(TParallelOpts), allocatable :: parallelOpts
 
     !> Maximal timing level to show in output
     integer :: timingLevel
-    
+
     ! Custom occupations
-    type(WrappedInt1), allocatable :: customOccAtoms(:)
+    type(TWrappedInt1), allocatable :: customOccAtoms(:)
     real(dp), allocatable :: customOccFillings(:,:)
 
-  end type control
+    ! TI-DFTB variables
+
+    !> Non-Aufbau filling
+    logical :: isNonAufbau = .false.
+
+    !> SpinPurify
+    logical :: isSpinPurify = .false.
+
+    !> GroundGuess
+    logical :: isGroundGuess = .false.
+
+    !> REKS input
+    type(TReksInp) :: reksInp
+
+  end type TControl
 
 
   !> Slater-Koster data
-  type slater
+  type TSlater
     real(dp), allocatable :: skSelf(:, :)
     real(dp), allocatable :: skHubbU(:, :)
     real(dp), allocatable :: skOcc(:, :)
     real(dp), allocatable :: mass(:)
 
-    type(OSlakoCont), allocatable :: skHamCont
-    type(OSlakoCont), allocatable :: skOverCont
-    type(ORepCont), allocatable :: repCont
+    type(TSlakoCont), allocatable :: skHamCont
+    type(TSlakoCont), allocatable :: skOverCont
+    type(TRepCont), allocatable :: repCont
     type(TOrbitals), allocatable :: orb
-  end type slater
+
+  end type TSlater
 
 #:if WITH_TRANSPORT
   !> container for data needed by libNEGF
@@ -507,17 +563,17 @@ module dftbp_inputdata_module
 
 
   !> container for input data constituents
-  type inputData
+  type TInputData
     logical :: tInitialized = .false.
-    type(control) :: ctrl
+    type(TControl) :: ctrl
     type(TGeometry) :: geom
-    type(slater) :: slako
+    type(TSlater) :: slako
   #:if WITH_TRANSPORT
     type(TTransPar) :: transpar
     type(TNEGFInfo) :: ginfo
-    type(TPoissonInfo) :: poisson
   #:endif
-  end type inputData
+    type(TPoissonInfo) :: poisson
+  end type TInputData
 
 
   !> Initialise the input data
@@ -535,31 +591,37 @@ contains
 
 
   !> Mark data structure as initialised
-  subroutine InputData_init(self)
-    type(inputData), intent(out) :: self
+  subroutine InputData_init(this)
 
-    self%tInitialized = .true.
+    !> Instance
+    type(TInputData), intent(out) :: this
+
+    this%tInitialized = .true.
 
   end subroutine InputData_init
 
 
   !> destructor for parts that are not cleaned up when going out of scope
-  subroutine InputData_destruct(self)
-    type(inputData), intent(inout) :: self
+  subroutine InputData_destruct(this)
 
-    call Control_destruct(self%ctrl)
+    !> Instance
+    type(TInputData), intent(inout) :: this
+
+    call Control_destruct(this%ctrl)
 
   end subroutine InputData_destruct
 
 
   !> destructor for parts that are not cleaned up when going out of scope
-  subroutine Control_destruct(self)
-    type(control), intent(inout) :: self
+  subroutine Control_destruct(this)
 
-    if (allocated(self%tShellResInRegion)) then
-      call destruct(self%iAtInRegion)
+    !> Instance
+    type(TControl), intent(inout) :: this
+
+    if (allocated(this%tShellResInRegion)) then
+      call destruct(this%iAtInRegion)
     end if
 
   end subroutine Control_destruct
 
-end module dftbp_inputdata_module
+end module dftbp_inputdata

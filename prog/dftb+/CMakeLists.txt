@@ -1,7 +1,16 @@
+file(TO_NATIVE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../" projectdir)
 #
 # General options for all targets
 #
-list(APPEND FYPP_FLAGS -I${CMAKE_CURRENT_SOURCE_DIR}/include -DRELEASE="'${RELEASE}'")
+set(fypp_flags ${FYPP_BUILD_FLAGS})
+list(APPEND fypp_flags -I${CMAKE_CURRENT_SOURCE_DIR}/include -DRELEASE="'${RELEASE}'")
+
+if(WITH_API)
+  message(STATUS "DFTB+ API version: ${API_VERSION}")
+  list(APPEND fypp_flags -DAPIVERSION="'${API_VERSION}'")
+  list(APPEND fypp_flags -DAPIMAJOR=${API_VERSION_MAJOR} -DAPIMINOR=${API_VERSION_MINOR}
+    -DAPIPATCH=${API_VERSION_PATCH})
+endif()
 
 #
 # Compile and install library
@@ -22,19 +31,19 @@ add_subdirectory(lib_io)
 add_subdirectory(lib_math)
 add_subdirectory(lib_md)
 add_subdirectory(lib_mixer)
+add_subdirectory(lib_poisson)
+add_subdirectory(lib_reks)
 add_subdirectory(lib_timedep)
 add_subdirectory(lib_type)
+add_subdirectory(lib_solvation)
 if(WITH_API)
   add_subdirectory(api/mm)
-endif()
-if(WITH_TRANSPORT)
-  add_subdirectory(lib_poisson)
 endif()
 if(WITH_GPU)
   add_subdirectory(lib_magmahelper)
 endif()
 
-dftbp_preprocess("${FYPP}" "${FYPP_FLAGS}" "F90" "f90" "${ALL-SOURCES-FPP}" all-sources-f90-preproc)
+dftbp_preprocess("${FYPP}" "${fypp_flags}" "F90" "f90" "${ALL-SOURCES-FPP}" all-sources-f90-preproc)
 
 
 # Library components
@@ -51,10 +60,13 @@ set(includedir ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 set_target_properties(dftbplus PROPERTIES Fortran_MODULE_DIRECTORY ${includedir})
 target_include_directories(dftbplus PUBLIC
-  $<BUILD_INTERFACE:${includedir}> $<INSTALL_INTERFACE:${INSTALL_MOD_DIR}>)
+  $<BUILD_INTERFACE:${includedir}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${INSTALL_MODULEDIR}>)
+
 if(WITH_API)
   target_include_directories(dftbplus INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/api/mm> $<INSTALL_INTERFACE:${INSTALL_INC_DIR}>)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/api/mm>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/${INSTALL_INCLUDEDIR}>)
 endif()
 
 
@@ -62,6 +74,8 @@ endif()
 
 target_include_directories(dftbplus PUBLIC
   $<BUILD_INTERFACE:$<TARGET_PROPERTY:xmlf90_objlib,INTERFACE_INCLUDE_DIRECTORIES>>)
+
+target_include_directories(dftbplus PRIVATE ${projectdir}/external/dftd4refs)
 
 if(WITH_SOCKETS)
   target_include_directories(dftbplus PUBLIC
@@ -72,9 +86,14 @@ if(WITH_DFTD3)
   target_link_libraries(dftbplus PUBLIC dftd3)
 endif()
 
-if(WITH_TRANSPORT)
-  target_link_libraries(dftbplus PUBLIC negf sparskit mudpack)
+if(WITH_MBD)
+  target_link_libraries(dftbplus PUBLIC Mbd::Mbd)
 endif()
+
+if(WITH_TRANSPORT)
+  target_link_libraries(dftbplus PUBLIC Negf::Negf)
+endif()
+target_link_libraries(dftbplus PUBLIC mudpack)
 
 if(WITH_ELSI)
   # Some compilers need all mod files (also indirect ones), so include dir must be exported
@@ -85,15 +104,29 @@ if(WITH_ELSI)
   endif()
 endif()
 
-if(WITH_MPI)
-  target_link_libraries(dftbplus PUBLIC mpifx scalapackfx)
-  target_link_libraries(dftbplus PRIVATE ${SCALAPACK_LIBRARIES})
+if(WITH_PLUMED)
+  target_link_libraries(dftbplus PRIVATE Plumed::Plumed)
 endif()
 
-target_link_libraries(dftbplus PRIVATE ${LAPACK_LIBRARIES})
+if(WITH_MPI)
+  target_link_libraries(dftbplus PUBLIC MPI::MPI_Fortran)
+  target_link_libraries(dftbplus PUBLIC MpiFx::MpiFx ScalapackFx::ScalapackFx)
+endif()
+
+if(WITH_OMP)
+  # OpenMP dependency must be public in order to forward eventual linker flags
+  # (workaround for NAG compiler) to targets linking to it.
+  target_link_libraries(dftbplus PUBLIC OpenMP::OpenMP_Fortran)
+endif()
 
 if(WITH_ARPACK)
-  target_link_libraries(dftbplus PRIVATE ${ARPACK_LIBRARIES})
+  target_link_libraries(dftbplus PRIVATE Arpack::Arpack)
+endif()
+
+target_link_libraries(dftbplus PRIVATE LAPACK::LAPACK)
+
+if (WITH_GPU)
+  target_link_libraries(dftbplus PUBLIC Magma::Magma)
 endif()
 
 target_link_libraries(dftbplus PRIVATE ${OTHER_LIBRARIES})
@@ -104,40 +137,55 @@ target_include_directories(dftbplus PUBLIC ${OTHER_INCLUDE_DIRS})
 # Installation
 
 if(WITH_API OR BUILD_SHARED_LIBS)
-  install(TARGETS dftbplus DESTINATION ${INSTALL_LIB_DIR} EXPORT dftbplus-targets)
+  install(TARGETS dftbplus DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    EXPORT dftbplus-targets)
 endif()
 
 if(INSTALL_INCLUDE_FILES)
-  install(DIRECTORY ${includedir}/ DESTINATION ${INSTALL_MOD_DIR})
-  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/api/mm/dftbplus.h DESTINATION ${INSTALL_INC_DIR})
+  install(DIRECTORY ${includedir}/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${INSTALL_MODULEDIR}")
+  CONFIGURE_FILE(
+    "${CMAKE_CURRENT_SOURCE_DIR}/api/mm/dftbplus.h"
+    "${CMAKE_CURRENT_BINARY_DIR}/dftbplus.h"
+    @ONLY
+  )
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/dftbplus.h"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+  )
 
   get_target_property(moddirs xmlf90_objlib INTERFACE_INCLUDE_DIRECTORIES)
   foreach(moddir IN LISTS moddirs)
-    install(DIRECTORY "${moddir}/" DESTINATION "${INSTALL_MOD_DIR}")
+    install(DIRECTORY "${moddir}/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${INSTALL_MODULEDIR}")
   endforeach()
 
   if (WITH_SOCKETS)
     get_target_property(moddirs fsockets_objlib INTERFACE_INCLUDE_DIRECTORIES)
     foreach(moddir IN LISTS moddirs)
-      install(DIRECTORY "${moddir}/" DESTINATION "${INSTALL_MOD_DIR}")
+      install(DIRECTORY "${moddir}/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${INSTALL_MODULEDIR}")
     endforeach()
   endif()
 endif()
 
+list(APPEND PKG_CONFIG_LIBS dftbplus)
+set(PKG_CONFIG_LIBS "${PKG_CONFIG_LIBS}" PARENT_SCOPE)
 
 #
 # Compile and install program
 #
+if(NOT BUILD_EXPORTED_TARGETS_ONLY)
 
-set(ALL-SOURCES-F90)
-set(ALL-SOURCES-FPP)
+  set(ALL-SOURCES-F90)
+  set(ALL-SOURCES-FPP)
 
-add_subdirectory(prg_dftb)
+  add_subdirectory(prg_dftb)
 
-dftbp_preprocess("${FYPP}" "${FYPP_FLAGS}" "F90" "f90" "${ALL-SOURCES-FPP}" all-sources-f90-preproc)
+  dftbp_preprocess("${FYPP}" "${fypp_flags}" "F90" "f90" "${ALL-SOURCES-FPP}"
+    all-sources-f90-preproc)
 
-add_executable(dftb+ ${ALL-SOURCES-F90} ${all-sources-f90-preproc})
+  add_executable(dftb+ ${ALL-SOURCES-F90} ${all-sources-f90-preproc})
 
-target_link_libraries(dftb+ dftbplus)
+  target_link_libraries(dftb+ dftbplus)
 
-install(TARGETS dftb+ DESTINATION ${INSTALL_BIN_DIR})
+  install(TARGETS dftb+ DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+endif()

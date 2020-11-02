@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -17,12 +17,13 @@ module dftbp_simplemixer
 
 
   !> Contains data for a simple mixer
-  type OSimpleMixer
+  type TSimpleMixer
     private
 
     !> Mixing parameter
     real(dp) :: mixParam
-  end type OSimpleMixer
+
+  end type TSimpleMixer
 
 
   !> Creates a SimpleMixer instance
@@ -42,31 +43,31 @@ module dftbp_simplemixer
     module procedure SimpleMixer_mix
   end interface
 
-  public :: OSimpleMixer
+  public :: TSimpleMixer
   public :: init, reset, mix
 
 contains
 
 
   !> Creates a simple mixer
-  subroutine SimpleMixer_init(self, mixParam)
+  subroutine SimpleMixer_init(this, mixParam)
 
     !> Simple mixer instance on exit
-    type(OSimpleMixer), intent(out) :: self
+    type(TSimpleMixer), intent(out) :: this
 
     !> Mixing parameter
     real(dp), intent(in) :: mixParam
 
-    self%mixParam = mixParam
+    this%mixParam = mixParam
 
   end subroutine SimpleMixer_init
 
 
   !> Resets the mixer
-  subroutine SimpleMixer_reset(self, nElem)
+  subroutine SimpleMixer_reset(this, nElem)
 
     !> Simple mixer instance
-    type(OSimpleMixer), intent(inout) :: self
+    type(TSimpleMixer), intent(inout) :: this
 
     !> Length of the vectors to mix
     integer, intent(in) :: nElem
@@ -79,10 +80,10 @@ contains
 
 
   !> Does the actual mixing
-  subroutine SimpleMixer_mix(self, qInpResult, qDiff)
+  subroutine SimpleMixer_mix(this, qInpResult, qDiff)
 
     !> SimpleMixer instance
-    type(OSimpleMixer), intent(inout) :: self
+    type(TSimpleMixer), intent(inout) :: this
 
     !> Input charge on entry, mixed charge on exit
     real(dp), intent(inout) :: qInpResult(:)
@@ -92,7 +93,7 @@ contains
 
     @:ASSERT(size(qInpResult) == size(qDiff))
 
-    qInpResult(:) = qInpResult(:) + self%mixParam * qDiff(:)
+    qInpResult(:) = qInpResult(:) + this%mixParam * qDiff(:)
 
   end subroutine SimpleMixer_mix
 

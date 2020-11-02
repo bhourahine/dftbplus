@@ -19,7 +19,6 @@ module dftbp_perturbkderivs
   use dftbp_orbitalequiv
   use dftbp_populations
   use dftbp_spin
-  use dftbp_thirdorder_module, only : ThirdOrder
   use dftbp_dftbplusu
   use dftbp_onsitecorrection
   use dftbp_mainio
@@ -400,7 +399,7 @@ contains
 
   #:endif
 
-    if (allocated(dEi) .and. env%tGlobalMaster) then
+    if (allocated(dEi) .and. env%tGlobalLead) then
       if (tWriteAutoTest) then
         open(newunit=fdResults, file=trim(autoTestTagFile), position="append")
         call taggedWriter%write(fdResults, tagLabels%dEigenDk, dEi)

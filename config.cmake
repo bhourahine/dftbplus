@@ -1,10 +1,11 @@
 #
 # Global architecture independent build settings
 #
-set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type (Release|Debug)")
 
-set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/_install" CACHE STRING
-  "Directory to install the compiled code into")
+#set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type (Release|RelWithDebInfo|Debug|MinSizeRel)")
+# CMAKE_BUILD_TYPE is commented out in order to allow for multi-configuration builds. It will
+# automatically default to RelWithDebInfo if used in a single configuration build. Uncomment or
+# override it only if you want a non-default single configuration build.
 
 option(WITH_OMP "Whether OpenMP thread parallisation should be enabled" TRUE)
 
@@ -23,17 +24,23 @@ option(WITH_TRANSPORT "Whether transport via libNEGF should be included." FALSE)
 option(WITH_SOCKETS "Whether socket communication should be allowed for" FALSE)
 
 option(WITH_ARPACK "Whether the ARPACK library should be included (needed for TD-DFTB)" FALSE)
-# Works only with non-MPI (serial) build
+# Works only with non-MPI (serial) build, needed for Casida linear response
 
 option(WITH_DFTD3 "Whether the DFTD3 library should be included" FALSE)
 # NOTE: Due to the license of the DFTD3 library, the combined code must be distributed under the
 # GPLv3 license (as opposed to the LGPLv3 license of the DFTB+ package)
 
-option(WITH_API "Whether public API should be included and the DFTB+ library installed" FALSE)
+option(WITH_MBD "Whether DFTB+ should be built with many-body-dispersion support" FALSE)
+
+option(WITH_PLUMED "Whether metadynamics via the PLUMED2 library should be allowed for" FALSE)
+
+option(WITH_API "Whether public API should be included and the DFTB+ library installed" TRUE)
 # Turn this on, if you want to use the DFTB+ library to integrate DFTB+ into other software
 # packages. (Otherwise only a stripped down version of the library without the public API is built.)
 # This will also install necessary include and module files and further libraries needed to link the
 # DFTB+ library.
+
+option(WITH_PYTHON "Whether the Python components of DFTB+ should be tested and installed" TRUE)
 
 option(BUILD_SHARED_LIBS "Whether the libraries built should be shared" FALSE)
 # Turn this on, if the DFTB+ library (and other compiled libraries) should be shared libraries and
@@ -44,13 +51,12 @@ option(BUILD_SHARED_LIBS "Whether the libraries built should be shared" FALSE)
 # calling DFTB+ functions from Python or Julia).
 
 
-
 #
 # Test environment settings
 #
-set(TEST_MPI_PROCS "1" CACHE STRING "Nr. of processes used for testing")
+set(TEST_MPI_PROCS "1" CACHE STRING "Nr. of MPI processes used for testing")
 
-set(TEST_OMP_THREADS "1" CACHE STRING "Nr. of OpeMP-threads used for testing")
+set(TEST_OMP_THREADS "1" CACHE STRING "Nr. of OpenMP-threads used for testing")
 
 # Command line used to launch the test code.
 # The escaped variables (\${VARIABLE}) will be substituted by the corresponding CMake variables.
@@ -60,28 +66,22 @@ if(WITH_MPI)
 else()
   set(TEST_RUNNER_TEMPLATE "env OMP_NUM_THREADS=\${TEST_OMP_THREADS}" CACHE STRING
     "How to run the tests")
+  set(MODES_RUNNER_TEMPLATE "env OMP_NUM_THREADS=\${TEST_OMP_THREADS}" CACHE STRING
+    "How to run the modes code for tests")
 endif()
 
 
 #
 # Installation options
 #
-set(INSTALL_BIN_DIR "${CMAKE_INSTALL_PREFIX}/bin" CACHE PATH
-  "Installation directory for executables")
+set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/_install" CACHE STRING
+  "Directory to install the compiled code into")
 
-set(INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/lib" CACHE PATH "Installation directory for libraries")
+set(INSTALL_INCLUDEDIR "dftbplus" CACHE PATH
+  "Name of the project specific sub-folder within the install folder for include files")
 
-set(INSTALL_INC_DIR "${CMAKE_INSTALL_PREFIX}/include/dftb+" CACHE PATH
-  "Installation directory for header and include files")
-
-set(INSTALL_MOD_DIR "${INSTALL_INC_DIR}/modfiles" CACHE PATH
-  "Installation directory for Fortran module files")
-
-option(EXPORT_EXTLIBS_WITH_PATH
-  "Whether external libraries in the CMake export file should contain their full path" FALSE)
-# For CMake experts only: It allows to link exact the same external libraries when using
-# the library in an other CMake project. It does not play well with the CMake export file of
-# the ELSI library.
+set(INSTALL_MODULEDIR "${INSTALL_INCLUDEDIR}/modfiles" CACHE PATH
+  "Installation directory for Fortran module files (within the install folder for include files)")
 
 set(PKGCONFIG_LANGUAGE "Fortran" CACHE STRING
   "Compiler and Linker language to assume when creating the pkg-config export file (C or Fortran)")
@@ -91,26 +91,24 @@ set(PKGCONFIG_LANGUAGE "Fortran" CACHE STRING
 # that compiler for the linking.
 
 
-####################################################################################################
 #
-# NOTE FOR DEVELOPERS: Do not customise any settings here or in any of the sys/*.cmake files as they
-# contain the official defaults DFTB+ is shipped with. If you need to customise any of the settings
-# for your system, create a custom cmake file (e.g. custom.cmake) containing (only) the settings you
-# would like to override. For an example, see
+# Advanced options (e.g. for developers and packagers)
 #
-#     https://gist.github.com/aradi/39ab88acfbacc3b2f44d1e41e4da15e7
+
+#set(TOOLCHAIN "gnu" CACHE STRING "Prefix of the toolchain file to be read from the sys/ folder")
+# Uncomment and set it if you want to override the automatic, compiler based toolchain file
+# selection.
+
+
+set(HYBRID_CONFIG_METHODS "Submodule;Find;Fetch" CACHE STRING
+  "Configuration methods to try in order to satisfy hybrid dependencies")
 #
-# When invoking CMake, pre-populate its cache with your custom settings using the -C option. For
-# example, assuming your build folder is a subdirectory within the DFTB+ source directory and you
-# wish to override the settings in config.cmake and in sys/gnu.cmake, issue:
+# This list can be used to control how hybrid dependencies (external dependencies which can
+# optionally be built during the build process) are configured. The listed methods are applied in
+# the following order:
 #
-#     cmake -C ../custom.cmake -DCMAKE_TOOLCHAIN_FILE=../sys/gnu.cmake ..
-#
-# The settings in custom.cmake will pre-populate the cache and suppress the corresponding cache
-# variables in config.cmake and sys/*.cmake.
-#
-# Alternatively, you may also override settings on the command line, e.g.:
-#
-#     cmake -DWITH_MPI=1 -DWITH_TRANSPORT=1 -DCMAKE_TOOLCHAIN_FILE=../sys/gnu.cmake ..
-#
-####################################################################################################
+# Submodule: Retrieve the dependency via git-submodule into the DFTB+ source tree (works only if the
+#     DFTB+ source tree is Git repository)
+# Find: Find the dependency as an already installed package in the system
+# Fetch: Fetch the source into the build folder (works also in cases where the source tree is not a
+#     Git repository)

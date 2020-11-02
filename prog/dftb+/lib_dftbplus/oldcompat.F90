@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2006 - 2019  DFTB+ developers group                                               !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -59,6 +59,12 @@ contains
       case (6)
         call convert_6_7(root)
         version = 7
+      case (7)
+        call convert_7_8(root)
+        version = 8
+      case (8)
+        call convert_8_9(root)
+        version = 9
       end select
     end do
 
@@ -66,13 +72,12 @@ contains
     ! with the old parser as the options have changed to the new parser by now
     call getChildValue(root, "ParserOptions", ch1, "", child=par, &
         &allowEmptyValue=.true.)
-    call getChildValue(par, "ParserVersion", version, child=ch2)
-    call setChildValue(ch2, "", curVersion, replace=.true.)
+    call setChildValue(par, "ParserVersion", version, replace=.true.)
 
   end subroutine convertOldHSD
 
 
-  !> Converts input from version 1 to 2. (Version 2 introcuded in August 2006)
+  !> Converts input from version 1 to 2. (Version 2 introduced in August 2006)
   subroutine convert_1_2(root)
 
     !> Root tag of the HSD-tree
@@ -343,8 +348,8 @@ contains
     !> Root tag of the HSD-tree
     type(fnode), pointer :: root
 
-    type(fnode), pointer :: ch1, ch2, ch3, ch4, par, par2, dummy
-    logical :: tVal, tVal2
+    type(fnode), pointer :: ch1, ch2, ch3, ch4, par, dummy
+    logical :: tVal
     real(dp) :: rTmp
 
     call getDescendant(root, "Analysis/Localise/PipekMezey/Tollerance", ch1)
@@ -391,14 +396,13 @@ contains
   end subroutine convert_5_6
 
 
-  !> Converts input from version 6 to 7. (Version 7 introcuded in April 2019)
+  !> Converts input from version 6 to 7. (Version 7 introduced in April 2019)
   subroutine convert_6_7(root)
 
     !> Root tag of the HSD-tree
     type(fnode), pointer :: root
 
-    type(fnode), pointer :: ch1, par
-    logical :: tVal
+    type(fnode), pointer :: ch1
 
     call getDescendant(root, "Hamiltonian/DFTB/OrbitalResolvedSCC", ch1)
     if (associated(ch1)) then
@@ -413,8 +417,100 @@ contains
       call setNodeName(ch1, "Solver")
     end if
 
-
   end subroutine convert_6_7
+
+
+  !> Converts input from version 7 to 8. (Version 8 introduced in October 2019)
+  subroutine convert_7_8(root)
+
+    !> Root tag of the HSD-tree
+    type(fnode), pointer :: root
+
+    type(fnode), pointer :: ch1, ch2, par
+    logical :: tVal
+    type(fnode), pointer :: pTaskType
+    type(string) :: buffer
+
+    call getDescendant(root, "Analysis/EigenvectorsAsTxt", ch1)
+    if (associated(ch1)) then
+      call detailedWarning(ch1, "Keyword converted to 'EigenvectorsAsText'.")
+      call setNodeName(ch1, "EigenvectorsAsText")
+    end if
+
+    call getDescendant(root, "Transport", ch1, parent=par)
+    if (associated(ch1)) then
+      call getDescendant(ch1, "Task", ch2)
+      if (.not. associated(ch2)) then
+        call setChildValue(ch1, "readBinaryContact", .false., child=ch2, replace=.true.)
+      else
+        call getChildValue(ch1, "Task", pTaskType, child=ch2)
+        call getNodeName(pTaskType, buffer)
+        select case (char(buffer))
+        case ("contacthamiltonian")
+          call setChildValue(ch1, "writeBinaryContact", .false., child=ch2, replace=.true.)
+        case ("uploadcontacts")
+          call setChildValue(ch1, "readBinaryContact", .false., child=ch2, replace=.true.)
+        end select
+      end if
+    end if
+
+    call getDescendant(root, "ParserOptions/WriteXMLInput", ch1)
+    if (associated(ch1)) then
+      call getChildValue(ch1, "", tVal)
+      call setUnprocessed(ch1)
+      if (tVal) then
+        call detailedWarning(ch1, "Sorry, XML export of the dftb_in.hsd is not supported any more&
+            & so is removed")
+      else
+        call detailedWarning(ch1, "XML export option is removed.")
+      end if
+      call destroyNode(ch1)
+    end if
+
+  end subroutine convert_7_8
+
+
+  !> Converts input from version 8 to 9. (Version 9 introduced in August 2020)
+  subroutine convert_8_9(root)
+
+    !> Root tag of the HSD-tree
+    type(fnode), pointer :: root
+
+    type(fnode), pointer :: ch1, ch2, par
+    logical :: tVal1, tVal2
+    type(fnode), pointer :: pTaskType
+    type(string) :: buffer
+
+    ! If this is an electron dynamics restart, then remove keywords for the (un-needed) ground state
+    ! calculation (unless the eigenvectors are required)
+    call getDescendant(root, "ElectronDynamics/Restart", ch1)
+    if (associated(ch1)) then
+      call getChildValue(ch1, "", tVal1)
+      call setUnprocessed(ch1)
+      tVal2 = .false.
+      ! Population projection requires eigenvectors, which are not currently stored in the restart
+      ! file.
+      call getDescendant(root, "ElectronDynamics/Populations", ch2)
+      if (associated(ch2)) then
+        call getChildValue(ch2, "", tVal2)
+        call setUnprocessed(ch2)
+      end if
+      if (tVal1 .and. .not.tVal2) then
+        call getDescendant(root, "Hamiltonian/DFTB/Filling", ch1)
+        if (associated(ch1)) then
+          call detailedWarning(ch1, "Restarted electronDynamics does not require Filling{}&
+              & settings unless projected onto ground state")
+          call destroyNode(ch1)
+        end if
+        call getDescendant(root, "Analysis", ch1)
+        if (associated(ch1)) then
+          call detailedWarning(ch1, "Restarted electronDynamics does not use the Analysis{} block")
+          call destroyNode(ch1)
+        end if
+      end if
+    end if
+
+  end subroutine convert_8_9
 
 
   !> Update values in the DftD3 block to match behaviour of v6 parser
@@ -425,7 +521,6 @@ contains
 
     type(fnode), pointer :: pD3, pDampMethod, pChild
     type(string) :: buffer
-    real(dp) :: dummy
 
     call getDescendant(root, "Hamiltonian/DFTB/Dispersion/DftD3", pD3)
     if (.not. associated(pD3)) then

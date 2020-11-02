@@ -37,7 +37,7 @@ module dftbp_rotateDegenerateOrbs
     ${TYPE}$(dp), allocatable :: ${LABEL}$U(:,:)
 
     !> Individual sub-blocks of unitary matrices to transform orbitals, if much smaller than U
-    type(wrapped${LABEL}$2), allocatable :: ${LABEL}$UBlock(:)
+    type(TWrapped${LABEL}$2), allocatable :: ${LABEL}$UBlock(:)
 
 #:endfor
 
@@ -491,7 +491,7 @@ contains
 
     if (self%tFullUMatrix) then
 
-      call makeSimiliarityTrans(matrixToProcess, self%${LABEL}$U, 'R')
+      call makeSimilarityTrans(matrixToProcess, self%${LABEL}$U, 'R')
 
     else if (allocated(self%${LABEL}$UBlock)) then
 
