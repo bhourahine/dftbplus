@@ -608,7 +608,7 @@ contains
           call mpifx_allreduceip(env%mpi%globalComm, dRho, MPI_SUM)
         #:endif
 
-          dRhoExtra = 0.0_dp
+          dRhoExtra(:,:) = 0.0_dp
           if (tMetallic) then
             ! correct for Fermi level shift for q=0 fields
 
@@ -1173,7 +1173,7 @@ contains
       &)
 
     !> Additional contribution to the density matrix to cancel effect of Fermi energy change
-    real(dp), intent(out) :: dRhoExtra(:)
+    real(dp), intent(inout) :: dRhoExtra(:)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -1300,7 +1300,7 @@ contains
     real(dp), intent(in), allocatable :: idHam(:,:)
 
     !> Driving frequency (if non-zero, is required for time dependent DFTB)
-    real(dp), intent(out) :: omega
+    real(dp), intent(in) :: omega
 
     !> list of neighbours for each atom
     type(TNeighbourList), intent(in) :: neighbourList
@@ -1604,7 +1604,7 @@ contains
       &)
 
     !> Additional contribution to the density matrix to cancel effect of Fermi energy change
-    real(dp), intent(out) :: dRhoExtra(:,:)
+    real(dp), intent(inout) :: dRhoExtra(:,:)
 
     !> Imaginary part of additional contribution to the density matrix to cancel effect of Fermi
     !> energy change
