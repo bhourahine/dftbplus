@@ -903,7 +903,7 @@ contains
     real(dp), intent(in) :: dHam(:,:)
 
     !> Driving frequency (if non-zero, is required for time dependent DFTB)
-    real(dp), intent(out) :: omega
+    real(dp), intent(in) :: omega
 
     !> list of neighbours for each atom
     type(TNeighbourList), intent(in) :: neighbourList
