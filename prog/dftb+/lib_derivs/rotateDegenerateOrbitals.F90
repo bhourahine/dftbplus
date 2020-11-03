@@ -274,30 +274,30 @@ contains
       localMatrix(:,:) = 0.0_dp
       do iGet = iStart, iEnd
 
-        if (env%mpi%tGroupMaster) then
+        if (env%mpi%tGroupLead) then
 
-          call communicator%getline_master(env%blacs%orbitalGrid, iGet, matrixToProcess,&
+          call communicator%getline_lead(env%blacs%orbitalGrid, iGet, matrixToProcess,&
               & localMatrixCols(:,iGet-iStart+1))
 
           localMatrix(:iEnd-iStart+1,iGet-iStart+1) = localMatrixCols(iStart:iEnd,iGet-iStart+1)
 
           ! now get eigenvectors into this structure
-          call communicator%getline_master(env%blacs%orbitalGrid, iGet, eigvecs,&
+          call communicator%getline_lead(env%blacs%orbitalGrid, iGet, eigvecs,&
               & localMatrixCols(:,iGet-iStart+1))
 
         else
 
           ! send matrix rows
-          call communicator%getline_slave(env%blacs%orbitalGrid, iGet, matrixToProcess)
+          call communicator%getline_follow(env%blacs%orbitalGrid, iGet, matrixToProcess)
 
           ! send eigenvectors
-          call communicator%getline_slave(env%blacs%orbitalGrid, iGet, eigvecs)
+          call communicator%getline_follow(env%blacs%orbitalGrid, iGet, eigvecs)
 
         end if
 
       end do
 
-      if (env%mpi%tGroupMaster) then
+      if (env%mpi%tGroupLead) then
         call heev(localMatrix(:nInBlock, :nInBlock), eigenvals, 'L', 'V')
 
         if (self%tReverseOrder) then
@@ -312,16 +312,16 @@ contains
 
       do iGet = iStart, iEnd
 
-        if (env%mpi%tGroupMaster) then
+        if (env%mpi%tGroupLead) then
 
           ! now send transformed eigenvectors back
-          call communicator%setline_master(env%blacs%orbitalGrid, iGet,&
+          call communicator%setline_lead(env%blacs%orbitalGrid, iGet,&
               & localMatrixCols(:,iGet-iStart+1), eigvecs)
 
         else
 
           ! set relevant eigenvectors to the transformed ones
-          call communicator%setline_slave(env%blacs%orbitalGrid, iGet, eigvecs)
+          call communicator%setline_follow(env%blacs%orbitalGrid, iGet, eigvecs)
 
         end if
 
