@@ -538,8 +538,7 @@ contains
     call getSummedCharges(species, orb, qOrbital, iHubbU=this%iHubbU, dQ=this%deltaQ, &
         & dQAtom=this%deltaQAtom, dQShell=this%deltaQPerLShell, dQUniqU=this%deltaQUniqU, q0=q0)
 
-    call this%coulombCont%updateCharges(env, qOrbital, q0, orb, species, &
-        & this%deltaQ, this%deltaQAtom, this%deltaQPerLShell, this%deltaQUniqU)
+    call this%coulombCont%updateCharges(this%deltaQAtom)
 
   end subroutine updateCharges
 

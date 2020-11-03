@@ -42,6 +42,7 @@ module dftbp_perturbderivs
 #:else
   use dftbp_blasroutines
 #:endif
+  use dftbp_assert
 
   implicit none
 
@@ -120,7 +121,7 @@ contains
     real(dp), intent(in) :: coord(:,:)
 
     !> SCC module internal variables
-    type(TScc), intent(inout) :: sccCalc
+    type(TScc), intent(inout), allocatable :: sccCalc
 
     !> maximal number of SCC iterations
     integer, intent(in) :: maxSccIter
@@ -136,7 +137,7 @@ contains
     integer, intent(in) :: nIneqMixElements
 
     !> Equivalence relations between orbitals
-    integer, intent(in) :: iEqOrbitals(:,:,:)
+    integer, intent(in), allocatable :: iEqOrbitals(:,:,:)
 
     !> onsite matrix elements for shells (elements between s orbitals on the same shell are ignored)
     real(dp), intent(in), allocatable :: onsMEs(:,:,:,:)
@@ -185,7 +186,7 @@ contains
     integer, intent(inout), allocatable :: nNeighbourLC(:)
 
     !> Charge mixing object
-    type(TMixer), intent(inout) :: pChrgMixer
+    type(TMixer), intent(inout), allocatable :: pChrgMixer
 
     !> Tagged writer object
     type(TTaggedWriter), intent(inout) :: taggedWriter
@@ -345,6 +346,11 @@ contains
     end if
 
     tSccCalc = (maxSccIter > 1)
+  #:block DEBUG_CODE
+    if (tSccCalc) then
+      @:ASSERT(allocated(sccCalc))
+    end if
+  #:endblock DEBUG_CODE
 
     if (tDFTBU .or. allocated(onsMEs)) then
       allocate(dqBlockIn(orb%mOrb,orb%mOrb,nAtom,nSpin))

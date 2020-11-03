@@ -515,38 +515,13 @@ contains
 
 
   !> Updates with changed charges for the instance.
-  subroutine updateCharges(this, env, qOrbital, q0, orb, species, deltaQ, &
-        & deltaQAtom, deltaQPerLShell, deltaQUniqU)
+  subroutine updateCharges(this, deltaQAtom)
 
     !> Data structure
     class(TCoulombCont), intent(inout) :: this
 
-    !> Environment settings
-    type(TEnvironment), intent(in) :: env
-
-    !> Orbital resolved charges
-    real(dp), intent(in) :: qOrbital(:,:,:)
-
-    !> Reference charge distribution (neutral atoms)
-    real(dp), intent(in) :: q0(:,:,:)
-
-    !> Contains information about the atomic orbitals in the system
-    type(TOrbitals), intent(in) :: orb
-
-    !> Species, shape: [nAtom]
-    integer, intent(in) :: species(:)
-
-    !> Negative gross charge
-    real(dp), intent(in) :: deltaQ(:,:)
-
-    !> Negative gross charge per shell
-    real(dp), intent(in) :: deltaQPerLShell(:,:)
-
     !> Negative gross charge per atom
     real(dp), intent(in) :: deltaQAtom(:)
-
-    !> Negative gross charge per U
-    real(dp), intent(in) :: deltaQUniqU(:,:)
 
     @:ASSERT(this%tCoordsUpdated)
 
