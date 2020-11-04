@@ -616,6 +616,10 @@ contains
               iK = parallelKS%localKS(1, iKS)
               iS = parallelKS%localKS(2, iKS)
 
+              if (abs(nF(iS)) < epsilon(1.0_dp)) then
+                cycle
+              end if
+
               dqOut(:,:,iS) = 0.0_dp
               call mulliken(dqOut(:,:,iS), over, drho(:,iS), orb, &
                   & neighbourList%iNeighbour, nNeighbourSK, img2CentCell, iSparseStart)
