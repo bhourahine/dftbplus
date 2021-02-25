@@ -26,6 +26,7 @@ module dftbp_initprogram
   use dftbp_elsisolver, only : TElsiSolver_init, TElsiSolver_final
   use dftbp_elsiiface
   use dftbp_arpack, only : withArpack
+  use dftbp_elsirciiface, only : withElsiRCI
   use dftbp_periodic, only : TNeighbourList, TNeighbourlist_init, buildSquaredAtomIndex
   use dftbp_periodic, only : getCellTranslations
   use dftbp_accuracy
@@ -2098,7 +2099,7 @@ contains
     if (this%isLinResp) then
 
       ! input checking for linear response
-      if (.not. withArpack) then
+      if (.not. withArpack .or. withElsiRCI) then
         call error("This binary has been compiled without support for linear response&
             & calculations.")
       end if

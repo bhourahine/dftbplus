@@ -87,6 +87,13 @@ else()
   list(APPEND FYPP_FLAGS -DELSI_VERSION=0)
 endif()
 
+if(WITH_ELSI_RCI AND NOT TARGET elsi_rci::elsi_rci)
+  # Some compilers need all mod files (also indirect ones), so include dir must be exported
+  find_package(elsi_rci REQUIRED PATHS ${ELSI_RCI_ROOT})
+  list(APPEND PKG_CONFIG_REQUIRES elsi_rci)
+endif()
+
+
 if(WITH_PLUMED)
   find_package(CustomPlumed REQUIRED)
   list(APPEND PKG_CONFIG_REQUIRES plumed)

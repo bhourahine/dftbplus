@@ -108,6 +108,15 @@ if(WITH_ELSI)
   endif()
 endif()
 
+if(WITH_ELSI_RCI)
+  # Some compilers need all mod files (also indirect ones), so include dir must be exported
+  find_package(elsi_rci REQUIRED PATHS ${ELSI_RCI_ROOT})
+  #dftbp_create_library_targets("${ELSI_RCI_EXTERNAL_LIBRARIES}" "${ELSI_RCI_EXTERNAL_LIBRARY_DIRS}")
+  list(APPEND EXPORTED_EXTERNAL_PACKAGES elsi_rci)
+  list(APPEND EXPORTED_EXTERNAL_LIBRARIES ${ELSI_RCI_EXTERNAL_LIBRARIES})
+  list(APPEND EXPORTED_EXTERNAL_LIBRARY_DIRS ${ELSI_RCI_EXTERNAL_LIBRARY_DIRS})
+endif()
+
 if(WITH_PLUMED)
   target_link_libraries(dftbplus PRIVATE Plumed::Plumed)
 endif()

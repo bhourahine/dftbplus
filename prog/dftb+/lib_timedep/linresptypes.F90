@@ -102,6 +102,9 @@ module dftbp_linresptypes
     !> file unit for Arnoldi solver tests, if this is < 1 no tests are performed
     integer :: fdArnoldiDiagnosis = -1
 
+    ! ELSI_RCI related
+    ! nothing specific so far
+
     !> Is the data structure initialised?
     logical :: tInit = .false.
 
