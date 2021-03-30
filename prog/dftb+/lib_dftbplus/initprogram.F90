@@ -4814,6 +4814,10 @@ contains
 
     end if
 
+    if (allocated(this%solvation)) then
+      call error("Range separated calculations not currently implemented for implicit solvents")
+    end if
+
   end subroutine ensureRangeSeparatedReqs
 
 
