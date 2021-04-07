@@ -33,6 +33,7 @@ module dftbp_staticperturb
   use dftbp_rotatedegen, only : TRotateDegen, TRotateDegen_init
   use dftbp_parallelks, only : TParallelKS
   use dftbp_blockpothelper, only : appendBlockReduced
+  use dftbp_dispersions, only : TDispersionIface
 #:if WITH_MPI
   use dftbp_mpifx
 #:endif
@@ -68,7 +69,7 @@ contains
       & nIneqMixElements, iEqOrbitals, tempElec, Ef, tFixEf, spinW, thirdOrd, dftbU, iEqBlockDftbu,&
       & onsMEs, iEqBlockOnSite, rangeSep, nNeighbourLC, pChrgMixer, taggedWriter, tWriteAutoTest,&
       & autoTestTagFile, tWriteTaggedOut, taggedResultsFile, tWriteDetailedOut, detailedOut,&
-      & kPoint, kWeight, iCellVec, cellVec, tPeriodic)
+      & kPoint, kWeight, iCellVec, cellVec, tPeriodic, q0, qOutput, dispersion)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -215,6 +216,15 @@ contains
 
     !> Is this a periodic geometry
     logical, intent(in) :: tPeriodic
+
+    !> reference charges
+    real(dp), intent(in) :: q0(:,:,:)
+
+    !> Output electrons
+    real(dp), intent(inout) :: qOutput(:,:,:)
+
+    !> Dispersion interactions object
+    class(TDispersionIface), allocatable, intent(inout) :: dispersion
 
     integer :: iS, iK, iKS, iAt, iNeigh, iCart, iSCC, iLev, iSh, iSp, jAt, jAtf
 
@@ -480,6 +490,14 @@ contains
               call getChargePerShell(dqIn, orb, species, dqPerShell)
               call getSpinShift(shellPot, dqPerShell, species, orb, spinW)
               dPotential%intShell(:,:,:) = dPotential%intShell + shellPot
+            end if
+
+            if (allocated(dispersion)) then
+              !call this%dispersion%updateOnsiteCharges(this%qNetAtom, this%orb, this%referenceN0,&
+              !    & this%species0, tConverged)
+              call dispersion%updateCharges(env, species, neighbourList, qOutput, q0,&
+                  & img2CentCell, orb, dQq=dqIn(:,:,1))
+              !call dispersion%addPotential(atomPot(:,1))
             end if
 
             if (allocated(thirdOrd)) then

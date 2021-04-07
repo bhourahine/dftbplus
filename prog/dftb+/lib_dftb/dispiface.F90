@@ -215,7 +215,7 @@ contains
 
 
   !> Updates with changed charges for the instance.
-  subroutine updateCharges(this, env, species, neigh, qq, q0, img2CentCell, orb)
+  subroutine updateCharges(this, env, species, neigh, qq, q0, img2CentCell, orb, dQq)
 
     !> Data structure
     class(TDispersionIface), intent(inout) :: this
@@ -240,6 +240,9 @@ contains
 
     !> Orbital information
     type(TOrbitals), intent(in) :: orb
+
+    !> Derivative of the orbital charges with respect to a perturbation
+    real(dp), intent(in), optional :: dQq(:,:)
 
   end subroutine updateCharges
 

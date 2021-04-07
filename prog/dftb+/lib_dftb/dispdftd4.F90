@@ -59,6 +59,9 @@ module dftbp_dispdftd4
     !> Derivative of zeta vector w.r.t. atomic charges
     real(dp), allocatable :: zetadq(:, :)
 
+    !> Derivative of potential shift
+    real(dp), allocatable :: dShift(:)
+
   end type TScD4
 
 
@@ -220,6 +223,8 @@ contains
     allocate(this%zetaVec(nRef, nAtom))
     allocate(this%zetadq(nRef, nAtom))
 
+    allocate(this%dShift(nAtom))
+
   end subroutine TScD4_init
 
 
@@ -315,7 +320,7 @@ contains
 
 
   !> Updates with changed charges for the instance.
-  subroutine updateCharges(this, env, species, neigh, qq, q0, img2CentCell, orb)
+  subroutine updateCharges(this, env, species, neigh, qq, q0, img2CentCell, orb, dQq)
 
     !> Data structure
     class(TDispDftD4), intent(inout) :: this
@@ -341,9 +346,13 @@ contains
     !> Orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> Derivative of the orbital charges with respect to a perturbation
+    real(dp), intent(in), optional :: dQq(:,:)
+
     @:ASSERT(this%tCoordsUpdated)
 
     if (allocated(this%sc)) then
+
       ! Obtain the atomic charges from the input populations
       call getSummedCharges(species, orb, qq, q0, dQAtom=this%sc%charges)
 
@@ -364,6 +373,11 @@ contains
 
       ! Mark the charges as updated
       this%tChargesUpdated = .true.
+
+      if (present(dQq)) then
+
+      end if
+
     end if
 
   end subroutine updateCharges
@@ -1289,7 +1303,7 @@ contains
       do iRef1 = 1, ref%nRef(iSp1)
         qRef1 = ref%charge(iRef1, iSp1) + zEff1
         zetaVec(iRef1, iAt1) = zetaScale(calc%ga, eta1, qRef1, q(iAt1) + zEff1)
-        zetadq(iRef1, iAt1) = dzetaScale(calc%ga, eta1, qRef1, q(iAt1)+zEff1)
+        zetadq(iRef1, iAt1) = dzetaScale(calc%ga, eta1, qRef1, q(iAt1) + zEff1)
       end do
     end do
 

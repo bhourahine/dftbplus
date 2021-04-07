@@ -374,7 +374,8 @@ contains
             & this%onSiteElements, this%iEqBlockOnSite, this%rangeSep, this%nNeighbourLC,&
             & this%pChrgMixer, this%taggedWriter, this%tWriteAutotest, autotestTag,&
             & this%tWriteResultsTag, resultsTag, this%tWriteDetailedOut, userOut,&
-            & this%kPoint, this%kWeight, this%iCellVec, this%cellVec, this%tPeriodic)
+            & this%kPoint, this%kWeight, this%iCellVec, this%cellVec, this%tPeriodic,&
+            & this%q0, this%qOutput, this%dispersion)
       end if
     end if
 
