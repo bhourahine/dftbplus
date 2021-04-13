@@ -67,6 +67,7 @@ module dftbp_parser
   use dftbp_negfvars
 #:endif
   use dftbp_solvparser, only : readSolvation, readCM5
+  use dftbp_elecconstraints, only : elecConstrParser
   implicit none
   private
 
@@ -1622,6 +1623,14 @@ contains
     if (associated(value1)) then
       allocate(ctrl%solvInp)
       call readSolvation(child, geo, ctrl%solvInp)
+    end if
+
+    ! Electronic constraints
+    call getChildValue(node, "StateConstrains", value1, "", child=child, allowEmptyValue=.true.,&
+        & dummyValue=.true., list=.true.)
+    if (associated(value1)) then
+      allocate(ctrl%elecConstrainInp)
+      call elecConstrParser(child, geo, ctrl%elecConstrainInp, ctrl%tSpin, ctrl%t2Component)
     end if
 
     if (ctrl%tLatOpt .and. .not. geo%tPeriodic) then

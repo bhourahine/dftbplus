@@ -228,6 +228,7 @@ contains
 
     ! Free energy contribution if attached to an electron reservoir
     if (tFixEf) then
+      write(*,*)'HERE !'
       if (nSpin == 2) then
         nEl(:) = sum(sum(qOrb(:,iAtInCentralRegion,:),dim=1),dim=1)
         nEl(1) = 0.5_dp * ( nEl(1) + nEl(2) )

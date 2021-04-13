@@ -110,6 +110,7 @@ module dftbp_initprogram
   use dftbp_cm5, only : TChargeModel5, TChargeModel5_init
   use dftbp_solvation, only : TSolvation
   use dftbp_solvinput, only : createSolvationModel, writeSolvationInfo
+  use dftbp_elecconstraints, only : TElecConstraintInp, TElecConstraint, TElecConstraint_init
 
 #:if WITH_TRANSPORT
   use dftbp_negfvars
@@ -795,6 +796,8 @@ module dftbp_initprogram
 
     !> Write cavity information as cosmo file
     logical :: tWriteCosmoFile
+
+    type(TElecConstraint), allocatable :: elecConstrain
 
     !> Can stress be calculated?
     logical :: tStress
@@ -2082,6 +2085,11 @@ contains
 
     if (allocated(this%halogenXCorrection)) then
       this%cutOff%mCutOff = max(this%cutOff%mCutOff, this%halogenXCorrection%getRCutOff())
+    end if
+
+    if (allocated(input%ctrl%elecConstrainInp)) then
+      allocate(this%elecConstrain)
+      call TElecConstraint_init(this%elecConstrain, input%ctrl%elecConstrainInp, this%orb)
     end if
 
     if (input%ctrl%nrChrg == 0.0_dp .and. .not.(this%tPeriodic.or.this%tHelical) .and.&

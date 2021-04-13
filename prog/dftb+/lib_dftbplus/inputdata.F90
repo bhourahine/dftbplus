@@ -35,6 +35,7 @@ module dftbp_inputdata
   use dftbp_reks
   use dftbp_cm5, only : TCM5Input
   use dftbp_solvinput, only : TSolvationInp
+  use dftbp_elecconstraints, only : TElecConstraintInp
 
 #:if WITH_TRANSPORT
   use dftbp_negfvars
@@ -463,6 +464,8 @@ module dftbp_inputdata
     !> Solvation
     class(TSolvationInp), allocatable :: solvInp
 
+    !> Electronic constraints
+    class(TElecConstraintInp), allocatable :: elecConstrainInp
 
     !> Local potentials
     real(dp), allocatable :: chrgConstr(:,:)

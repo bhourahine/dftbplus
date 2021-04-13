@@ -61,7 +61,7 @@ module dftbp_main
   use dftbp_shift
   use dftbp_spinorbit
   use dftbp_angmomentum
-  use dftbp_elecconstraints
+  !use dftbp_elecconstraints, only : TElecConstraint
   use dftbp_pmlocalisation, only : TPipekMezey
   use dftbp_linresp
   use dftbp_linresptypes
@@ -610,6 +610,11 @@ contains
 
     real(dp), allocatable :: dipoleTmp(:)
 
+    integer :: iConstrIter, nConstrIter
+
+    real(dp), allocatable :: constrShift(:,:,:,:)
+    logical :: isConstrConv
+
     if (this%tDipole) then
       allocate(dipoleTmp(3))
     end if
@@ -717,10 +722,10 @@ contains
       if (this%tWriteDetailedOut) then
         call openDetailedOut(this%fdDetailedOut, userOut, tAppendDetailedOut)
       end if
-      ! We need to define hamltonian by adding the potential
+      ! We need to define hamiltonian by adding the potential
       call getSccHamiltonian(this%H0, this%over, this%nNeighbourSK, this%neighbourList,&
-          & this%species, this%orb, this%iSparseStart, this%img2CentCell, this%potential,&
-          & allocated(this%reks), this%ham, this%iHam)
+          & this%species, this%orb, this%iSparseStart, this%img2CentCell, this%potential%intBlock,&
+          & this%potential%iorbitalBlock, allocated(this%reks), this%ham, this%iHam)
       tExitGeoOpt = .true.
       return
     end if
@@ -739,6 +744,9 @@ contains
     call env%globalTimer%stopTimer(globalTimers%preSccInit)
 
     call env%globalTimer%startTimer(globalTimers%scc)
+
+    allocate(constrShift(this%orb%mOrb, this%orb%mOrb, this%nAtom, this%nSpin))
+    constrShift(:,:,:,:) = 0.0_dp
 
     REKS_SCC: if (allocated(this%reks)) then
 
@@ -850,6 +858,17 @@ contains
 
       lpSCC: do iSccIter = 1, this%maxSccIter
 
+        if (allocated(this%elecConstrain)) then
+          constrShift(:,:,:,:) = 0.0_dp
+          nConstrIter = 200
+        else
+          nConstrIter = 1
+        end if
+
+        lpConstrInner: do iConstrIter = 1, nConstrIter
+
+          write(stdOut,*)'Iter',iConstrIter
+
         call resetInternalPotentials(this%tDualSpinOrbit, this%xi, this%orb, this%species,&
             & this%potential)
 
@@ -879,125 +898,156 @@ contains
 
         end if
 
-        ! All potentials are added up into intBlock
-        this%potential%intBlock = this%potential%intBlock +&
-            & this%potential%extBlock
+          ! All potentials are added up into intBlock
+          this%potential%intBlock = this%potential%intBlock +&
+              & this%potential%extBlock
 
-        if (allocated(this%qDepExtPot)) then
-          call getChargePerShell(this%qInput, this%orb, this%species, dQ, qRef=this%q0)
-          call this%qDepExtPot%addPotential(sum(dQ(:,:,1), dim=1), dQ(:,:,1), this%orb,&
-              & this%species, this%potential%intBlock)
-        end if
-
-        if (this%electronicSolver%iSolver == electronicSolverTypes%pexsi .and. this%tSccCalc) then
-          call this%electronicSolver%elsi%updatePexsiDeltaVRanges(this%potential)
-        end if
-
-        call getSccHamiltonian(this%H0, this%over, this%nNeighbourSK, this%neighbourList,&
-            & this%species, this%orb, this%iSparseStart, this%img2CentCell, this%potential,&
-            & allocated(this%reks), this%ham, this%iHam)
-
-        if (this%tWriteRealHS .or. this%tWriteHS&
-            & .and. any(this%electronicSolver%iSolver&
-            & == [electronicSolverTypes%qr, electronicSolverTypes%divideandconquer,&
-            & electronicSolverTypes%relativelyrobust, electronicSolverTypes%magma_gvd])) then
-          call writeHSAndStop(env, this%tWriteHS, this%tWriteRealHS, this%tRealHS, this%over,&
-              & this%neighbourList, this%nNeighbourSK, this%denseDesc%iAtomStart,&
-              & this%iSparseStart, this%img2CentCell, this%kPoint, this%iCellVec, this%cellVec,&
-              & this%ham, this%iHam)
-        end if
-
-        call convertToUpDownRepr(this%ham, this%iHam)
-
-        call getDensity(env, this%negfInt, iSccIter, this%denseDesc, this%ham, this%over,&
-            & this%neighbourList, this%nNeighbourSk, this%iSparseStart, this%img2CentCell,&
-            & this%iCellVec, this%cellVec, this%kPoint, this%kWeight, this%orb, this%tHelical,&
-            & this%coord, this%species, this%electronicSolver, this%tRealHS, this%tSpinSharedEf,&
-            & this%tSpinOrbit, this%tDualSpinOrbit, this%tFillKSep, this%tFixEf, this%tMulliken,&
-            & this%iDistribFn, this%tempElec, this%nEl, this%parallelKS, this%Ef, this%mu,&
-            & this%dftbEnergy(this%deltaDftb%iDeterminant), this%rangeSep, this%eigen,&
-            & this%filling, this%rhoPrim, this%iHam, this%xi, this%orbitalL, this%HSqrReal,&
-            & this%SSqrReal, this%eigvecsReal, this%iRhoPrim, this%HSqrCplx, this%SSqrCplx,&
-            & this%eigvecsCplx, this%rhoSqrReal, this%deltaRhoInSqr, this%deltaRhoOutSqr,&
-            & this%qOutput, this%nNeighbourLC, this%tLargeDenseMatrices, this%deltaDftb)
-
-        !> For rangeseparated calculations deduct atomic charges from deltaRho
-        if (this%isRangeSep) then
-          select case(this%nSpin)
-          case(2)
-            do iSpin = 1, 2
-              call denseSubtractDensityOfAtoms(this%q0, this%denseDesc%iAtomStart,&
-                  & this%deltaRhoOutSqr, iSpin)
-            end do
-          case(1)
-            call denseSubtractDensityOfAtoms(this%q0, this%denseDesc%iAtomStart,&
-                & this%deltaRhoOutSqr)
-          case default
-            call error("Range separation not implemented for non-colinear spin")
-          end select
-        end if
-
-        if (this%tWriteBandDat .and. this%deltaDftb%nDeterminant() == 1) then
-          call writeBandOut(bandOut, this%eigen, this%filling, this%kWeight)
-        end if
-
-        if (this%tMulliken) then
-          call getMullikenPopulation(this%rhoPrim, this%over, this%orb, this%neighbourList,&
-              & this%nNeighbourSk, this%img2CentCell, this%iSparseStart, this%qOutput,&
-              & iRhoPrim=this%iRhoPrim, qBlock=this%qBlockOut, qiBlock=this%qiBlockOut,&
-              & qNetAtom=this%qNetAtom)
-        end if
-
-      #:if WITH_TRANSPORT
-        ! Override charges with uploaded contact charges
-        if (this%tUpload) then
-          call overrideContactCharges(this%qOutput, this%chargeUp, this%transpar, this%qBlockIn,&
-              & this%blockUp)
-        end if
-      #:endif
-
-        ! For non-dual spin-orbit orbitalL is determined during getDensity() call above
-        if (this%tDualSpinOrbit) then
-          call getLDual(this%orbitalL, this%qiBlockOut, this%orb, this%species)
-        end if
-
-        ! Note: if XLBOMD is active, potential created with input charges is needed later,
-        ! therefore it should not be overwritten here.
-        if (this%tSccCalc .and. .not. this%isXlbomd) then
-          call resetInternalPotentials(this%tDualSpinOrbit, this%xi, this%orb, this%species,&
-              & this%potential)
-          call getChargePerShell(this%qOutput, this%orb, this%species, this%chargePerShell)
-
-          call addChargePotentials(env, this%scc, this%updateSccAfterDiag, this%qOutput,&
-              & this%q0, this%chargePerShell, this%orb, this%species, this%neighbourList,&
-              & this%img2CentCell, this%spinW, this%solvation, this%thirdOrd, this%potential,&
-              & this%dispersion)
-
-          call addBlockChargePotentials(this%qBlockOut, this%qiBlockOut, this%dftbU, this%tImHam,&
-              & this%species, this%orb, this%potential)
-
-          if (allocated(this%onSiteElements)) then
-            call addOnsShift(this%potential%intBlock, this%potential%iOrbitalBlock, this%qBlockOut,&
-                & this%qiBlockOut, this%onSiteElements, this%species, this%orb, this%q0)
+          if (allocated(this%qDepExtPot)) then
+            call getChargePerShell(this%qInput, this%orb, this%species, dQ, qRef=this%q0)
+            call this%qDepExtPot%addPotential(sum(dQ(:,:,1), dim=1), dQ(:,:,1), this%orb,&
+                & this%species, this%potential%intBlock)
           end if
 
-          this%potential%intBlock = this%potential%intBlock + this%potential%extBlock
-        end if
+          if (allocated(this%elecConstrain)) then
+            constrShift(:,:,:,:) = this%potential%intBlock + constrShift
+          else
+            constrShift(:,:,:,:) = this%potential%intBlock
+          end if
 
-        if (allocated(this%qDepExtPot)) then
-          call getChargePerShell(this%qOutput, this%orb, this%species, dQ, qRef=this%q0)
-          call this%qDepExtPot%addPotential(sum(dQ(:,:,1), dim=1), dQ(:,:,1), this%orb,&
-              & this%species, this%potential%intBlock)
-        end if
+          if (this%electronicSolver%iSolver == electronicSolverTypes%pexsi .and. this%tSccCalc) then
+            call this%electronicSolver%elsi%updatePexsiDeltaVRanges(this%potential)
+          end if
 
-        call calcEnergies(this%scc, this%qOutput, this%q0, this%chargePerShell, this%species,&
-            & this%tExtField, this%isXlbomd, this%dftbU, this%tDualSpinOrbit, this%rhoPrim,&
-            & this%H0, this%orb, this%neighbourList, this%nNeighbourSk, this%img2CentCell,&
-            & this%iSparseStart, this%cellVol, this%extPressure,&
-            & this%dftbEnergy(this%deltaDftb%iDeterminant)%TS, this%potential,&
-            & this%dftbEnergy(this%deltaDftb%iDeterminant), this%thirdOrd, this%solvation,&
-            & this%rangeSep, this%reks, this%qDepExtPot, this%qBlockOut, this%qiBlockOut,&
-            & this%xi, this%iAtInCentralRegion, this%tFixEf, this%Ef, this%onSiteElements)
+          call getSccHamiltonian(this%H0, this%over, this%nNeighbourSK, this%neighbourList,&
+              & this%species, this%orb, this%iSparseStart, this%img2CentCell, constrShift,&
+              & this%potential%iorbitalBlock, allocated(this%reks), this%ham, this%iHam)
+
+          if (this%tWriteRealHS .or. this%tWriteHS&
+              & .and. any(this%electronicSolver%iSolver&
+              & == [electronicSolverTypes%qr, electronicSolverTypes%divideandconquer,&
+              & electronicSolverTypes%relativelyrobust, electronicSolverTypes%magma_gvd])) then
+            call writeHSAndStop(env, this%tWriteHS, this%tWriteRealHS, this%tRealHS, this%over,&
+                & this%neighbourList, this%nNeighbourSK, this%denseDesc%iAtomStart,&
+                & this%iSparseStart, this%img2CentCell, this%kPoint, this%iCellVec, this%cellVec,&
+                & this%ham, this%iHam)
+          end if
+
+          call convertToUpDownRepr(this%ham, this%iHam)
+
+          call getDensity(env, this%negfInt, iSccIter, this%denseDesc, this%ham, this%over,&
+              & this%neighbourList, this%nNeighbourSk, this%iSparseStart, this%img2CentCell,&
+              & this%iCellVec, this%cellVec, this%kPoint, this%kWeight, this%orb, this%tHelical,&
+              & this%coord, this%species, this%electronicSolver, this%tRealHS, this%tSpinSharedEf,&
+              & this%tSpinOrbit, this%tDualSpinOrbit, this%tFillKSep, this%tFixEf, this%tMulliken,&
+              & this%iDistribFn, this%tempElec, this%nEl, this%parallelKS, this%Ef, this%mu,&
+              & this%dftbEnergy(this%deltaDftb%iDeterminant), this%rangeSep, this%eigen,&
+              & this%filling, this%rhoPrim, this%iHam, this%xi, this%orbitalL, this%HSqrReal,&
+              & this%SSqrReal, this%eigvecsReal, this%iRhoPrim, this%HSqrCplx, this%SSqrCplx,&
+              & this%eigvecsCplx, this%rhoSqrReal, this%deltaRhoInSqr, this%deltaRhoOutSqr,&
+              & this%qOutput, this%nNeighbourLC, this%tLargeDenseMatrices, this%deltaDftb)
+
+          !> For range separated calculations deduct atomic charges from deltaRho
+          if (this%isRangeSep) then
+            select case(this%nSpin)
+            case(2)
+              do iSpin = 1, 2
+                call denseSubtractDensityOfAtoms(this%q0, this%denseDesc%iAtomStart,&
+                    & this%deltaRhoOutSqr, iSpin)
+              end do
+            case(1)
+              call denseSubtractDensityOfAtoms(this%q0, this%denseDesc%iAtomStart,&
+                  & this%deltaRhoOutSqr)
+            case default
+              call error("Range separation not implemented for non-colinear spin")
+            end select
+          end if
+
+          if (this%tWriteBandDat .and. this%deltaDftb%nDeterminant() == 1) then
+            call writeBandOut(bandOut, this%eigen, this%filling, this%kWeight)
+          end if
+
+          if (this%tMulliken) then
+            call getMullikenPopulation(this%rhoPrim, this%over, this%orb, this%neighbourList,&
+                & this%nNeighbourSk, this%img2CentCell, this%iSparseStart, this%qOutput,&
+                & iRhoPrim=this%iRhoPrim, qBlock=this%qBlockOut, qiBlock=this%qiBlockOut,&
+                & qNetAtom=this%qNetAtom)
+          end if
+
+        #:if WITH_TRANSPORT
+          ! Override charges with uploaded contact charges
+          if (this%tUpload) then
+            call overrideContactCharges(this%qOutput, this%chargeUp, this%transpar, this%qBlockIn,&
+                & this%blockUp)
+          end if
+        #:endif
+
+          ! For non-dual spin-orbit orbitalL is determined during getDensity() call above
+          if (this%tDualSpinOrbit) then
+            call getLDual(this%orbitalL, this%qiBlockOut, this%orb, this%species)
+          end if
+
+          ! Note: if XLBOMD is active, potential created with input charges is needed later,
+          ! therefore it should not be overwritten here.
+          if (this%tSccCalc .and. .not. this%isXlbomd) then
+            call resetInternalPotentials(this%tDualSpinOrbit, this%xi, this%orb, this%species,&
+                & this%potential)
+            call getChargePerShell(this%qOutput, this%orb, this%species, this%chargePerShell)
+
+            call addChargePotentials(env, this%scc, this%updateSccAfterDiag, this%qOutput,&
+                & this%q0, this%chargePerShell, this%orb, this%species, this%neighbourList,&
+                & this%img2CentCell, this%spinW, this%solvation, this%thirdOrd, this%potential,&
+                & this%dispersion)
+
+            call addBlockChargePotentials(this%qBlockOut, this%qiBlockOut, this%dftbU, this%tImHam,&
+                & this%species, this%orb, this%potential)
+
+            if (allocated(this%onSiteElements)) then
+              call addOnsShift(this%potential%intBlock, this%potential%iOrbitalBlock,&
+                  & this%qBlockOut, this%qiBlockOut, this%q0, this%onSiteElements, this%species,&
+                  & this%orb)
+            end if
+
+            this%potential%intBlock(:,:,:,:) = this%potential%intBlock + this%potential%extBlock
+
+          end if
+
+          if (allocated(this%qDepExtPot)) then
+            call getChargePerShell(this%qOutput, this%orb, this%species, dQ, qRef=this%q0)
+            call this%qDepExtPot%addPotential(sum(dQ(:,:,1), dim=1), dQ(:,:,1), this%orb,&
+                & this%species, this%potential%intBlock)
+          end if
+
+          call calcEnergies(this%scc, this%qOutput, this%q0, this%chargePerShell, this%species,&
+              & this%tExtField, this%isXlbomd, this%dftbU, this%tDualSpinOrbit, this%rhoPrim,&
+              & this%H0, this%orb, this%neighbourList, this%nNeighbourSk, this%img2CentCell,&
+              & this%iSparseStart, this%cellVol, this%extPressure,&
+              & this%dftbEnergy(this%deltaDftb%iDeterminant)%TS, this%potential,&
+              & this%dftbEnergy(this%deltaDftb%iDeterminant), this%thirdOrd, this%solvation,&
+              & this%rangeSep, this%reks, this%qDepExtPot, this%qBlockOut, this%qiBlockOut,&
+              & this%xi, this%iAtInCentralRegion, this%tFixEf, this%Ef, this%onSiteElements)
+
+
+          if (allocated(this%elecConstrain)) then
+            if (this%electronicSolver%elecChemPotAvailable) then
+              write(*,*)'Fermi level', this%Ef
+              this%dftbEnergy(this%deltaDftb%iDeterminant)%NEf = sum(this%Ef *&
+                  & sum(sum(this%qOutput(:,:size(this%iAtInCentralRegion),:),dim=1),dim=1))
+            end if
+            call sumEnergies(this%dftbEnergy(this%deltaDftb%iDeterminant))
+            write(*,*)'XXX',this%dftbEnergy(this%deltaDftb%iDeterminant)%NEf
+            write(*,*)this%dftbEnergy(this%deltaDftb%iDeterminant)%Eelec
+            write(*,*)this%dftbEnergy(this%deltaDftb%iDeterminant)%EForceRelated
+            call this%elecConstrain%constrain(constrShift, this%qOutput,&
+                & this%dftbEnergy(this%deltaDftb%iDeterminant)%EForceRelated, isConstrConv)
+          else
+            isConstrConv = .true.
+          end if
+
+          if (isConstrConv) then
+            exit lpConstrInner
+          end if
+
+        end do lpConstrInner
 
         tStopScc = hasStopFile(fStopScc)
 
@@ -7022,8 +7072,9 @@ contains
       end if
 
       ! tmpHamSp has (my_qm) component
-      call getSccHamiltonian(H0, over, nNeighbourSK, neighbourList, species, orb,&
-          & iSparseStart, img2CentCell, potential, allocated(reks), tmpHamSp, iHam)
+      call getSccHamiltonian(H0, over, nNeighbourSK, neighbourList, species, orb, iSparseStart,&
+          & img2CentCell, potential%intBlock, potential%iorbitalBlock, allocated(reks), tmpHamSp,&
+          & iHam)
       tmpHamSp(:,1) = 2.0_dp * tmpHamSp(:,1)
 
       if (reks%isRangeSep) then
