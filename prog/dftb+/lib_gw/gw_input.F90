@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,11 +8,11 @@
 #:include 'common.fypp'
 
 !> input process for GW variables, should replace with slakocont compatible structure
-module GWInput
-  use accuracy
-  use slakocont
-  use slakoeqgrid
-  use inputdata_module
+module dftbp_GWInput
+  use dftbp_accuracy
+  use dftbp_slakocont
+  use dftbp_slakoeqgrid
+  use dftbp_inputdata
   implicit none
   private
 
@@ -20,7 +20,7 @@ module GWInput
 
   !> slater-koster-like tables of integrals
   type TGWInput
-    type(slater) :: slako
+    type(TSlater) :: slako
     real(dp), allocatable :: xtab(:,:,:)
     real(dp), allocatable :: etab(:,:,:)
     real(dp), allocatable :: ceri(:,:)
@@ -45,4 +45,4 @@ contains
 
   end subroutine GWInput_destroy
 
-end module GWInput
+end module dftbp_GWInput

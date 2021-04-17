@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -12,11 +12,11 @@
 !> The dynamic neighbour list does not store the entire neighbour list, but creates it on the fly,
 !> allowing for a low memory footprint for large neighbour lists (at the cost of speed).
 !>
-module dynneighlist
-  use accuracy
-  use assert
-  use latpointiter
-  use message
+module dftbp_dynneighlist
+  use dftbp_accuracy
+  use dftbp_assert
+  use dftbp_latpointiter
+  use dftbp_message
   implicit none
   private
 
@@ -31,7 +31,7 @@ module dynneighlist
     !> Cutoff for neighbour generation
     real(dp) :: cutoff
 
-    !> Nr. of atoms 
+    !> Nr. of atoms
     integer :: nAtom
 
     !> Coordinates of atoms (folded into unit cell, if periodic)
@@ -45,10 +45,11 @@ module dynneighlist
 
     !> Inverse lattice vectors, if system is periodic
     real(dp), allocatable :: invLatVecs(:,:)
-    
+
   contains
     procedure :: updateLatVecs => TDynNeighList_updateLatVecs
     procedure :: updateCoords => TDynNeighList_updateCoords
+    procedure :: updateCutoff => TDynNeighList_updateCutoff
   end type TDynNeighList
 
 
@@ -88,7 +89,7 @@ module dynneighlist
 
     !> Whether iterator has finished
     logical :: tFinished
-    
+
   contains
     procedure :: getNextNeighbours => TNeighIterator_getNextNeighbours
   end type TNeighIterator
@@ -159,6 +160,20 @@ contains
     this%coords0(:,:) = coords
 
   end subroutine TDynNeighList_updateCoords
+
+
+  !> Updates real space cutoff
+  subroutine TDynNeighList_updateCutoff(this, cutoff)
+
+    !> Instance
+    class(TDynNeighList), intent(inout) :: this
+
+    !> New cutoff
+    real(dp), intent(in) :: cutoff
+
+    this%cutoff = cutoff
+
+  end subroutine TDynNeighList_updateCutoff
 
 
   !> Initializes an iterator for the dynamic neighbours of a given atom.
@@ -279,4 +294,4 @@ contains
   end subroutine TNeighIterator_getNextNeighbours
 
 
-end module dynneighlist
+end module dftbp_dynneighlist

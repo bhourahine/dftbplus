@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -9,10 +9,10 @@
 
 !> Contains subroutines to calculate the correlation part of the GW self energy using a plasmon pole
 !> model
-module PPModel
-  use accuracy, only : dp
-  use eigensolver
-  use TransDens
+module dftbp_PPModel
+  use dftbp_accuracy, only : dp
+  use dftbp_eigensolver
+  use dftbp_TransDens
   implicit none
 
   private
@@ -167,4 +167,4 @@ contains
 
   end subroutine selfCor
 
-end module PPModel
+end module dftbp_PPModel

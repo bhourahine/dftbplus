@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,10 +8,10 @@
 #:include 'common.fypp'
 
 !> Module to wrap around the different shift contributions in the DFTB energy expressions
-module potentials
-  use assert
-  use accuracy, only : dp
-  use commontypes
+module dftbp_potentials
+  use dftbp_assert
+  use dftbp_accuracy, only : dp
+  use dftbp_commontypes
   implicit none
 
   public :: TPotentials, init
@@ -45,11 +45,20 @@ module potentials
     !> external block and spin resolved potential
     real(dp), allocatable :: extBlock(:,:,:,:)
 
+    !> gradient of the external potential with respect of nucleus coordinates
+    real(dp), allocatable :: extGrad(:,:)
+
     !> pSIC/DFTB+U etc. potential
     real(dp), allocatable :: orbitalBlock(:,:,:,:)
 
     !> L.S etc where these are imaginary coefficients
     real(dp), allocatable :: iorbitalBlock(:,:,:,:)
+
+    !> If performing a contact calculation, variable for retaining the shell resolved electrostatics
+    !> for later storage. Ony the charge related potential is stored, so last index will be
+    !> allocated as 1 in most cases
+    real(dp), allocatable :: coulombShell(:,:,:)
+
   end type TPotentials
 
 
@@ -62,10 +71,10 @@ contains
 
 
   !> Allocates storage for the potential components
-  subroutine Potentials_init(self,orb,nAtom,nSpin)
+  subroutine Potentials_init(this, orb, nAtom, nSpin)
 
     !> data structure to allocate
-    type(TPotentials), intent(out) :: self
+    type(TPotentials), intent(out) :: this
 
     !> information about the orbitals and their angular momenta
     type(TOrbitals), intent(in) :: orb
@@ -76,30 +85,32 @@ contains
     !> number of spins
     integer, intent(in) :: nSpin
 
-    @:ASSERT(.not. self%tInitialised)
+    @:ASSERT(.not. this%tInitialised)
     @:ASSERT(nSpin == 1 .or. nSpin == 2 .or. nSpin == 4)
     @:ASSERT(nAtom > 0)
     @:ASSERT(orb%mShell > 0)
     @:ASSERT(orb%mOrb > 0)
 
-    allocate(self%intAtom(nAtom,nSpin))
-    allocate(self%intShell(orb%mShell,nAtom,nSpin))
-    allocate(self%intBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
-    allocate(self%extAtom(nAtom,nSpin))
-    allocate(self%extShell(orb%mShell,nAtom,nSpin))
-    allocate(self%extBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
-    allocate(self%orbitalBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
-    allocate(self%iorbitalBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
-    self%intAtom = 0.0_dp
-    self%intShell = 0.0_dp
-    self%intBlock = 0.0_dp
-    self%extAtom = 0.0_dp
-    self%extShell = 0.0_dp
-    self%extBlock = 0.0_dp
-    self%orbitalBlock = 0.0_dp
-    self%iorbitalBlock = 0.0_dp
-    self%tInitialised = .true.
+    allocate(this%intAtom(nAtom,nSpin))
+    allocate(this%intShell(orb%mShell,nAtom,nSpin))
+    allocate(this%intBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
+    allocate(this%extAtom(nAtom,nSpin))
+    allocate(this%extShell(orb%mShell,nAtom,nSpin))
+    allocate(this%extBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
+    allocate(this%extGrad(3, nAtom))
+    allocate(this%orbitalBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
+    allocate(this%iorbitalBlock(orb%mOrb,orb%mOrb,nAtom,nSpin))
+    this%intAtom = 0.0_dp
+    this%intShell = 0.0_dp
+    this%intBlock = 0.0_dp
+    this%extAtom = 0.0_dp
+    this%extShell = 0.0_dp
+    this%extBlock = 0.0_dp
+    this%extGrad(:,:) = 0.0_dp
+    this%orbitalBlock = 0.0_dp
+    this%iorbitalBlock = 0.0_dp
+    this%tInitialised = .true.
 
   end subroutine Potentials_init
 
-end module potentials
+end module dftbp_potentials

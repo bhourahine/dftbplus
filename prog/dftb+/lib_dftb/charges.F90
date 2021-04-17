@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,21 +8,24 @@
 #:include 'common.fypp'
 
 !> Module to calculate atomic charges
-module charges
-  use assert
-  use accuracy
-  use commontypes, only : TOrbitals
+module dftbp_charges
+  use dftbp_assert
+  use dftbp_accuracy, only : dp
+  use dftbp_commontypes, only : TOrbitals
+  use dftbp_uniquehubbard, only : TUniqueHubbard
   implicit none
+
   private
 
-  public :: getSummedCharges
+  public :: getSummedCharges, getSummedChargesPerOrbital, getSummedChargesPerAtom
+  public :: getSummedChargesPerLShell, getSummedChargesPerUniqueU
+
 
 contains
 
 
   !> Calculates various gross charges.
-  subroutine getSummedCharges(species, orb, qOrbital, q0, iHubbU, dQ, dQAtom, dQShell, dQUniqU)
-
+  subroutine getSummedCharges(species, orb, qOrbital, q0, dQ, dQAtom, dQShell)
 
     !> Species of each atom.
     integer, intent(in) :: species(:)
@@ -32,7 +35,7 @@ contains
     type(TOrbitals), intent(in) :: orb
 
 
-    !> Orbital populations.
+    !> Orbital populations. Shape [iChannels, mOrb, nAtom].
     real(dp), intent(in) :: qOrbital(:,:,:)
 
 
@@ -40,30 +43,20 @@ contains
     real(dp), intent(in) :: q0(:,:,:)
 
 
-    !> Unique Hubbard U indices (only needed if dQUniqU is passed)
-    integer, intent(in), optional :: iHubbU(:,:)
-
-
-    !> charge per orbital.
+    !> Charge per atomic orbital. Shape [qOrb, nAtom].
     real(dp), target, intent(out), optional :: dQ(:,:)
 
 
     !> Summed charge per atom.
-    real(dp), target, intent(out), optional :: dQAtom(:)
+    real(dp), intent(out), optional :: dQAtom(:)
 
 
     !> Summed charge per shell.
     real(dp), target, intent(out), optional :: dQShell(:,:)
 
-
-    !> Summed charges per unique Hubbard U
-    real(dp), target, intent(out), optional :: dQUniqU(:,:)
-
     real(dp), allocatable, target :: dQLocal(:,:), dQShellLocal(:,:)
     real(dp), pointer :: dQWork(:,:), dQShellWork(:,:)
     integer :: nAtom
-
-    @:ASSERT(present(iHubbU) .eqv. present(dQUniqU))
 
     nAtom = size(orb%nOrbAtom)
     if (present(dQ)) then
@@ -72,29 +65,16 @@ contains
       allocate(dQLocal(orb%mOrb, nAtom))
       dQWork => dQLocal
     end if
-    if (present(dQUniqU) .or. present(dQShell)) then
-      if (present(dQShell)) then
-        dQShellWork => dQShell
-      else
-        allocate(dQShellLocal(orb%mShell, nAtom))
-        dQShellWork => dQShellLocal
-      end if
-    end if
 
     call getSummedChargesPerOrbital(qOrbital(:,:,1), q0(:,:,1), dQWork)
     if (present(dQAtom)) then
       call getSummedChargesPerAtom(dQWork, dQAtom)
     end if
-    if (present(dQShell) .or. present(dQUniqU)) then
-      call getSummedChargesPerLShell(species, orb, dQWork, dQShellWork)
-    end if
-    if (present(dQUniqU)) then
-      call getSummedChargesPerUniqU(species, orb, dQShellWork, iHubbU, dQUniqU)
+    if (present(dQShell)) then
+      call getSummedChargesPerLShell(species, orb, dQWork, dQShell)
     end if
 
   end subroutine getSummedCharges
-
-  ! Private routines
 
 
   !> orbital resolved charges
@@ -159,7 +139,7 @@ contains
 
 
   !> charges for regions with common U values
-  subroutine getSummedChargesPerUniqU(species, orb, deltaQPerLShell, iHubbU, deltaQUniqU)
+  subroutine getSummedChargesPerUniqueU(species, orb, hubbU, deltaQPerLShell, deltaQUniqU)
 
     !> chemical species of each atom
     integer, intent(in) :: species(:)
@@ -167,26 +147,19 @@ contains
     !> species resolved atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
+    !> Contracted Hubbard U parameters
+    type(TUniqueHubbard), intent(in) :: hubbU
+
     !> charge per atomic shell
     real(dp), intent(in) :: deltaQPerLShell(:,:)
-
-    !> index for unique Hubbard U values
-    integer, intent(in) :: iHubbU(:,:)
 
     !> charges for atomic shells with a common U value
     real(dp), intent(out) :: deltaQUniqU(:,:)
 
     integer :: iAt, iSp, iSh
 
-    deltaQUniqU(:,:) = 0.0_dp
-    do iAt = 1, size(orb%nOrbAtom)
-      iSp = species(iAt)
-      do iSh = 1, orb%nShell(iSp)
-        deltaQUniqU(iHubbU(iSh, iSp), iAt) = deltaQUniqU(iHubbU(iSh, iSp), iAt)&
-            & + deltaQPerLShell(iSh, iAt)
-      end do
-    end do
+    call hubbU%sumOverUniqueU(deltaQPerLShell, species, orb, deltaQUniqU)
 
-  end subroutine getSummedChargesPerUniqU
+  end subroutine getSummedChargesPerUniqueU
 
-end module charges
+end module dftbp_charges

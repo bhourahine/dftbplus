@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,22 +8,28 @@
 #:include 'common.fypp'
 
 !> Angular momentum related routines
-module angmomentum
+module dftbp_angmomentum
 #:if WITH_SCALAPACK
-  use scalapackfx
+  use dftbp_scalapackfx
 #:endif
-  use assert
-  use accuracy, only : dp
-  use constants, only : imag
-  use qm
-  use commontypes, only : TOrbitals
-  use environment
-  use densedescr
+  use dftbp_assert
+  use dftbp_accuracy, only : dp
+  use dftbp_constants, only : imag
+  use dftbp_qm
+  use dftbp_commontypes, only : TOrbitals
+  use dftbp_environment
+  use dftbp_densedescr
   implicit none
   private
 
-  public :: getLOperators, getLOperatorsForSpecies
-  public :: getLOnsite, getLDual
+  public :: getLOperators, getLOperatorsForSpecies, getLOnsite, getLDual, rotateZ
+
+  !> Construct matrix for rotation of orbitals around the z axis in the tesseral spherical hamonics
+  !> basis
+  interface rotateZ
+    module procedure zrot_onel
+    module procedure zrot_manyl
+  end interface rotateZ
 
 
 contains
@@ -75,8 +81,8 @@ contains
     end do
     uu(ll, ll) = 1.0_dp
 
-    call makeSimiliarityTrans(Lz, uu)
-    call makeSimiliarityTrans(Lplus, uu)
+    call makeSimilarityTrans(Lz, uu)
+    call makeSimilarityTrans(Lplus, uu)
 
   end subroutine getLOperators
 
@@ -312,7 +318,7 @@ contains
 
     ! convert to tesseral form
     do iCart = 1, 3
-      call makeSimiliarityTrans(L(:,:,iCart), uu)
+      call makeSimilarityTrans(L(:,:,iCart), uu)
     end do
 
   end subroutine localLOperators
@@ -342,4 +348,59 @@ contains
 
   end subroutine localGetLOperatorsForSpecies
 
-end module angmomentum
+
+  !> Constructs a matrix to rotate tesseral spherical harmonic orbitals of angular momentum l around
+  !> the z axis by phi radians
+  pure subroutine zrot_onel(zmat,l, phi)
+
+    !> resulting real unitary transformation matrix
+    real(dp), intent(out) :: zmat(:,:)
+
+    !> l value of angular momentum
+    integer, intent(in)   :: l
+
+    !> angle of rotation in radians
+    real(dp), intent(in)  :: phi
+
+    integer  :: m ! magnetic quantum number
+
+    zmat(:,:) = 0.0_dp
+    zmat(l+1,l+1) = 1.0_dp ! l_z = 0
+
+    do m = 1, l
+      zmat(m+l+1,m+l+1) = cos(m*phi)
+      zmat(-m+l+1,-m+l+1) = cos(m*phi)
+      zmat(m+l+1,-m+l+1) = -sin(m*phi)
+      zmat(-m+l+1,m+l+1) = sin(m*phi)
+    end do
+
+  end subroutine zrot_onel
+
+
+  !> Constructs a matrix to rotate tesseral spherical harmonic orbitals of angular momentum l around
+  !> the z axis by phi radians
+  pure subroutine zrot_manyl(zmat,l, phi)
+
+    !> resulting real unitary transformation matrix
+    real(dp), intent(out) :: zmat(:,:)
+
+    !> l value of angular momentum
+    integer, intent(in)   :: l(:)
+
+    !> angle of rotation in radians
+    real(dp), intent(in)  :: phi
+
+    integer :: il, iStart, iEnd
+
+    zmat(:,:) = 0.0_dp
+
+    iStart = 1
+    do il = 1, size(l)
+      iEnd = iStart + 2*l(il)
+      call zrot_onel(zmat(iStart:iEnd,iStart:iEnd),l(il), phi)
+      iStart = iEnd + 1
+    end do
+
+  end subroutine zrot_manyl
+
+end module dftbp_angmomentum

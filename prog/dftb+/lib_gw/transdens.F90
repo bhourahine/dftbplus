@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -9,9 +9,9 @@
 
 !> Contains subroutines for the calculation of Mulliken populations representing KS transition
 !> densities
-module TransDens
-  use accuracy
-  use blasroutines
+module dftbp_TransDens
+  use dftbp_accuracy
+  use dftbp_blasroutines
   implicit none
 
   private
@@ -114,4 +114,4 @@ contains
 
   end subroutine transQ_destr
 
-end module TransDens
+end module dftbp_TransDens

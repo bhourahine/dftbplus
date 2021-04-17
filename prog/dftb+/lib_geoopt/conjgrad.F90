@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -9,17 +9,17 @@
 
 !> Function minimization with the standard conjugate gradient technique.  See Numerical Recipes for
 !> details.
-module conjgrad
-  use assert
-  use accuracy
-  use linemin
+module dftbp_conjgrad
+  use dftbp_assert
+  use dftbp_accuracy
+  use dftbp_linemin
   implicit none
 
   private
 
 
-  !> Contains data for the conjugate gradient minimizer
-  type OConjGrad
+  !> contains data for the conjugate gradient minimizer
+  type TConjGrad
     private
 
     !> State of the minimizer
@@ -31,7 +31,7 @@ module conjgrad
     !> Gradient in previous cycle
     real(dp), allocatable :: gg(:)
 
-    !> Conjugate gradient
+    !> conjugate gradient
     real(dp), allocatable :: hh(:)
 
     !> Last calculated point
@@ -50,47 +50,48 @@ module conjgrad
     logical :: tInitialized
 
     !> Line minimizer
-    type(OLineMin) :: pLinMin
-  end type OConjGrad
+    type(TLineMin) :: pLinMin
+
+  end type TConjGrad
 
 
   !> Initialises CG instance
   interface init
-    module procedure ConjGrad_init
+    module procedure conjGrad_init
   end interface init
 
 
   !> Resets CG
   interface reset
-    module procedure ConjGrad_reset
+    module procedure conjGrad_reset
   end interface reset
 
 
   !> Passes calculated function value and gradient to the minimizer and gives
   !> back a new coordinate.
   interface next
-    module procedure ConjGrad_next
+    module procedure conjGrad_next
   end interface next
 
 
   !> Coordinate of the minimum.
   interface getMinX
-    module procedure ConjGrad_getMinX
+    module procedure conjGrad_getMinX
   end interface getMinX
 
 
   !> Function value in the minimum.
   interface getMinY
-    module procedure ConjGrad_getMinY
+    module procedure conjGrad_getMinY
   end interface getMinY
 
 
   !> Gradient in the minimum.
   interface getMinGrad
-    module procedure ConjGrad_getMinGrad
+    module procedure conjGrad_getMinGrad
   end interface getMinGrad
 
-  public :: OConjGrad
+  public :: TConjGrad
   public :: init, reset, next, getMinX, getMinY, getMinGrad
 
 
@@ -101,10 +102,10 @@ contains
 
 
   !> Creates a conjugate gradient instance
-  subroutine ConjGrad_init(self, nElem, tol, maxDisp)
+  subroutine conjGrad_init(this, nElem, tol, maxDisp)
 
-    !> Conjugate gradient instance on exit
-    type(OConjGrad), intent(out) :: self
+    !> conjugate gradient instance on exit
+    type(TConjGrad), intent(out) :: this
 
     !> Nr. of elements in the vectors
     integer, intent(in) :: nElem
@@ -119,47 +120,47 @@ contains
     @:ASSERT(tol > 0.0_dp)
     @:ASSERT(maxDisp > 0.0_dp)
 
-    self%nElem = nElem
-    self%tolerance = tol
-    self%maxDisp = maxDisp
-    allocate(self%gg(nElem))
-    allocate(self%hh(nElem))
-    allocate(self%uu(nElem))
+    this%nElem = nElem
+    this%tolerance = tol
+    this%maxDisp = maxDisp
+    allocate(this%gg(nElem))
+    allocate(this%hh(nElem))
+    allocate(this%uu(nElem))
     !! Line minimizer is created with an extrem big tolerance: it just brackets
     !! the minimum and returns an approximative minimum between them. Seems
     !! to give in most cases better results as making many line min. steps.
-    call init(self%pLinMin, nElem, 10, 10000.0_dp, self%maxDisp)
-    self%tInitialized = .false.
+    call TLineMin_init(this%pLinMin, nElem, 10, 10000.0_dp, this%maxDisp)
+    this%tInitialized = .false.
 
-  end subroutine ConjGrad_init
+  end subroutine conjGrad_init
 
 
   !> Resets CG minimizer
-  subroutine ConjGrad_reset(self, x0)
+  subroutine conjGrad_reset(this, x0)
 
     !> CG minimizer
-    type(OConjGrad), intent(inout) :: self
+    type(TConjGrad), intent(inout) :: this
 
     !> Point to start from
     real(dp), intent(in) :: x0(:)
 
-    @:ASSERT(size(x0) == self%nElem)
+    @:ASSERT(size(x0) == this%nElem)
 
-    self%uu(:) = x0(:)
-    self%state = st_1
-    self%tConverged = .false.
-    self%tInitialized = .true.
+    this%uu(:) = x0(:)
+    this%state = st_1
+    this%tConverged = .false.
+    this%tInitialized = .true.
 
-  end subroutine ConjGrad_reset
+  end subroutine conjGrad_reset
 
 
   !> Passes calculated function value and gradient to the minimizare and gives a new coordinate
   !> back.  When calling the first time, funciton value and gradient for the starting point of the
   !> minimization should be passed.
-  subroutine ConjGrad_next(self, fx, dx, xNew, tConverged)
+  subroutine conjGrad_next(this, fx, dx, xNew, tConverged)
 
     !> CG minimizer
-    type(OConjGrad), intent(inout) :: self
+    type(TConjGrad), intent(inout) :: this
 
     !> Function value for last point returned by this routine
     real(dp), intent(in) :: fx
@@ -173,22 +174,22 @@ contains
     !> True, if gradient goes below the specified tolerance
     logical,  intent(out) :: tConverged
 
-    @:ASSERT(self%tInitialized)
-    @:ASSERT(size(xNew) == self%nElem)
-    @:ASSERT(size(dx) == self%nElem)
+    @:ASSERT(this%tInitialized)
+    @:ASSERT(size(xNew) == this%nElem)
+    @:ASSERT(size(dx) == this%nElem)
 
-    if (.not. self%tConverged) then
-      call next_local(self%state, self%gg, self%hh, self%uu, self%tConverged, &
-          &self%tolerance, self%pLinMin, fx, dx)
+    if (.not. this%tConverged) then
+      call next_local(this%state, this%gg, this%hh, this%uu, this%tConverged, this%tolerance,&
+          & this%pLinMin, fx, dx)
     end if
-    xNew(:) = self%uu(:)
-    tConverged = self%tConverged
-  end subroutine ConjGrad_next
+    xNew(:) = this%uu(:)
+    tConverged = this%tConverged
+
+  end subroutine conjGrad_next
 
 
   !> Workhorse for the CG minimizer.
-  subroutine next_local(state, gg, hh, uu, tConverged, tolerance, pLinMin, fu,&
-      &du)
+  subroutine next_local(state, gg, hh, uu, tConverged, tolerance, pLinMin, fu, du)
 
     !> state of the conjugate gradient minimizer
     integer, intent(inout) :: state
@@ -196,7 +197,7 @@ contains
     !> Gradient in previous cycle
     real(dp), intent(inout) :: gg(:)
 
-    !> Conjugate gradient
+    !> conjugate gradient
     real(dp), intent(inout) :: hh(:)
 
     !> New calculated point
@@ -209,7 +210,7 @@ contains
     real(dp), intent(in) :: tolerance
 
     !> Line minimizer
-    type(OLineMin), intent(inout) :: pLinMin
+    type(TLineMin), intent(inout) :: pLinMin
 
     !> Function value in the last point
     real(dp), intent(in) :: fu
@@ -234,16 +235,16 @@ contains
       end if
       !! First step x = F/k, where F is the acting force and
       !! k is a spring constant in the magnitude of a C-C vibration mode
-      call reset(pLinMin, uu, hh, 5.0_dp * sqrt(sum(gg**2)))
+      call pLinMin%reset(uu, hh, 5.0_dp * sqrt(sum(gg**2)))
       state = st_2
     end if
 
     tConvLine = .true.
     do while ((.not. tConverged) .and. tConvLine)
-      call next(pLinMin, fu, du, uu, tConvLine)
+      call pLinMin%next(fu, du, uu, tConvLine)
       if (tConvLine) then
         allocate(xi(size(gg)))
-        call getMinGrad(pLinMin, xi)
+        call pLinMin%getMinGrad(xi)
         if (maxval(abs(xi)) < tolerance) then
           tConverged = .true.
         else
@@ -254,9 +255,9 @@ contains
           else
             gg(:) = -xi(:)
             hh(:) = gg(:) + (dgAbs / ggAbs) * hh(:)
-            call getMinX(pLinMin, uu)
-            call getMinLambda(pLinMin, rTmp)
-            call reset(pLinMin, uu, hh, rTmp)
+            call pLinMin%getMinX(uu)
+            call pLinMin%getMinLambda(rTmp)
+            call pLinMin%reset(uu, hh, rTmp)
           end if
         end if
       end if
@@ -264,9 +265,9 @@ contains
 
     !! If converged, reuse internal variables to store the result
     if (tConverged .and. state /= st_1) then
-      call getMinX(pLinMin, uu)
-      call getMinGrad(pLinMin, gg)
-      call getMinY(pLinMin, hh(1))
+      call pLinMin%getMinX(uu)
+      call pLinMin%getMinGrad(gg)
+      call pLinMin%getMinY(hh(1))
     end if
 
   end subroutine next_local
@@ -275,53 +276,53 @@ contains
   !> Gives the coordinate of the minimal point back
   !> The returned value is meaningless if the subroutine is called
   !>   before the CG minimizer signals convergence.
-  subroutine ConjGrad_getMinX(self, minX)
+  subroutine conjGrad_getMinX(this, minX)
 
     !> CG minimizer
-    type(OConjGrad), intent(in) :: self
+    type(TConjGrad), intent(in) :: this
 
     !> Coordinate of the minimal point
     real(dp), intent(out) :: minX(:)
 
-    @:ASSERT(self%tInitialized .and. self%tConverged)
-    @:ASSERT(size(minX) == self%nElem)
-    call getMinX(self%pLinMin, minX)
+    @:ASSERT(this%tInitialized .and. this%tConverged)
+    @:ASSERT(size(minX) == this%nElem)
+    call this%pLinMin%getMinX(minX)
 
-  end subroutine ConjGrad_getMinX
+  end subroutine conjGrad_getMinX
 
 
   !> Gives the function value in the minimal point back.
   !> The returned value is meaningless if the subroutine is called before the CG minimizer
   !>   signals convergence.
-  subroutine ConjGrad_getMinY(self, minY)
+  subroutine conjGrad_getMinY(this, minY)
 
     !> CG minimizer
-    type(OConjGrad), intent(in) :: self
+    type(TConjGrad), intent(in) :: this
 
     !> Coordinate of the minimal point
     real(dp), intent(out) :: minY
 
-    @:ASSERT(self%tInitialized .and. self%tConverged)
-    call getMinY(self%pLinMin, minY)
+    @:ASSERT(this%tInitialized .and. this%tConverged)
+    call this%pLinMin%getMinY(minY)
 
-  end subroutine ConjGrad_getMinY
+  end subroutine conjGrad_getMinY
 
 
   !> Gives the gradient in the minimal point back
   !> The returned value is meaningless if the subroutine is called before the CG minimizer signals
   !> convergence.
-  subroutine ConjGrad_getMinGrad(self, minGrad)
+  subroutine conjGrad_getMinGrad(this, minGrad)
 
     !> CG minimizer
-    type(OConjGrad), intent(in) :: self
+    type(TConjGrad), intent(in) :: this
 
     !> Coordinate of the minimal point
     real(dp), intent(out) :: minGrad(:)
 
-    @:ASSERT(self%tInitialized .and. self%tConverged)
-    @:ASSERT(size(minGrad) == self%nElem)
-    call getMinGrad(self%pLinMin, minGrad)
+    @:ASSERT(this%tInitialized .and. this%tConverged)
+    @:ASSERT(size(minGrad) == this%nElem)
+    call this%pLinMin%getMinGrad(minGrad)
 
-  end subroutine ConjGrad_getMinGrad
+  end subroutine conjGrad_getMinGrad
 
-end module conjgrad
+end module dftbp_conjgrad

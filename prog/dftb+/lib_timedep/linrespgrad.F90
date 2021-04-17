@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,58 +8,57 @@
 #:include 'common.fypp'
 
 !> Linear response excitations and gradients with respect to atomic coordinates
-module linrespgrad
-  use assert
-  use arpack
-  use linrespcommon
-  use commontypes
-  use slakocont
-  use shortgamma
-  use accuracy
-  use constants, only : Hartree__eV, au__Debye
-  use nonscc, only : NonSccDiff
-  use scc, only : TScc
-  use blasroutines
-  use eigensolver
-  use message
-  use taggedoutput
-  use sorting
-  use qm
+module dftbp_linrespgrad
+  use dftbp_assert
+  use dftbp_arpack
+  use dftbp_linrespcommon
+  use dftbp_commontypes
+  use dftbp_slakocont
+  use dftbp_shortgammafuncs, only : expGammaPrime
+  use dftbp_accuracy
+  use dftbp_constants, only : Hartree__eV, au__Debye
+  use dftbp_nonscc, only : TNonSccDiff
+  use dftbp_scc, only : TScc
+  use dftbp_blasroutines
+  use dftbp_eigensolver
+  use dftbp_lapackroutines
+  use dftbp_message
+  use dftbp_taggedoutput, only : TTaggedWriter, tagLabels
+  use dftbp_sorting
+  use dftbp_qm
+  use dftbp_transcharges
+  use dftbp_linresptypes
+  use dftbp_degeneracyfind
   implicit none
   private
 
   public :: LinRespGrad_old
 
+  !> Output files for results
+  character(*), parameter :: transitionsOut = "TRA.DAT"
+  character(*), parameter :: XplusYOut = "XplusY.DAT"
+  character(*), parameter :: excitedCoefsOut = "COEF.DAT"
+  character(*), parameter :: excitationsOut = "EXC.DAT"
+  character(*), parameter :: transDipOut = "TDP.DAT"
+
+
+  ! ARPACK related variables
 
   !> Tolerance for ARPACK solver.
-  real(dp), parameter :: ARTOL = epsilon(1.0_dp)
-
+  real(dp), parameter :: ARTOL = epsilon(1.0_rsp)
 
   !> Maximal allowed iteration in the ARPACK solver.
   integer, parameter :: MAX_AR_ITER = 300
 
-  character(lc) :: tmpStr
-
-
   !> Names of output files
   character(*), parameter :: arpackOut = "ARPACK.DAT"
   character(*), parameter :: testArpackOut = "TEST_ARPACK.DAT"
-  character(*), parameter :: transitionsOut = "TRA.DAT"
-  character(*), parameter :: XplusYOut = "XplusY.DAT"
-  character(*), parameter :: excitedQOut = "XCH.DAT"
-  character(*), parameter :: excitedDipoleOut = "XREST.DAT"
-  character(*), parameter :: excitedCoefsOut = "COEF.DAT"
-  character(*), parameter :: excitationsOut = "EXC.DAT"
-  character(*), parameter :: transDipOut = "TDP.DAT"
-  character(*), parameter :: singlePartOut = "SPX.DAT"
-
 
   !> Communication with ARPACK for progress information
   integer :: logfil, ndigit, mgetv0
   integer :: msaupd, msaup2, msaitr, mseigt, msapps, msgets, mseupd
   integer :: mnaupd, mnaup2, mnaitr, mneigh, mnapps, mngets, mneupd
   integer :: mcaupd, mcaup2, mcaitr, mceigh, mcapps, mcgets, mceupd
-
 
   !> Common block of ARPACK variables
   common /debug/ logfil, ndigit, mgetv0,&
@@ -69,21 +68,17 @@ module linrespgrad
 
 contains
 
-
   !> This subroutine analytically calculates excitations and gradients of excited state energies
   !> based on Time Dependent DFRT
-  subroutine LinRespGrad_old(tSpin, natom, iAtomStart, grndEigVecs, grndEigVal, sccCalc, dq,&
-      & coord0, nexc, nstat0, symc, SSqr, filling, species0, HubbardU, spinW, rnel, iNeighbour,&
-      & img2CentCell, orb, tWriteTagged, fdTagged, fdMulliken, fdCoeffs, tGrndState, fdXplusY,&
-      & fdTrans, fdSPTrans, fdTradip, tArnoldi, fdArnoldi, fdArnoldiDiagnosis, fdExc,&
-      & tEnergyWindow, energyWindow,tOscillatorWindow, oscillatorWindow, omega, allOmega, shift,&
-      & skHamCont, skOverCont, excgrad, derivator, rhoSqr, occNatural, naturalOrbs)
+  subroutine LinRespGrad_old(tSpin, this, iAtomStart, grndEigVecs, grndEigVal, sccCalc, dq, coord0,&
+      & SSqr, filling, species0, iNeighbour, img2CentCell, orb, tWriteTagged, fdTagged,&
+      & taggedWriter, omega, allOmega, shift, skHamCont, skOverCont, excgrad, derivator, rhoSqr,&
+      & occNatural, naturalOrbs)
 
     !> spin polarized calculation
     logical, intent(in) :: tSpin
 
-    !> number of atoms
-    integer, intent(in) :: natom
+    type(TLinResp), intent(inout) :: this
 
     !> index vector for S and H matrices
     integer, intent(in) :: iAtomStart(:)
@@ -98,19 +93,10 @@ contains
     type(TScc), intent(in) :: sccCalc
 
     !> converged ground state Mulliken gross charges - atomic charges
-    real(dp), intent(in) :: dq(:)
+    real(dp), intent(in) :: dq(:,:)
 
     !> atomic positions
     real(dp), intent(in) :: coord0(:,:)
-
-    !> number of excited states to solve for
-    integer, intent(in) :: nexc
-
-    !> state of interest (< 0 find brightest, 0 calculate all nexc states, > 0 that specific state)
-    integer, intent(in) :: nstat0
-
-    !> symmetry required singlet ('S'), triplet ("T") or both ("B")
-    character, intent(in) :: symc
 
     !> square overlap matrix between basis functions, both triangles required
     real(dp), intent(in) :: SSqr(:,:)
@@ -120,15 +106,6 @@ contains
 
     !> chemical species of each atom
     integer, intent(in) :: species0(:)
-
-    !> ground state Hubbard U values for each species
-    real(dp), intent(in) :: HubbardU(:)
-
-    !> ground state spin derivatives for each species
-    real(dp), intent(in) :: spinW(:)
-
-    !> real number of electrons in system
-    real(dp), intent(in) :: rnel
 
     !> Atomic neighbour lists
     integer, intent(in) :: iNeighbour(0:,:)
@@ -145,53 +122,10 @@ contains
     !> file descriptor for the tagged data output
     integer, intent(in) :: fdTagged
 
-    !> file unit for excited Mulliken populations?
-    integer, intent(in) :: fdMulliken
+    !> tagged writer
+    type(TTaggedWriter), intent(inout) :: taggedWriter
 
-    !> file unit if the coefficients for the excited states should be written to disc
-    integer, intent(in) :: fdCoeffs
-
-    !> Add the ground state to the excited state transition density matrix when determining the
-    !> natural orbitals
-    logical, intent(in) :: tGrndState
-
-    !> file for X+Y data
-    integer, intent(in) :: fdXplusY
-
-    !> File unit for single particle (KS) transitions if required
-    integer, intent(in) :: fdTrans
-
-    !> File unit for single particle transition dipole strengths
-    integer, intent(in) :: fdSPTrans
-
-    !> File unit for transition dipole data
-    integer, intent(in) :: fdTradip
-
-    !> write state of Arnoldi solver to disc
-    logical, intent(in) :: tArnoldi
-
-    !> file unit for Arnoldi write out
-    integer, intent(in) :: fdArnoldi
-
-    !> file unit for Arnoldi solver tests, if this is < 1 no tests are performed
-    integer, intent(in) :: fdArnoldiDiagnosis
-
-    !> file handle for excitation energies
-    integer, intent(in) :: fdExc
-
-    !> is an energy window specified
-    logical, intent(in) :: tEnergyWindow
-
-    !> energy window for transitions above energy of nexc-th single particle transtion
-    real(dp), intent(in) :: energyWindow
-
-    !> is an oscillator window specified
-    logical, intent(in) :: tOscillatorWindow
-
-    !> the window for transitions not included in nexc and energy window (if used)
-    real(dp), intent(in) :: oscillatorWindow
-
-    !> excitation energy of state nstat0
+    !> excitation energy of state nStat
     real(dp), intent(out) :: omega
 
     !> excitation energy of all states that have been solved
@@ -200,19 +134,19 @@ contains
     !> shift vector for potentials in the ground state
     real(dp), intent(in), optional :: shift(:)
 
-    !> non-SCC hamitonian data
-    type(OSlakoCont), intent(in), optional :: skHamCont
+    !> non-SCC hamiltonian data
+    type(TSlakoCont), intent(in), optional :: skHamCont
 
     !> overlap data
-    type(OSlakoCont), intent(in), optional :: skOverCont
+    type(TSlakoCont), intent(in), optional :: skOverCont
 
     !> excitation energy gradient with respect to atomic positions
     real(dp), intent(out), optional :: excgrad(:,:)
 
     !> Differentiator for H0 and S matrices.
-    class(NonSccDiff), intent(in), optional :: derivator
+    class(TNonSccDiff), intent(in), optional :: derivator
 
-    !> ground state square density matrix
+    !> ground state density matrix
     real(dp), intent(in), optional :: rhoSqr(:,:,:)
 
     !> Occupation numbers for natural orbitals from the excited state density matrix
@@ -221,79 +155,87 @@ contains
     !> the single particle eigenvectors themselves for the excited state density matrix.
     real(dp), intent(out), optional :: naturalOrbs(:,:,:)
 
-    real(dp) :: Ssq(nexc)
+
+    real(dp) :: Ssq(this%nExc)
     real(dp), allocatable :: gammaMat(:,:), snglPartTransDip(:,:)
     real(dp), allocatable :: stimc(:,:,:), wij(:)
-    real(dp), allocatable :: dqex(:), sposz(:), osz(:), xpy(:), xmy(:), pc(:,:)
-    real(dp), allocatable :: t(:,:), rhs(:), woo(:), wvv(:), wov(:)
+    real(dp), allocatable :: dqex(:,:), sposz(:), osz(:), xpy(:), xmy(:), pc(:,:,:)
+    real(dp), allocatable :: t(:,:,:), rhs(:), woo(:,:), wvv(:,:), wov(:)
     real(dp), allocatable :: evec(:,:), eval(:), transitionDipoles(:,:)
-    integer, allocatable :: win(:), getij(:,:)
-
+    integer, allocatable :: win(:), getia(:,:), getij(:,:), getab(:,:)
 
     !> array from pairs of single particles states to compound index - should replace with a more
     !> compact data structure in the cases where there are oscilator windows
-    integer, allocatable :: iatrans(:,:)
+    integer, allocatable :: iatrans(:,:,:)
 
     character, allocatable :: symmetries(:)
 
-    integer :: nocc, nocc_r, nvir_r, nxoo_r, nxvv_r
-    integer :: nxov, nxov_ud(2), nxov_r, nxov_d, nxov_rd
-    integer :: norb
+    integer :: nxoo_max, nxvv_max
+    integer, allocatable :: nocc_ud(:), nvir_ud(:)
+    integer :: mHOMO, mLUMO
+    integer :: nxov, nxov_ud(2), nxov_r, nxov_d, nxov_rd, nxoo_ud(2), nxvv_ud(2)
+    integer :: norb, nxoo, nxvv
     integer :: i, j, iSpin, isym, iLev, nStartLev, nEndLev
     integer :: nSpin
     character :: sym
+    character(lc) :: tmpStr
 
     real(dp) :: energyThreshold
 
     integer :: nStat
 
-
     !> control variables
     logical :: tZVector, tCoeffs, tTradip
-
 
     !> printing data
     logical :: tMulliken
 
-
     !> should gradients be calculated
     logical :: tForces
 
-    ! ARPACK library variables
-    ndigit = -3
-    ! Output unit:
-    logfil = fdArnoldi
-    msgets = 0
-    msaitr = 0
-    msapps = 0
-    mseigt = 0
-    mseupd = 0
-    if(tArnoldi) then
-      msaupd = 1
-      msaup2 = 1
-    else
-      msaupd = 0
-      msaup2 = 0
-    endif
-    ! End of ARPACK communication variables
+    !> transition charges, either cached or evaluated on demand
+    type(TTransCharges) :: transChrg
 
-    @:ASSERT(fdExc > 0)
 
-    ! work out which data files are required, based on whether they have valid file IDs (>0)
-    tMulliken = (fdMulliken > 0)
-    tCoeffs = (fdCoeffs > 0)
-    tTradip = (fdTradip > 0)
+    if (withArpack) then
 
-    if (tMulliken) then
-      open(fdMulliken, file=excitedQOut,position="rewind", status="replace")
-      close(fdMulliken)
-      open(fdMulliken, file=excitedDipoleOut, position="rewind", status="replace")
-      close(fdMulliken)
+      ! ARPACK library variables
+      ndigit = -3
+      ! Output unit:
+      logfil = this%fdArnoldi
+      msgets = 0
+      msaitr = 0
+      msapps = 0
+      mseigt = 0
+      mseupd = 0
+      if(this%tArnoldi) then
+        msaupd = 1
+        msaup2 = 1
+      else
+        msaupd = 0
+        msaup2 = 0
+      endif
+      ! End of ARPACK communication variables
+
     end if
 
-    @:ASSERT(fdArnoldi > 0)
-    if (tArnoldi) then
-      open(fdArnoldi, file=arpackOut, position="rewind", status="replace")
+    @:ASSERT(this%fdExc > 0)
+
+    ! work out which data files are required, based on whether they have valid file IDs (>0)
+    tMulliken = (this%fdMulliken > 0)
+    tCoeffs = (this%fdCoeffs > 0)
+    tTradip = (this%fdTradip > 0)
+
+    if (tMulliken) then
+      open(this%fdMulliken, file=excitedQOut,position="rewind", status="replace")
+      close(this%fdMulliken)
+      open(this%fdMulliken, file=excitedDipoleOut, position="rewind", status="replace")
+      close(this%fdMulliken)
+    end if
+
+    @:ASSERT(this%fdArnoldi > 0)
+    if (this%tArnoldi) then
+      open(this%fdArnoldi, file=arpackOut, position="rewind", status="replace")
     end if
 
     nSpin = size(grndEigVal, dim=2)
@@ -304,9 +246,12 @@ contains
     @:ASSERT(present(excgrad) .eqv. present(shift))
     @:ASSERT(present(excgrad) .eqv. present(skHamCont))
     @:ASSERT(present(excgrad) .eqv. present(skOverCont))
-    @:ASSERT(present(excgrad) .eqv. present(rhoSqr))
     @:ASSERT(present(excgrad) .eqv. present(derivator))
-
+  #:block DEBUG_CODE
+    if (present(excgrad)) then
+    @:ASSERT(present(rhoSqr))
+    end if
+  #:endblock DEBUG_CODE
     @:ASSERT(present(occNatural) .eqv. present(naturalOrbs))
 
     ! count initial number of transitions from occupied to empty states
@@ -324,9 +269,39 @@ contains
     end do
     nxov = sum(nxov_ud)
 
-    if (nexc + 1 >= nxov) then
+    ! # occupied/virtual states per spin channel
+    ALLOCATE(nocc_ud(nSpin))
+    ALLOCATE(nvir_ud(nSpin))
+    nocc_ud = 0
+    nvir_ud = 0
+    do iSpin = 1, nSpin
+      do i = 1, norb
+        if (filling(i,iSpin) > elecTolMax) then
+          nocc_ud(iSpin) = nocc_ud(iSpin) + 1
+        else
+          nvir_ud(iSpin) = nvir_ud(iSpin) + 1
+        end if
+      end do
+    end do
+
+    mHOMO = maxval(nocc_ud)
+    mLUMO = minval(nocc_ud) + 1
+
+    ! Dimension of getIJ and getAB
+    nxoo_ud(:) = 0
+    nxvv_ud(:) = 0
+    do iSpin = 1, nSpin
+       nxoo_ud(iSpin) = (nocc_ud(iSpin) * (nocc_ud(iSpin) + 1))/2
+       nxvv_ud(iSpin) = (nvir_ud(iSpin) * (nvir_ud(iSpin) + 1))/2
+    enddo
+    nxoo = sum(nxoo_ud)
+    nxvv = sum(nxvv_ud)
+    nxoo_max = maxval(nxoo_ud)
+    nxvv_max = maxval(nxvv_ud)
+
+    if (this%nExc + 1 >= nxov) then
       write(tmpStr,"(' Insufficent single particle excitations, ',I0,&
-          & ', for required number of excited states ',I0)")nxov, nexc
+          & ', for required number of excited states ',I0)")nxov, this%nExc
       call error(tmpStr)
     end if
 
@@ -338,26 +313,26 @@ contains
       end if
     end if
 
-
     !> is a z vector required?
-    tZVector = tForces .or. tMulliken .or. tCoeffs .or. present(naturalOrbs)
+    tZVector = tForces .or. tMulliken .or. tCoeffs .or. present(naturalOrbs) .or.&
+        & this%tWriteDensityMatrix
 
     ! Sanity checks
-    nstat = nstat0
-    if (nstat < 0 .and. symc /= "S") then
+    nstat = this%nStat
+    if (nstat < 0 .and. this%symmetry /= "S") then
       call error("Linresp: Brightest mode only available for singlets.")
     end if
-    if (nstat /= 0 .and. symc == "B") then
+    if (nstat /= 0 .and. this%symmetry == "B") then
       call error("Linresp: Both symmetries not allowed if a specific state is excited")
     end if
-    if (tZVector .and. nexc > nxov - 1) then
+    if (tZVector .and. this%nExc > nxov - 1) then
       call error("Linresp: With gradients/properties, nexc can be greater than the number of&
           & occupied-virtual excitations")
     end if
 
     ! Select symmetries to process
     if (.not. tSpin) then
-      select case (symc)
+      select case (this%symmetry)
       case ("B")
         ALLOCATE(symmetries(2))
         symmetries(:) = [ "T", "S" ]
@@ -373,16 +348,17 @@ contains
       ALLOCATE(symmetries(1))
       symmetries(:) = [ " " ]
     end if
-
     ! Allocation for general arrays
-    ALLOCATE(gammaMat(natom, natom))
+    ALLOCATE(gammaMat(this%nAtom, this%nAtom))
     ALLOCATE(snglPartTransDip(nxov, 3))
     ALLOCATE(stimc(norb, norb, nSpin))
     ALLOCATE(wij(nxov))
     ALLOCATE(win(nxov))
-    ALLOCATE(eval(nexc))
-    ALLOCATE(getij(nxov, 2))
-    ALLOCATE(transitionDipoles(nxov, 3))
+    ALLOCATE(eval(this%nExc))
+    ALLOCATE(getia(nxov, 3))
+    ALLOCATE(getij(nxoo, 3))
+    ALLOCATE(getab(nxvv, 3))
+    ALLOCATE(transitionDipoles(this%nExc, 3))
     ALLOCATE(sposz(nxov))
 
     ! Overlap times wave function coefficients - most routines in DFTB+ use lower triangle (would
@@ -396,59 +372,59 @@ contains
     call sccCalc%getAtomicGammaMatrix(gammaMat, iNeighbour, img2CentCell)
 
     ! Oscillator strengths for exited states, when needed.
-    ALLOCATE(osz(nexc))
+    ALLOCATE(osz(this%nExc))
 
     ! Find all single particle transitions and KS energy differences for cases that go from filled
-    ! to empty states
-    call getSPExcitations(grndEigVal, filling, wij, getij)
+    ! to empty states, create index arrays for ov,oo,vv
+    call getSPExcitations(nocc_ud, nvir_ud, grndEigVal, filling, wij, getia, getij, getab)
 
     ! put them in ascending energy order
-    if (tOscillatorWindow) then
+    if (this%tOscillatorWindow) then
       ! use a stable sort so that degenerate transitions from the same single particle state are
       ! grouped together in the results, allowing these to be selected together (since how intensity
       ! is shared out over degenerate transitions is arbitrary between eigensolvers/platforms).
-      call merge_sort(win,wij, 1.0_dp*epsilon(1.0))
+      call merge_sort(win, wij, 1.0E-3_dp*epsilon(0.0_rsp))
     else
       ! do not require stability, use the usual routine to sort, saving an O(N) workspace
-      call index_heap_sort(win,wij)
+      call index_heap_sort(win, wij)
     end if
     wij = wij(win)
 
     ! dipole strength of transitions between K-S states
-    call calcTransitionDipoles(coord0, win, nxov_ud(1), getij, iAtomStart, stimc, grndEigVecs,&
+    call calcTransitionDipoles(coord0, win, nxov_ud(1), getia, iAtomStart, stimc, grndEigVecs,&
         & snglPartTransDip)
 
     ! single particle excitation oscillator strengths
     sposz(:) = twothird * wij(:) * sum(snglPartTransDip**2, dim=2)
 
-    if (tOscillatorWindow .and. tZVector ) then
+    if (this%tOscillatorWindow .and. tZVector ) then
       call error("Incompabilitity between excited state property evaluation and an oscillator&
           & strength window at the moment.")
     end if
 
-    if (tOscillatorWindow .or. tEnergyWindow) then
+    if (this%tOscillatorWindow .or. this%tEnergyWindow) then
 
-      if (.not. tEnergyWindow) then
+      if (.not. this%tEnergyWindow) then
 
         ! find transitions that are strongly dipole allowed (> oscillatorWindow)
-        call dipselect(wij, sposz, win, snglPartTransDip,nxov_rd, oscillatorWindow, grndEigVal,&
-            & getij)
+        call dipselect(wij, sposz, win, snglPartTransDip, nxov_rd, this%oscillatorWindow,&
+            & grndEigVal, getia)
 
       else
 
         ! energy window above the lowest nexc single particle transitions
-        energyThreshold = wij(nexc) + energyWindow
+        energyThreshold = wij(this%nExc) + this%energyWindow
         nxov_r = count(wij <= energyThreshold)
 
         nxov_d = 0
-        if (tOscillatorWindow) then
+        if (this%tOscillatorWindow) then
 
           ! find transitions that are strongly dipole allowed (> oscillatorWindow)
           if (nxov_r < nxov) then
             ! find transitions that are strongly dipole allowed (> oscillatorWindow)
             call dipselect(wij(nxov_r+1:), sposz(nxov_r+1:), win(nxov_r+1:),&
-                & snglPartTransDip(nxov_r+1:,:),nxov_d, oscillatorWindow,&
-                & grndEigVal, getij)
+                & snglPartTransDip(nxov_r+1:,:),nxov_d, this%oscillatorWindow,&
+                & grndEigVal, getia)
           end if
 
         end if
@@ -462,90 +438,103 @@ contains
 
     end if
 
-    ! just in case energy/dipole windows add no extra states, and is due to an arpack solver
-    ! requirement combined with the need to get at least nexc states
-    nxov_rd = max(nxov_rd,min(nexc+1,nxov))
-
-    if (fdXplusY >  0) then
-      open(fdXplusY, file=XplusYOut, position="rewind", status="replace")
+    if (withArpack) then
+      ! just in case energy/dipole windows add no extra states, and is due to an arpack solver
+      ! requirement combined with the need to get at least nexc states
+      nxov_rd = max(nxov_rd,min(this%nExc+1,nxov))
+    else
+      nxov_rd = max(nxov_rd,min(this%nExc,nxov))
     end if
 
-    if(fdTrans>0) then
-      open(fdTrans, file=transitionsOut, position="rewind", status="replace")
-      write(fdTrans,*)
+    call TTransCharges_init(transChrg, iAtomStart, stimc, grndEigVecs, nxov_rd, nxov_ud(1), &
+        & nxoo_ud, nxvv_ud, getia, getij, getab, win, this%tCacheCharges)
+
+    if (this%fdXplusY >  0) then
+      open(this%fdXplusY, file=XplusYOut, position="rewind", status="replace")
+    end if
+
+    if(this%fdTrans>0) then
+      open(this%fdTrans, file=transitionsOut, position="rewind", status="replace")
+      write(this%fdTrans,*)
     endif
 
-    ! single particle transition dipole file
-    if (fdTradip > 0) then
-      open(fdTradip, file=transDipOut, position="rewind", status="replace")
-      write(fdTradip,*)
-      write(fdTradip,'(5x,a,5x,a,2x,a)') "#", 'w [eV]', 'Transition dipole (x,y,z) [Debye]'
-      write(fdTradip,*)
-      write(fdTradip,'(1x,57("="))')
-      write(fdTradip,*)
+    ! Many-body transition dipole file to excited states
+    if (this%fdTradip > 0) then
+      open(this%fdTradip, file=transDipOut, position="rewind", status="replace")
+      write(this%fdTradip,*)
+      write(this%fdTradip,'(5x,a,5x,a,2x,a)') "#", 'w [eV]', 'Transition dipole (x,y,z) [Debye]'
+      write(this%fdTradip,*)
+      write(this%fdTradip,'(1x,60("="))')
+      write(this%fdTradip,*)
     endif
 
     ! excitation energies
-    open(fdExc, file=excitationsOut, position="rewind", status="replace")
-    write(fdExc,*)
+    open(this%fdExc, file=excitationsOut, position="rewind", status="replace")
+    write(this%fdExc,*)
     if (tSpin) then
-      write(fdExc,'(5x,a,7x,a,9x,a,9x,a,6x,a,4x,a)') 'w [eV]', 'Osc.Str.', 'Transition','Weight',&
-          & 'KS [eV]','D<S*S>'
+      write(this%fdExc,'(5x,a,7x,a,9x,a,9x,a,6x,a,4x,a)') 'w [eV]', 'Osc.Str.', 'Transition',&
+          & 'Weight', 'KS [eV]','D<S*S>'
     else
-      write(fdExc,'(5x,a,7x,a,9x,a,9x,a,6x,a,4x,a)') 'w [eV]','Osc.Str.', 'Transition','Weight',&
-          & 'KS [eV]','Sym.'
+      write(this%fdExc,'(5x,a,7x,a,9x,a,9x,a,6x,a,4x,a)') 'w [eV]','Osc.Str.', 'Transition',&
+          & 'Weight', 'KS [eV]','Sym.'
     end if
 
-    write(fdExc,*)
-    write(fdExc,'(1x,80("="))')
-    write(fdExc,*)
+    write(this%fdExc,*)
+    write(this%fdExc,'(1x,80("="))')
+    write(this%fdExc,*)
 
     ! single particle excitations (output file and tagged file if needed).  Was used for nxov_rd =
     ! size(wij), but now for just states that are actually included in the excitation calculation.
-    call writeSPExcitations(wij, win, nxov_ud(1), getij, fdSPTrans, sposz, nxov_rd, tSpin)
-    ALLOCATE(evec(nxov_rd, nexc))
+    call writeSPExcitations(wij, win, nxov_ud(1), getia, this%fdSPTrans, sposz, nxov_rd, tSpin)
+    ALLOCATE(evec(nxov_rd, this%nExc))
 
     do isym = 1, size(symmetries)
 
       sym = symmetries(isym)
-      call buildAndDiagExcMatrix(tSpin, wij(:nxov_rd), sym, win, nxov_ud(1), nxov_rd, iAtomStart,&
-          & stimc, grndEigVecs, filling, getij, gammaMat, species0, spinW, fdArnoldiDiagnosis,&
-          & eval, evec )
+      if (withArpack) then
+        call buildAndDiagExcMatrixArpack(tSpin, wij(:nxov_rd), sym, win, nxov_ud(1), nxov_rd,&
+            & iAtomStart, stimc, grndEigVecs, filling, getia, gammaMat, species0, this%spinW,&
+            & transChrg, this%fdArnoldiDiagnosis, eval, evec, this%onSiteMatrixElements, orb)
+      else
+        call error("No suitable eigensolver was compiled with this binary")
+      end if
 
       ! Excitation oscillator strengths for resulting states
       call getOscillatorStrengths(sym, snglPartTransDip(1:nxov_rd,:), wij(:nxov_rd), eval, evec,&
-          & filling, win, nxov_ud(1), getij, nstat, osz, tTradip, transitionDipoles)
+          & filling, win, nxov_ud(1), getia, nstat, osz, tTradip, transitionDipoles)
 
       if (tSpin) then
-        call getExcSpin(Ssq, nxov_ud(1), getij, win, eval, evec, wij(:nxov_rd), filling, stimc,&
+        call getExcSpin(Ssq, nxov_ud(1), getia, win, eval, evec, wij(:nxov_rd), filling, stimc,&
             & grndEigVecs)
-        call writeExcitations(sym, osz, nexc, nxov_ud(1), getij, win, eval, evec, wij(:nxov_rd),&
-            & fdXplusY, fdTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc, Ssq)
+        call writeExcitations(sym, osz, this%nExc, nxov_ud(1), getia, win, eval, evec,&
+            & wij(:nxov_rd), this%fdXplusY, this%fdTrans, this%fdTradip, transitionDipoles,&
+            & tWriteTagged, fdTagged, taggedWriter, this%fdExc, Ssq)
       else
-        call writeExcitations(sym, osz, nexc, nxov_ud(1), getij, win, eval, evec, wij(:nxov_rd),&
-            & fdXplusY, fdTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc)
+        call writeExcitations(sym, osz, this%nExc, nxov_ud(1), getia, win, eval, evec,&
+            & wij(:nxov_rd), this%fdXplusY, this%fdTrans, this%fdTradip, transitionDipoles,&
+            & tWriteTagged, fdTagged, taggedWriter, this%fdExc)
       end if
 
       if (allocated(allOmega)) then
-        if (size(allOmega) /= size(symmetries) * nExc) then
+        if (size(allOmega) /= size(symmetries) * this%nExc) then
           deallocate(allOmega)
         end if
       end if
       if (.not. allocated(allOmega)) then
-        allocate(allOmega(size(symmetries) * nExc))
+        allocate(allOmega(size(symmetries) * this%nExc))
       end if
-      allOmega(1+(iSym-1)*nExc:iSym*nExc) = sqrt(eval)
+      allOmega(1+(iSym-1)*this%nExc:iSym*this%nExc) = sqrt(eval)
 
     end do
 
-    if (tArnoldi) then
-      close(fdArnoldi)
+    if (this%tArnoldi) then
+      close(this%fdArnoldi)
     end if
 
-    if (fdTrans > 0) close(fdTrans)
-    if (fdXplusY > 0) close(fdXplusY)
-    if (fdExc > 0) close(fdExc)
-    if (fdTradip > 0) close(fdTradip)
+    if (this%fdTrans > 0) close(this%fdTrans)
+    if (this%fdXplusY > 0) close(this%fdXplusY)
+    if (this%fdExc > 0) close(this%fdExc)
+    if (this%fdTradip > 0) close(this%fdTradip)
 
     ! Remove some un-used memory
     deallocate(snglPartTransDip)
@@ -563,7 +552,7 @@ contains
 
       if (nstat == 0) then
         nStartLev = 1
-        nEndLev = nexc
+        nEndLev = this%nExc
 
         if (tForces) then
           call error("Forces currently not available unless a single excited state is specified")
@@ -575,46 +564,43 @@ contains
       end if
 
       if (tSpin) then
-        call error("Z vector evaluation does not currently support spin polarization.")
+        if (any( abs(filling) > elecTolMax .and. abs(filling-1.0_dp) > elecTolMax ) ) then
+          call error("Fractional fillings not currently possible for excited state property&
+              & calculations")
+        end if
+      else
+        if (any( abs(filling) > elecTolMax .and. abs(filling-2.0_dp) > elecTolMax ) ) then
+          call error("Fractional fillings not currently possible for excited state property&
+              & calculations")
+        end if
       end if
-
-      if (any( abs(filling) > elecTolMax .and. abs(filling-2.0_dp) > elecTolMax ) ) then
-        call error("Fractional fillings not currently possible for excited state property&
-            & calculations")
-      end if
-
-      ! redefine if needed (generalize it for spin-polarized and fractional occupancy)
-      nocc = int(rnel) / 2
-
-      ! count virtual and occupied states
-      call getNorb_r(nxov_rd, win, getij, nocc, nocc_r, nvir_r)
-
-      ! size of occ-occ and virt-virt blocks
-      nxoo_r = (nocc_r * (nocc_r + 1)) / 2
-      nxvv_r = (nvir_r * (nvir_r + 1)) / 2
 
       ! Arrays needed for Z vector
       ALLOCATE(xpy(nxov_rd))
       ALLOCATE(xmy(nxov_rd))
-      ALLOCATE(t(norb, norb))
+      ALLOCATE(t(norb, norb, nSpin))
       ALLOCATE(rhs(nxov_rd))
-      ALLOCATE(woo(nxoo_r))
-      ALLOCATE(wvv(nxvv_r))
+      ALLOCATE(woo(nxoo_max, nSpin))
+      ALLOCATE(wvv(nxvv_max, nSpin))
       ALLOCATE(wov(nxov_rd))
-      ALLOCATE(iatrans(1:nocc, nocc+1:norb))
+      ALLOCATE(iatrans(norb, norb, nSpin))
 
       ! Arrays for gradients and Mulliken analysis
       if (tZVector) then
-        ALLOCATE(dqex(natom))
-        ALLOCATE(pc(norb, norb))
+        ALLOCATE(dqex(this%nAtom, nSpin))
+        ALLOCATE(pc(norb, norb, nSpin))
       end if
 
-      ! Furche terms: X+Y, X-Y
-      xpy(:nxov_rd) = sqrt(wij(:nxov_rd)) / sqrt(omega) * evec(:nxov_rd,nstat)
-      xmy(:nxov_rd) = sqrt(omega) / sqrt(wij(:nxov_rd)) * evec(:nxov_rd,nstat)
-
       ! set up transition indexing
-      call rindxov_array(win, nocc, nxov, getij, iatrans)
+      call rindxov_array(win, nxov, nxoo, nxvv, getia, getij, getab, iatrans)
+
+   #:block DEBUG_CODE
+      ! Test cached charges
+      print *,'--> Comparison of ov/oo/vv transition charges by direct evaluation of transQ'
+      print *,'--> and through the cache.'
+      call chargeTest(iAtomStart, stimc, grndEigVecs, win, nxov_rd, nxov_ud, &
+           &  nxoo_ud, nxvv_ud, nocc_ud, gammaMat, getia, getij, getab, iatrans, transChrg) 
+   #:endblock DEBUG_CODE 
 
       do iLev = nStartLev, nEndLev
         omega = sqrt(eval(iLev))
@@ -623,33 +609,39 @@ contains
         xmy(:nxov_rd) = evec(:nxov_rd,iLev) * sqrt(omega / wij(:nxov_rd))
 
         ! solve for Z and W to get excited state density matrix
-        call getZVectorEqRHS(xpy, xmy, win, iAtomStart, nocc, nocc_r,&
-            & nxov_ud(1), getij, iatrans, natom, species0,grndEigVal(:,1),&
-            & stimc, grndEigVecs, gammaMat, spinW, omega, sym, rhs, t,&
-            & wov, woo, wvv)
-        call solveZVectorEq(rhs, win, nxov_ud(1), getij, natom, iAtomStart,&
-            & stimc, gammaMat, wij(:nxov_rd), grndEigVecs)
-        call calcWVectorZ(rhs, win, nocc, nocc_r, nxov_ud(1), getij, iAtomStart,&
-            & stimc, grndEigVecs, gammaMat, grndEigVal(:,1), wov, woo, wvv)
-        call calcPMatrix(t, rhs, win, getij, pc)
+        call getZVectorEqRHS(xpy, xmy, win, iAtomStart, nocc_ud,&
+            & nxov_ud(1), getia, iatrans, this%nAtom, species0,grndEigVal,&
+            & stimc, grndEigVecs, gammaMat, this%spinW, omega, sym, rhs, t,&
+            & wov, woo, wvv, transChrg)
+        call solveZVectorPrecond(rhs, win, nxov_ud(1), getia, this%nAtom, iAtomStart,&
+            & stimc, gammaMat, wij(:nxov_rd), grndEigVecs, transChrg, species0, this%spinW)
+        call calcWVectorZ(rhs, win, nocc_ud, nxov_ud(1), getia, iAtomStart,&
+            & stimc, grndEigVecs, gammaMat, grndEigVal, wov, woo, wvv, transChrg, species0, this%spinW)
+        call calcPMatrix(t, rhs, win, getia, pc)
 
-        call writeCoeffs(pc, grndEigVecs, filling, nocc, fdCoeffs,&
-            & tCoeffs, tGrndState, occNatural, naturalOrbs)
+        call writeCoeffs(pc, grndEigVecs, filling, this%fdCoeffs,&
+            & tCoeffs, this%tGrndState, occNatural, naturalOrbs)
 
-        ! Make MO to AO transformation of the excited density matrix
-        call makeSimiliarityTrans(pc, grndEigVecs(:,:,1))
+        do iSpin = 1, nSpin
+          ! Make MO to AO transformation of the excited density matrix
+          call makeSimilarityTrans(pc(:,:,iSpin), grndEigVecs(:,:,iSpin))
+          call getExcMulliken(iAtomStart, pc(:,:,iSpin), SSqr, dqex(:,iSpin))
+        end do
 
-        call getExcMulliken(iAtomStart, pc, SSqr, dqex)
+        if (this%tWriteDensityMatrix) then
+          call writeDM(iLev, pc, rhoSqr)
+        end if
+
         if (tMulliken) then
-          call writeExcMulliken(sym, iLev, dq, dqex, coord0, fdMulliken)
+          !> for now, only total Mulliken charges
+          call writeExcMulliken(sym, iLev, dq(:,1), sum(dqex,dim=2), coord0, this%fdMulliken)
         end if
 
         if (tForces) then
-          call addGradients(sym, nxov_rd, natom, species0, iAtomStart, norb,&
-              & nocc, nocc_r, nxov_ud(1), getij, win, grndEigVecs, pc, stimc,&
-              & dq, dqex, gammaMat, HubbardU, spinW, shift, woo, wov, wvv,&
-              & xpy, coord0, orb, skHamCont, skOverCont, derivator,&
-              & rhoSqr(:,:,1), excgrad)
+          call addGradients(sym, nxov_rd, this%nAtom, species0, iAtomStart, norb, nocc_ud,&
+              & getia, win, grndEigVecs, pc, stimc, dq, dqex, gammaMat, this%HubbardU,&
+              & this%spinW, shift, woo, wov, wvv, transChrg, xpy, coord0, orb, skHamCont,&
+              & skOverCont, derivator, rhoSqr, excgrad)
         end if
 
       end do
@@ -664,8 +656,9 @@ contains
 
 
   !> Builds and diagonalizes the excitation matrix via iterative technique.
-  subroutine buildAndDiagExcMatrix(tSpin, wij, sym, win, nmatup, nxov, iAtomStart, stimc,&
-      & grndEigVecs, filling, getij, gammaMat, species0, spinW, fdArnoldiDiagnosis, eval, evec)
+  subroutine buildAndDiagExcMatrixArpack(tSpin, wij, sym, win, nmatup, nxov, iAtomStart, stimc,&
+      & grndEigVecs, filling, getia, gammaMat, species0, spinW, transChrg, fdArnoldiDiagnosis,&
+      & eval, evec, onsMEs, orb)
 
     !> spin polarisation?
     logical, intent(in) :: tSpin
@@ -701,7 +694,7 @@ contains
     real(dp), intent(in) :: gammaMat(:,:)
 
     !> index array for for single particle excitations
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
 
     !> central cell chemical species
     integer, intent(in) :: species0(:)
@@ -712,11 +705,20 @@ contains
     !> atomic resolved spin constants
     real(dp), intent(in) :: spinW(:)
 
+    !> machinery for transition charges between single particle levels
+    type(TTransCharges), intent(in) :: transChrg
+
     !> resulting eigenvalues for transitions
     real(dp), intent(out) :: eval(:)
 
     !> eigenvectors for transitions
     real(dp), intent(out) :: evec(:,:)
+
+    !> onsite corrections if in use
+    real(dp), allocatable :: onsMEs(:,:,:,:)
+
+    !> data type for atomic orbital information
+    type(TOrbitals), intent(in) :: orb
 
     real(dp), allocatable :: workl(:), workd(:), resid(:), vv(:,:), qij(:)
     real(dp) :: sigma
@@ -728,6 +730,7 @@ contains
 
     integer :: iState
     real(dp), allocatable :: Hv(:), orthnorm(:,:)
+    character(lc) :: tmpStr
 
     nexc = size(eval)
     natom = size(gammaMat, dim=1)
@@ -745,8 +748,8 @@ contains
     ALLOCATE(vv(nxov, ncv))
     ALLOCATE(qij(natom))
 
-    resid = 0.0_dp
-    workd = 0.0_dp
+    resid(:) = 0.0_dp
+    workd(:) = 0.0_dp
 
     ! random initial vector used for dsaupd ARPACK call
     info = 0
@@ -775,14 +778,14 @@ contains
       ! still running, test for an error return
       if (abs(ido) /= 1) then
         write(tmpStr,"(' Unexpected return from arpack routine saupd, IDO ',I0, ' INFO ',I0)")&
-            & ido,info
+            & ido, info
         call error(tmpStr)
       end if
 
       ! Action of excitation supermatrix on supervector
       call omegatvec(tSpin, workd(ipntr(1):ipntr(1)+nxov-1), workd(ipntr(2):ipntr(2)+nxov-1),&
-          & wij, sym, win, nmatup, iAtomStart, stimc, grndEigVecs, filling, getij, gammaMat,&
-          & species0, spinW)
+          & wij, sym, win, nmatup, iAtomStart, stimc, grndEigVecs, filling, getia, gammaMat,&
+          & species0, spinW, onsMEs, orb, transChrg)
 
     end do
 
@@ -823,7 +826,7 @@ contains
           & non-orthog'
       do iState = 1, nExc
         call omegatvec(tSpin, evec(:,iState), Hv, wij, sym, win, nmatup, iAtomStart, stimc,&
-            & grndEigVecs, filling, getij, gammaMat, species0, spinW)
+            & grndEigVecs, filling, getia, gammaMat, species0, spinW, onsMEs, orb, transChrg)
         write(fdArnoldiDiagnosis,"(I4,4E16.8)")iState, dot_product(Hv,evec(:,iState))-eval(iState),&
             & sqrt(sum( (Hv-evec(:,iState)*eval(iState) )**2 )), orthnorm(iState,iState) - 1.0_dp,&
             & max(maxval(orthnorm(:iState-1,iState)), maxval(orthnorm(iState+1:,iState)))
@@ -831,12 +834,12 @@ contains
       close(fdArnoldiDiagnosis)
     end if
 
-  end subroutine buildAndDiagExcMatrix
+  end subroutine buildAndDiagExcMatrixArpack
 
 
   !> Calculate oscillator strength for a given excitation between KS states
   subroutine getOscillatorStrengths(sym, snglPartTransDip, wij, eval, evec, filling, win, nmatup,&
-      & getij, istat, osz, tTradip, transitionDipoles)
+      & getia, istat, osz, tTradip, transitionDipoles)
 
     !> symmetry of transition
     character, intent(in) :: sym
@@ -863,7 +866,7 @@ contains
     integer, intent(in) :: nmatup
 
     !> index from single particle excitation to specific pair of single particle states involved
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
 
     !> write transition dipole
     logical :: tTradip
@@ -889,7 +892,7 @@ contains
       tSpin = .false.
     end if
 
-    transitionDipoles = 0.0_dp
+    transitionDipoles(:,:) = 0.0_dp
     osz = 0.0_dp
 
     ! Triplet oscillator strength and transition dipole is zero for
@@ -898,7 +901,7 @@ contains
       return
     end if
 
-    call wtdn(wij, filling, win, nmatup, nmat, getij, wnij)
+    call wtdn(wij, filling, win, nmatup, nmat, getia, wnij)
 
     !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
     do ii = 1, size(evec, dim=2)
@@ -913,172 +916,17 @@ contains
     end if
 
     if (tTradip) then
-      call transitionDipole(snglPartTransDip, wnij, eval, evec,&
-          & transitionDipoles)
+      call transitionDipole(snglPartTransDip, wnij, eval, evec, transitionDipoles)
     end if
 
   end subroutine getOscillatorStrengths
 
 
-  !> Calculate <S^2> as a measure of spin contamination (smaller magnitudes are better, 0.5 is
-  !> considered an upper threshold for reliability according to Garcia thesis)
-  subroutine getExcSpin(Ssq, nmatup, getij, win, eval, evec, wij, filling, stimc, grndEigVecs)
-
-    !> spin contamination
-    real(dp), intent(out) :: Ssq(:)
-
-    !> number of spin up excitations
-    integer, intent(in) :: nmatup
-
-    !> index for composite excitations to specific occupied and empty states
-    integer, intent(in) :: getij(:,:)
-
-    !> single particle excitations
-    integer, intent(in) :: win(:)
-
-    !> Casida exitation energies
-    real(dp), intent(in) :: eval(:)
-
-    !> Casida excited eigenvectors
-    real(dp), intent(in) :: evec(:,:)
-
-    !> single particle excitation energies
-    real(dp), intent(in) :: wij(:)
-
-    !> occupations in ground state
-    real(dp), intent(in) :: filling(:,:)
-
-    !> Overlap times ground state eigenvectors
-    real(dp), intent(in) :: stimc(:,:,:)
-
-    !> Ground state eigenvectors
-    real(dp), intent(in) :: grndEigVecs(:,:,:)
-
-    integer:: i, k, l, m, ia, jb, ii, aa, jj, bb
-    integer:: nmat, nexc, nup, ndwn
-    real(dp) :: rsqw, TDvnorm
-    real(dp), allocatable :: TDvec(:), TDvec_sq(:)
-    integer, allocatable :: TDvin(:)
-    logical :: ud_ia, ud_jb
-    real(dp) :: s_iaja, s_iaib, s_iajb, tmp
-    real(dp) :: wnij(size(wij))
-
-    nmat = size(evec, dim=1)
-    nexc = size(Ssq)
-    nup = ceiling(sum(filling(:,1)))
-    ndwn = ceiling(sum(filling(:,2)))
-    ALLOCATE(TDvec(nmat))
-    ALLOCATE(TDvec_sq(nmat))
-    ALLOCATE(TDvin(nmat))
-
-    call wtdn(wij, filling, win, nmatup, nmat, getij, wnij)
-
-    do i = 1, nexc
-      rsqw = 1.0_dp / sqrt(sqrt(eval(i)))
-      TDvec(:) = sqrt(wnij(:)) * rsqw * evec(:,i)
-      TDvnorm = 1.0_dp / sqrt(sum(TDvec**2))
-      TDvec(:) = TDvec(:) * TDvnorm
-      TDvec_sq = TDvec**2
-
-      ! put these transition dipoles in order of descending magnitude
-      call index_heap_sort(TDvin, TDvec_sq)
-      TDvin = TDvin(nmat:1:-1)
-      TDvec_sq = TDvec_sq(TDvin)
-
-      ! S_{ia,ja}
-      s_iaja = 0.0_dp
-      do k = 1, nmat
-        ia = TDvin(k)
-        call indxov(win, ia, getij, ii, aa)
-        ud_ia = (win(ia) <= nmatup)
-        do l = 1, nmat
-          jb = TDvin(l)
-          call indxov(win, jb, getij, jj, bb)
-          ud_jb = (win(jb) <= nmatup)
-
-          if ( (bb /= aa) .or. (ud_jb .neqv. ud_ia) ) then
-            cycle
-          end if
-
-          tmp = 0.0_dp
-          if (ud_ia) then
-            do m = 1,ndwn
-              tmp = tmp + MOoverlap(ii,m,stimc,grndEigVecs) * MOoverlap(jj,m,stimc,grndEigVecs)
-            end do
-          else
-            do m = 1,nup
-              tmp = tmp + MOoverlap(m,ii,stimc,grndEigVecs) * MOoverlap(m,jj,stimc,grndEigVecs)
-            end do
-          end if
-
-          s_iaja = s_iaja + TDvec(ia)*TDvec(jb)*tmp
-
-        end do
-      end do
-
-      ! S_{ia,ib}
-      s_iaib = 0.0_dp
-      do k = 1, nmat
-        ia = TDvin(k)
-        call indxov(win, ia, getij, ii, aa)
-        ud_ia = (win(ia) <= nmatup)
-        do l = 1, nmat
-          jb = TDvin(l)
-          call indxov(win, jb, getij, jj, bb)
-          ud_jb = (win(jb) <= nmatup)
-
-          if ( (ii /= jj) .or. (ud_jb .neqv. ud_ia) ) then
-            cycle
-          end if
-
-          tmp = 0.0_dp
-          if (ud_ia) then
-            do m = 1,ndwn
-              tmp = tmp + MOoverlap(aa,m,stimc,grndEigVecs) * MOoverlap(bb,m,stimc,grndEigVecs)
-            end do
-          else
-            do m = 1,nup
-              tmp = tmp + MOoverlap(m,aa,stimc,grndEigVecs) * MOoverlap(m,bb,stimc,grndEigVecs)
-            end do
-          end if
-
-          s_iaib = s_iaib + TDvec(ia)*TDvec(jb)*tmp
-        end do
-      end do
-
-      ! S_{ia,jb}
-      s_iajb = 0.0_dp
-      do k = 1, nmat
-        ia = TDvin(k)
-        call indxov(win, ia, getij, ii, aa)
-        ud_ia = (win(ia) <= nmatup)
-        if (.not. ud_ia ) then
-          cycle
-        end if
-        do l = 1, nmat
-          jb = TDvin(l)
-          call indxov(win, jb, getij, jj, bb)
-          ud_jb = (win(jb) <= nmatup)
-
-          if ( ud_jb ) cycle
-
-          s_iajb = s_iajb + TDvec(ia)*TDvec(jb) * MOoverlap(aa,bb,stimc,grndEigVecs)&
-              & * MOoverlap(ii,jj,stimc,grndEigVecs)
-
-        end do
-      end do
-
-      Ssq(i) =  s_iaja - s_iaib - 2.0_dp*s_iajb
-
-    end do
-
-  end subroutine getExcSpin
-
-
   !> Build right hand side of the equation for the Z-vector and those parts of the W-vectors which
   !> do not depend on Z.
-  subroutine getZVectorEqRHS(xpy, xmy, win, iAtomStart, homo, nocc, nmatup, getij, iatrans, natom,&
-      & species0, grndEigVal, stimc, c, gammaMat, spinW, omega, sym, rhs, t, wov, woo, wvv)
+  subroutine getZVectorEqRHS(xpy, xmy, win, iAtomStart, homo, nmatup, getia, iatrans, natom,&
+      & species0, grndEigVal, stimc, c, gammaMat, spinW, omega, sym, rhs, t, wov, woo, wvv,&
+      & transChrg)
 
     !> X+Y Furche term
     real(dp), intent(in) :: xpy(:)
@@ -1093,19 +941,16 @@ contains
     integer, intent(in) :: iAtomStart(:)
 
     !> highest occupied level
-    integer, intent(in) :: homo
-
-    !> number of filled states
-    integer, intent(in) :: nocc
+    integer, intent(in) :: homo(:)
 
     !> number of same spin excitations
     integer, intent(in) :: nmatup
 
     !> index array between transitions in square and 1D representations
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
 
     !> index array from orbital pairs to compound index
-    integer, intent(in) :: iatrans(:,homo+1:)
+    integer, intent(in) :: iatrans(:,:,:)
 
     !> number of central cell atoms
     integer, intent(in) :: natom
@@ -1114,7 +959,7 @@ contains
     integer, intent(in) :: species0(:)
 
     !> ground state wavefunctions
-    real(dp), intent(in) :: grndEigVal(:)
+    real(dp), intent(in) :: grndEigVal(:,:)
 
     !> overlap times ground state wavefunctions
     real(dp), intent(in) :: stimc(:,:,:)
@@ -1138,201 +983,316 @@ contains
     real(dp), intent(out) :: rhs(:)
 
     !> T matrix
-    real(dp), intent(out) :: t(:,:)
+    real(dp), intent(out) :: t(:,:,:)
 
     !> W vector occupied-virtual part
     real(dp), intent(out) :: wov(:)
 
     !> W vector occupied part
-    real(dp), intent(out) :: woo(:)
+    real(dp), intent(out) :: woo(:,:)
 
     !> W vector virtual part
-    real(dp), intent(out) :: wvv(:)
+    real(dp), intent(out) :: wvv(:,:)
 
-    real(dp), allocatable :: xpyq(:), qij(:), gamxpyq(:), qgamxpyq(:), gamqt(:)
-    integer :: nxov, nxoo, nxvv
-    integer :: i, j, a, b, ia, ib, ij, ab, ja
-    real(dp) :: tmp1, tmp2
-    logical :: updwn
+    !> machinery for transition charges between single particle levels
+    type(TTransCharges), intent(in) :: transChrg
+
+    real(dp), allocatable :: xpyq(:), qij(:), gamxpyq(:), qgamxpyq(:,:), gamqt(:)
+    real(dp), allocatable :: xpyqds(:), gamxpyqds(:)
+    integer :: nxov
+    integer, allocatable :: nxoo(:), nxvv(:), nvir(:)
+    integer :: i, j, a, b, ias, ibs, ij, ab, jas, s, nSpin
+    real(dp) :: tmp1, tmp2, fact
+    logical :: updwn, tSpin
 
     nxov = size(rhs)
-    nxoo = size(woo)
-    nxvv = size(wvv)
 
     ALLOCATE(xpyq(natom))
     ALLOCATE(qij(natom))
     ALLOCATE(gamxpyq(natom))
     ALLOCATE(gamqt(natom))
-    ALLOCATE(qgamxpyq(max(nxoo, nxvv)))
 
-    t(:,:) = 0.0_dp
+    t(:,:,:) = 0.0_dp
     rhs(:) = 0.0_dp
     wov(:) = 0.0_dp
-    woo(:) = 0.0_dp
-    wvv(:) = 0.0_dp
-    xpyq(:) = 0.0_dp
+    woo(:,:) = 0.0_dp
+    wvv(:,:) = 0.0_dp
+
+    nSpin = size(t, dim=3)
+
+    ALLOCATE(nxoo(nSpin))
+    ALLOCATE(nxvv(nSpin))
+    ALLOCATE(nvir(nSpin))
+
+    nxoo(:) = (homo(:)*(homo(:)+1))/2
+    nvir(:) = size(t, dim=1) - homo(:)
+    nxvv(:) = (nvir(:)*(nvir(:)+1))/2
+
+    ALLOCATE(qgamxpyq(max(maxval(nxoo), maxval(nxvv)), size(homo)))
+
+    if (nSpin == 2) then
+      tSpin = .true.
+      ALLOCATE(xpyqds(natom))
+      ALLOCATE(gamxpyqds(natom))
+    else
+      tSpin = .false.
+    end if
 
     ! Build t_ab = 0.5 * sum_i (X+Y)_ia (X+Y)_ib + (X-Y)_ia (X-Y)_ib
     ! and w_ab = Q_ab with Q_ab as in (B16) but with corrected sign.
     ! factor 1 / (1 + delta_ab) follows later
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
+    do ias = 1, nxov
+      call indxov(win, ias, getia, i, a, s)
 
       ! BA: is T_aa = 0?
-      do b = homo + 1, a
-        ib = iatrans(i, b)
-        call rindxvv(homo, a, b, ab)
-        tmp1 = xpy(ia) * xpy(ib) + xmy(ia) * xmy(ib)
-        tmp2 = omega * (xpy(ia) * xmy(ib)+ xmy(ia) * xpy(ib))
-        t(a,b) = t(a,b) + 0.5_dp * tmp1
+      do b = homo(s) + 1, a
+        ibs = iatrans(i, b, s)
+        call rindxvv(homo(s), a, b, ab)
+        tmp1 = xpy(ias) * xpy(ibs) + xmy(ias) * xmy(ibs)
+        tmp2 = omega * (xpy(ias) * xmy(ibs)+ xmy(ias) * xpy(ibs))
+        t(a,b,s) = t(a,b,s) + 0.5_dp * tmp1
         ! to prevent double counting
         if (a /= b) then
-          t(b,a) = t(b,a) + 0.5_dp * tmp1
+          t(b,a,s) = t(b,a,s) + 0.5_dp * tmp1
         end if
         ! Note: diagonal elements will be multiplied by 0.5 later.
-        wvv(ab) = wvv(ab) + grndEigVal(i) * tmp1 + tmp2
+        wvv(ab,s) = wvv(ab,s) + grndEigVal(i,s) * tmp1 + tmp2
       end do
 
       ! Build t_ij = 0.5 * sum_a (X+Y)_ia (X+Y)_ja + (X-Y)_ia (X-Y)_ja and 1 / (1 + delta_ij) Q_ij
       ! with Q_ij as in eq. (B9) (1st part of w_ij)
-      do j = i, homo
-        ja = iatrans(j,a)
-        call rindxvv(homo-nocc, j, i, ij)
-        tmp1 = xpy(ia) * xpy(ja) + xmy(ia) * xmy(ja)
-        tmp2 = omega * (xpy(ia) * xmy(ja) + xmy(ia) * xpy(ja))
+      do j = i, homo(s)
+        jas = iatrans(j,a,s)
+
+        ! ADG: assume no constraint on occ space atm (nocc_r = nocc)
+        ! otherwise first argument should be nocc - nocc_r
+        call rindxvv(0, j, i, ij)
+        tmp1 = xpy(ias) * xpy(jas) + xmy(ias) * xmy(jas)
+        tmp2 = omega * (xpy(ias) * xmy(jas) + xmy(ias) * xpy(jas))
         ! Note, there is a typo in Heringer et al. J. Comp Chem 28, 2589.
         ! The sign must be negative see Furche, J. Chem. Phys, 117 7433 (2002).
-        t(i,j) = t(i,j) - 0.5_dp * tmp1
+        t(i,j,s) = t(i,j,s) - 0.5_dp * tmp1
         ! to prevent double counting
         if (i /= j) then
-          t(j,i) = t(j,i) - 0.5_dp * tmp1
+          t(j,i,s) = t(j,i,s) - 0.5_dp * tmp1
         end if
-        woo(ij) = woo(ij) - grndEigVal(a) * tmp1 + tmp2
+        woo(ij,s) = woo(ij,s) - grndEigVal(a,s) * tmp1 + tmp2
       end do
+
     end do
 
-    ! Build xpyq = sum_ia (X+Y)_ia
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
-      updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, c, qij)
-      xpyq(:) = xpyq + xpy(ia) * qij
-    end do
+    ! xpyq = Q * xpy
+    xpyq(:) = 0.0_dp
+    call transChrg%qMatVec(iAtomStart, stimc, c, getia, win, xpy, xpyq)
 
-    ! qgamxpyq(ab) = sum_jc K_ab,jc (X+Y)_jc
-    if (sym == "S") then
+    if (.not. tSpin) then  ! ---- spin-unpolarized case ----
+
+      ! qgamxpyq(ab) = sum_jc K_ab,jc (X+Y)_jc
+      if (sym == "S") then
+        call hemv(gamxpyq, gammaMat,  xpyq)
+        do ab = 1, nxvv(1)
+          call indxvv(homo(1), ab, a, b)
+          qij(:) = transq(a, b, iAtomStart, .true., stimc, c)
+          qgamxpyq(ab, 1) = 2.0_dp * sum(qij * gamxpyq)
+        end do
+      else ! triplet case
+        do ab = 1, nxvv(1)
+          call indxvv(homo(1), ab, a, b)
+          qij(:) = transq(a, b, iAtomStart, .true., stimc, c)
+          qgamxpyq(ab, 1) = 2.0_dp * sum(qij * xpyq * spinW(species0))
+        end do
+      end if
+
+    else  ! ---- spin-polarized case -----
+
+      xpyqds(:) = 0.0_dp
+      call transChrg%qMatVecDs(iAtomStart, stimc, c, getia, win, xpy, xpyqds)
+
       call hemv(gamxpyq, gammaMat,  xpyq)
-      do ab = 1, nxvv
-        call indxvv(homo, ab, a, b)
-        call transq(a, b, iAtomStart, updwn, stimc, c, qij)
-        qgamxpyq(ab) = 2.0_dp * sum(qij * gamxpyq)
+      do s = 1, 2
+        if (s == 1) then
+          updwn = .true.
+          fact = 1.0_dp
+        else
+          updwn = .false.
+          fact = -1.0_dp
+        end if
+        do ab = 1, nxvv(s)
+          call indxvv(homo(s), ab, a, b)
+          qij(:) = transq(a, b, iAtomStart, updwn, stimc, c)
+          qgamxpyq(ab, s) = sum(qij * gamxpyq)
+          !magnetization part
+          qgamxpyq(ab, s) = qgamxpyq(ab, s) + fact * sum(qij * xpyqds * spinW(species0))
+        end do
       end do
-    else
-      do ab = 1, nxvv
-        call indxvv(homo, ab, a, b)
-        call transq(a, b, iAtomStart, updwn, stimc, c, qij)
-        qgamxpyq(ab) = 2.0_dp * sum(qij * xpyq * spinW(species0))
-      end do
+
     end if
 
     ! rhs(ia) -= Qia = sum_b (X+Y)_ib * qgamxpyq(ab))
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
-      do b = homo + 1, a
-        call rindxvv(homo, a, b, ab)
-        ib = iatrans(i,b)
-        rhs(ia) = rhs(ia) - 2.0_dp * xpy(ib) * qgamxpyq(ab)
+    do ias = 1, nxov
+      call indxov(win, ias, getia, i, a, s)
+
+      do b = homo(s) + 1, a
+        call rindxvv(homo(s), a, b, ab)
+        ibs = iatrans(i,b,s)
+        rhs(ias) = rhs(ias) - 2.0_dp * xpy(ibs) * qgamxpyq(ab, s)
         ! Since qgamxpyq has only upper triangle
         if (a /= b) then
-          rhs(ib) = rhs(ib) - 2.0_dp * xpy(ia) * qgamxpyq(ab)
+          rhs(ibs) = rhs(ibs) - 2.0_dp * xpy(ias) * qgamxpyq(ab, s)
         end if
       end do
     end do
 
     ! -rhs = -rhs - sum_j (X + Y)_ja H + _ij[X + Y]
-    if (sym == "S") then
-      do ij = 1, nxoo
-        qgamxpyq(ij) = 0.0_dp
-        call indxoo(homo, nocc, ij, i, j)
-        call transq(i, j, iAtomStart, updwn, stimc, c, qij)
-        ! qgamxpyq(ij) = sum_kb K_ij,kb (X+Y)_kb
-        qgamxpyq(ij) = 2.0_dp * sum(qij * gamxpyq)
+    if (.not. tSpin) then  ! ---- spin-unpolarized case ----
+
+      if (sym == "S") then
+        do ij = 1, nxoo(1)
+          qgamxpyq(ij, 1) = 0.0_dp
+          call indxoo(ij, i, j)
+          qij(:) = transq(i, j, iAtomStart, .true., stimc, c)
+          ! qgamxpyq(ij) = sum_kb K_ij,kb (X+Y)_kb
+          qgamxpyq(ij, 1) = 2.0_dp * sum(qij * gamxpyq)
+        end do
+      else
+        do ij = 1, nxoo(1)
+          qgamxpyq(ij, 1) = 0.0_dp
+          call indxoo(ij, i, j)
+          qij(:) = transq(i, j, iAtomStart, .true., stimc, c)
+          qgamxpyq(ij, 1) = 2.0_dp * sum(qij * xpyq * spinW(species0))
+        end do
+      end if
+
+    else  ! ---- spin-polarized case -----
+
+      do s = 1, 2
+        if (s == 1) then
+          updwn = .true.
+          fact = 1.0_dp
+        else
+          updwn = .false.
+          fact = -1.0_dp
+        end if
+        do ij = 1, nxoo(s)
+          qgamxpyq(ij, s) = 0.0_dp
+          call indxoo(ij, i, j)
+          qij(:) = transq(i, j, iAtomStart, updwn, stimc, c)
+          qgamxpyq(ij, s) = sum(qij * gamxpyq)
+          !magnetization part
+          qgamxpyq(ij, s) = qgamxpyq(ij, s) + fact * sum(qij * xpyqds * spinW(species0))
+        end do
       end do
-    else
-      do ij = 1, nxoo
-        qgamxpyq(ij) = 0.0_dp
-        call indxoo(homo, nocc, ij, i, j)
-        call transq(i, j, iAtomStart, updwn, stimc, c, qij)
-        qgamxpyq(ij) = 2.0_dp * sum(qij * xpyq * spinW(species0))
-      end do
+
     end if
 
     ! rhs(ia) += Qai = sum_j (X+Y)_ja qgamxpyq(ij)
     ! add Qai to Wia as well.
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
-      do j = i, homo
-        ja = iatrans(j, a)
-        ij = i-homo+nocc + ((j-homo+nocc - 1) * (j-homo+nocc)) / 2
-        tmp1 = 2.0_dp * xpy(ja) * qgamxpyq(ij)
-        rhs(ia) = rhs(ia) + tmp1
-        wov(ia) = wov(ia) + tmp1
+    do ias = 1, nxov
+      call indxov(win, ias, getia, i, a, s)
+      do j = i, homo(s)
+        jas = iatrans(j, a, s)
+        !ij = i-homo+nocc + ((j-homo+nocc - 1) * (j-homo+nocc)) / 2
+        call rindxvv(0, j, i, ij)
+        tmp1 = 2.0_dp * xpy(jas) * qgamxpyq(ij, s)
+        rhs(ias) = rhs(ias) + tmp1
+        wov(ias) = wov(ias) + tmp1
         if (i /= j) then
-          tmp2 = 2.0_dp * xpy(ia) * qgamxpyq(ij)
-          rhs(ja) = rhs(ja) + tmp2
-          wov(ja) = wov(ja) + tmp2
+          tmp2 = 2.0_dp * xpy(ias) * qgamxpyq(ij, s)
+          rhs(jas) = rhs(jas) + tmp2
+          wov(jas) = wov(jas) + tmp2
         end if
       end do
     end do
 
     ! gamxpyq(iAt2) = sum_ij q_ij(iAt2) T_ij
     gamxpyq(:) = 0.0_dp
-    do ij = 1, nxoo
-      call indxoo(homo, nocc, ij, i, j)
-      call transq(i, j, iAtomStart, updwn, stimc, c, qij)
-      if (i == j) then
-        gamxpyq(:) = gamxpyq(:) + t(i,j) * qij(:)
-      else
-        ! factor 2 because of symmetry of the matrix
-        gamxpyq(:) = gamxpyq(:) + 2.0_dp  * t(i,j) * qij(:)
-      end if
-    end do
+    if (tSpin) then
+      gamxpyqds(:) = 0.0_dp
+    end if
 
-    ! gamxpyq(iAt2) += sum_ab q_ab(iAt2) T_ab
-    do ab = 1, nxvv
-      call indxvv(homo, ab, a, b)
-      call transq(a, b, iAtomStart, updwn, stimc, c, qij)
-      if (a == b) then
-        gamxpyq(:) = gamxpyq(:) + t(a,b) * qij(:)
+    do s = 1, nSpin
+      if (s == 1) then
+        updwn = .true.
+        fact = 1.0_dp
       else
-        ! factor 2 because of symmetry of the matrix
-        gamxpyq(:) = gamxpyq(:) + 2.0_dp * t(a,b) * qij(:)
+        updwn = .false.
+        fact = -1.0_dp
       end if
+      do ij = 1, nxoo(s)
+        call indxoo(ij, i, j)
+        qij = transq(i, j, iAtomStart, updwn, stimc, c)
+        if (i == j) then
+          gamxpyq(:) = gamxpyq(:) + t(i,j,s) * qij(:)
+          if (tSpin) then
+            gamxpyqds(:) = gamxpyqds(:) + t(i,j,s) * qij(:) * fact
+          end if
+        else
+          ! factor 2 because of symmetry of the matrix
+          gamxpyq(:) = gamxpyq(:) + 2.0_dp  * t(i,j,s) * qij(:)
+          if (tSpin) then
+            gamxpyqds(:) = gamxpyqds(:) + 2.0_dp * t(i,j,s) * qij(:) * fact
+          end if
+        end if
+      end do
+
+      ! gamxpyq(iAt2) += sum_ab q_ab(iAt2) T_ab
+      do ab = 1, nxvv(s)
+        call indxvv(homo(s), ab, a, b)
+        qij(:) = transq(a, b, iAtomStart, updwn, stimc, c)
+        if (a == b) then
+          gamxpyq(:) = gamxpyq(:) + t(a,b,s) * qij(:)
+          if (tSpin) then
+            gamxpyqds(:) = gamxpyqds(:) + t(a,b,s) * qij(:) * fact
+          end if
+        else
+          ! factor 2 because of symmetry of the matrix
+          gamxpyq(:) = gamxpyq(:) + 2.0_dp * t(a,b,s) * qij(:)
+          if (tSpin) then
+            gamxpyqds(:) = gamxpyqds(:) + 2.0_dp * t(a,b,s) * qij(:) * fact
+          end if
+        end if
+      end do
+
     end do
 
     ! gamqt(iAt1) = sum_iAt2 gamma_iAt1,iAt2 gamxpyq(iAt2)
     call hemv(gamqt, gammaMat, gamxpyq)
 
     ! rhs -= sum_q^ia(iAt1) gamxpyq(iAt1)
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
-      updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, c, qij)
-      rhs(ia) = rhs(ia) - 4.0_dp * sum(qij * gamqt)
-    end do
+    if (.not. tSpin) then
+      call transChrg%qVecMat(iAtomStart, stimc, c, getia, win, -4.0_dp*gamqt, rhs)
+    else
+      call transChrg%qVecMat(iAtomStart, stimc, c, getia, win, -2.0_dp*gamqt, rhs)
+      call transChrg%qVecMatDs(iAtomStart, stimc, c, getia, win, -2.0_dp*gamxpyqds*spinW(species0), rhs)
+    end if
 
     ! Furche vectors
-    do ij = 1, nxoo
-      call indxoo(homo, nocc, ij, i, j)
-      call transq(i, j, iAtomStart, updwn, stimc, c, qij)
-      woo(ij) = woo(ij) + 4.0_dp * sum(qij * gamqt)
+    do s = 1, nSpin
+      if (s == 1) then
+        updwn = .true.
+        fact = 1.0_dp
+      else
+        updwn = .false.
+        fact = -1.0_dp
+      end if
+      do ij = 1, nxoo(s)
+        call indxoo(ij, i, j)
+        qij(:) = transq(i, j, iAtomStart, updwn, stimc, c)
+        if (.not. tSpin) then
+          woo(ij,s) = woo(ij,s) + 4.0_dp * sum(qij * gamqt)
+        else
+          woo(ij,s) = woo(ij,s) + 2.0_dp * sum(qij * gamqt)
+          woo(ij,s) = woo(ij,s) + 2.0_dp * fact * sum(qij * gamxpyqds * spinW(species0))
+        end if
+      end do
     end do
 
   end subroutine getZVectorEqRHS
 
 
-  !> Solving the (A+B) Z = -R equation via conjugate gradient
-  subroutine solveZVectorEq(rhs, win, nmatup, getij, natom, iAtomStart, stimc, gammaMat, wij, c)
+  !> Solving the (A+B) Z = -R equation via diagonally preconditioned conjugate gradient
+  subroutine solveZVectorPrecond(rhs, win, nmatup, getia, natom, iAtomStart, stimc, gammaMat, wij,&
+      & c, transChrg, species0, spinW)
 
     !> on entry -R, on exit Z
     real(dp), intent(inout) :: rhs(:)
@@ -1344,7 +1304,7 @@ contains
     integer, intent(in) :: nmatup
 
     !> index array from composite index to specific filled-empty transition
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
 
     !> number of atoms
     integer, intent(in) :: natom
@@ -1364,48 +1324,64 @@ contains
     !> ground state mo-coefficients
     real(dp), intent(in) :: c(:,:,:)
 
+    !> machinery for transition charges between single particle levels
+    type(TTransCharges), intent(in) :: transChrg
+
+    !> central cell chemical species
+    integer, intent(in) :: species0(:)
+
+    !> ground state spin derivatives for each species
+    real(dp), intent(in) :: spinW(:)
+
     integer :: nxov
-    integer :: ia, i, a, k
-    real(dp) :: rhs2(size(rhs)),rkm1(size(rhs)),pkm1(size(rhs)),apk(size(rhs))
+    integer :: ia, kk
+    real(dp) :: rhs2(size(rhs)), rkm1(size(rhs)), zkm1(size(rhs)), pkm1(size(rhs)), apk(size(rhs))
     real(dp) :: qTmp(nAtom), rs, alphakm1, tmp1, tmp2, bkm1
-    real(dp), allocatable :: qij(:)
-    logical :: updwn
+    real(dp), allocatable :: qij(:), P(:)
+    logical :: tSpin
 
     nxov = size(rhs)
     allocate(qij(nAtom))
 
-    ! Choosing a start value
-    ! rhs2 = rhs / (A+B)_ia,ia (diagonal of the supermatrix sum A+B)
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
-      updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, c, qij)
-      call hemv(qTmp, gammaMat, qij)
-      rs = 4.0_dp * dot_product(qij, qTmp) + wij(ia)
-      rhs2(ia) = rhs(ia) / rs
-    end do
+    tSpin = (nxov > nmatup)
 
-    ! unit vector
-    rhs2 = 1.0_dp / sqrt(real(nxov,dp))
+    ! diagonal preconditioner
+    ! P^-1 = 1 / (A+B)_ia,ia (diagonal of the supermatrix sum A+B)
+    allocate(P(nxov))
+    do ia = 1, nxov
+      qij = transChrg%qTransIA(ia, iAtomStart, stimc, c, getia, win)
+      call hemv(qTmp, gammaMat, qij)
+      if (.not. tSpin) then
+        rs = 4.0_dp * dot_product(qij, qTmp) + wij(ia)
+      else
+        rs = 2.0_dp * dot_product(qij, qTmp) + wij(ia)
+        rs = rs + 2.0_dp * sum(qij * qij * spinW(species0))
+      end if
+      P(ia) = 1.0_dp / rs
+    end do
 
     ! Free some space, before entering the apbw routine
     deallocate(qij)
 
-    ! action of matrix on vector
-    call apbw(rkm1, rhs2, wij, nxov, natom, win, nmatup, getij, iAtomStart,&
-        & stimc, c, gammaMat)
+    ! unit vector as initial guess solution
+    rhs2(:) = 1.0_dp / sqrt(real(nxov,dp))
 
-    rkm1 = rhs - rkm1
-    pkm1 = rkm1
+    ! action of matrix on vector
+    call apbw(rkm1, rhs2, wij, nxov, natom, win, nmatup, getia, iAtomStart, stimc, c, gammaMat,&
+        & transChrg, species0, spinW)
+
+    rkm1(:) = rhs - rkm1
+    zkm1(:) = P * rkm1
+    pkm1(:) = zkm1
 
     ! Iteration: should be convergent in at most nxov steps for a quadradic surface, so set higher
-    do k = 1, nxov**2
+    do kk = 1, nxov**2
 
       ! action of matrix on vector
-      call apbw(apk, pkm1, wij, nxov, natom,&
-          & win, nmatup, getij, iAtomStart, stimc, c, gammaMat)
+      call apbw(apk, pkm1, wij, nxov, natom, win, nmatup, getia, iAtomStart, stimc, c, gammaMat,&
+          & transChrg, species0, spinW)
 
-      tmp1 = dot_product(rkm1, rkm1)
+      tmp1 = dot_product(rkm1, zkm1)
       tmp2 = dot_product(pkm1, apk)
       alphakm1 = tmp1 / tmp2
 
@@ -1420,43 +1396,45 @@ contains
         exit
       end if
 
-      if (k == nxov**2) then
+      if (kk == nxov**2) then
         call error("solveZVectorEq : Z vector not converged!")
       end if
 
+      zkm1(:) = P * rkm1
+
+      tmp2 = dot_product(zkm1, rkm1)
+
+      ! Fletcher-Reeves update
       bkm1 = tmp2 / tmp1
 
-      pkm1 = rkm1 + bkm1 * pkm1
+      pkm1 = zkm1 + bkm1 * pkm1
 
     end do
 
     rhs(:) = rhs2(:)
 
-  end subroutine solveZVectorEq
+  end subroutine solveZVectorPrecond
 
 
   !> Calculate Z-dependent parts of the W-vectors and divide diagonal elements of W_ij and W_ab by
   !> 2.
-  subroutine calcWvectorZ(zz, win, homo, nocc, nmatup, getij, iAtomStart, stimc, c, gammaMat,&
-      & grndEigVal, wov, woo, wvv)
+  subroutine calcWvectorZ(zz, win, homo, nmatup, getia, iAtomStart, stimc, c, gammaMat,&
+      & grndEigVal, wov, woo, wvv, transChrg, species0, spinW)
 
     !> Z vector
     real(dp), intent(in) :: zz(:)
 
-    !> index array for transitions
+    !> index array for single particle transitions
     integer, intent(in) :: win(:)
 
     !> highest occupied level
-    integer, intent(in) :: homo
-
-    !> number of filled levels
-    integer, intent(in) :: nocc
+    integer, intent(in) :: homo(:)
 
     !> number of same spin excitations
     integer, intent(in) :: nmatup
 
     !> index array between transitions in square and 1D representations
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
 
     !> index array for S and H0 ground state square matrices
     integer, intent(in) :: iAtomStart(:)
@@ -1471,76 +1449,157 @@ contains
     real(dp), intent(in) :: gammaMat(:,:)
 
     !> ground state MO-energies
-    real(dp), intent(in) :: grndEigVal(:)
+    real(dp), intent(in) :: grndEigVal(:,:)
 
     !> W vector occupied-virtual part
     real(dp), intent(inout) :: wov(:)
 
     !> W vector occupied part
-    real(dp), intent(inout) :: woo(:)
+    real(dp), intent(inout) :: woo(:,:)
 
     !> W vector virtual part
-    real(dp), intent(inout) :: wvv(:)
+    real(dp), intent(inout) :: wvv(:,:)
 
-    integer :: nxov, nxoo, nxvv, natom
-    integer :: ij, ia, ab, i, j, a, b, iAt1
-    real(dp), allocatable :: qij(:), gamxpyq(:), zq(:)
-    logical :: updwn
+    !> machinery for transition charges between single particle levels
+    type(TTransCharges), intent(in) :: transChrg
+
+    !> central cell chemical species
+    integer, intent(in) :: species0(:)
+
+    !> ground state spin derivatives for each species
+    real(dp), intent(in) :: spinW(:)
+
+    integer :: nxov, natom, nSpin
+    integer, allocatable :: nxoo(:), nxvv(:), nvir(:)
+    integer :: ij, ias, ab, i, j, a, b, s, iAt1
+    real(dp) :: fact
+    real(dp), allocatable :: qij(:), gamxpyq(:), zq(:), zqds(:)
+    logical :: updwn, tSpin
 
     nxov = size(zz)
     natom = size(gammaMat, dim=1)
-    nxoo = size(woo)
-    nxvv = size(wvv)
+    nSpin = size(grndEigVal, dim=2)
+
     ALLOCATE(qij(natom))
     ALLOCATE(gamxpyq(natom))
     ALLOCATE(zq(natom))
+    ALLOCATE(nxoo(nSpin))
+    ALLOCATE(nxvv(nSpin))
+    ALLOCATE(nvir(nSpin))
+
+    nxoo(:) = (homo(:)*(homo(:)+1))/2
+    nvir(:) = size(c, dim=1) - homo(:)
+    nxvv(:) = (nvir(:)*(nvir(:)+1))/2
+
+    if ( nSpin == 2 ) then
+      tSpin = .true.
+      ALLOCATE(zqds(natom))
+    else
+      tSpin = .false.
+    end if
 
     ! Adding missing epsilon_i * Z_ia term to W_ia
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
-      wov(ia) = wov(ia) + zz(ia) * grndEigVal(i)
+    do ias = 1, nxov
+      call indxov(win, ias, getia, i, a, s)
+      wov(ias) = wov(ias) + zz(ias) * grndEigVal(i, s)
     end do
 
     ! Missing sum_kb 4 K_ijkb Z_kb term in W_ij: zq(iAt1) = sum_kb q^kb(iAt1) Z_kb
-    do iAt1 = 1, natom
-      zq(iAt1) = 0.0_dp
-      do ia = 1, nxov
-        call indxov(win, ia, getij, i, a)
-        updwn = (win(ia) <= nmatup)
-        call transq(i, a, iAtomStart, updwn, stimc, c, qij)
-        zq(iAt1) = zq(iAt1) + zz(ia) * qij(iAt1)
-      end do
-    end do
-
+    zq(:) = 0.0_dp
+    call transChrg%qMatVec(iAtomStart, stimc, c, getia, win, zz, zq)
     call hemv(gamxpyq, gammaMat, zq)
 
+    if (tSpin) then
+      zqds(:) = 0.0_dp
+      call transChrg%qMatVecDs(iAtomStart, stimc, c, getia, win, zz, zqds)
+    end if
+
     ! sum_iAt1 qij(iAt1) gamxpyq(iAt1)
-    do ij = 1, nxoo
-      call indxoo(homo, nocc, ij, i, j)
-      call transq(i, j, iAtomStart, updwn, stimc, c, qij)
-      do iAt1 = 1, natom
+    do s = 1, nSpin
+      if (s == 1) then
+        updwn = .true.
+        fact = 1.0_dp
+      else
+        updwn = .false.
+        fact = -1.0_dp
+      end if
+      do ij = 1, nxoo(s)
+        call indxoo(ij, i, j)
+        qij(:) = transq(i, j, iAtomStart, updwn, stimc, c)
         ! W contains 1/2 for i == j.
-        woo(ij) = woo(ij) + 4.0_dp * qij(iAt1) * gamxpyq(iAt1)
+        if (.not. tSpin) then
+          woo(ij,s) = woo(ij,s) + 4.0_dp * sum(qij * gamxpyq)
+        else
+          woo(ij,s) = woo(ij,s) + 2.0_dp * sum(qij * gamxpyq)
+          woo(ij,s) = woo(ij,s) + 2.0_dp * fact * sum(qij * zqds * spinW(species0))
+        end if
       end do
     end do
 
     ! Divide diagonal elements of W_ij by 2.
-    do ij = 1, nxoo
-      call indxoo(homo, nocc, ij, i, j)
-      if (i == j) then
-        woo(ij) = 0.5_dp * woo(ij)
-      end if
+    do s = 1, nSpin
+      do ij = 1, nxoo(s)
+        call indxoo(ij, i, j)
+        if (i == j) then
+          woo(ij,s) = 0.5_dp * woo(ij,s)
+        end if
+      end do
     end do
 
     ! Divide diagonal elements of W_ab by 2.
-    do ab = 1, nxvv
-      call indxvv(homo, ab, a, b)
-      if (a == b) then
-        wvv(ab) = 0.5_dp * wvv(ab)
-      end if
+    do s = 1, nSpin
+      do ab = 1, nxvv(s)
+        call indxvv(homo(s), ab, a, b)
+        if (a == b) then
+          wvv(ab,s) = 0.5_dp * wvv(ab,s)
+        end if
+      end do
     end do
 
   end subroutine calcWvectorZ
+
+
+  !> Write out density matrix, full if rhoSqr is present
+  subroutine writeDM(iLev, pc, rhoSqr)
+
+    !> Lable for excited state level
+    integer, intent(in) :: iLev
+
+    !> transition density matrix
+    real(dp), intent(in) :: pc(:,:,:)
+
+    !> ground state density matrix
+    real(dp), intent(in), optional :: rhoSqr(:,:,:)
+
+    integer :: fdUnit, iErr
+    integer :: iSpin, nSpin
+    character(lc) :: tmpStr, error_string
+
+    nSpin = size(pc, dim=3)
+
+    write(tmpStr, "(A,I0,A)")"DM", iLev, ".dat"
+
+    open(newunit=fdUnit, file=trim(tmpStr), position="rewind", status="replace",&
+        & form='unformatted',iostat=iErr)
+    if (iErr /= 0) then
+      write(error_string, *) "Failure to open density matrix"
+      call error(error_string)
+    end if
+
+    ! size and spin channels
+    do iSpin = 1, nSpin
+      write(fdUnit)size(pc, dim=1), iSpin
+
+      if (present(rhoSqr)) then
+        write(fdUnit)cmplx(pc(:,:,iSpin)+rhoSqr(:,:,iSpin), 0.0_dp, dp)
+      else
+        write(fdUnit)cmplx(pc(:,:,iSpin), 0.0_dp, dp)
+      end if
+    end do
+
+    close(fdUnit)
+
+  end subroutine writeDM
 
 
   !> Mulliken population for a square density matrix and overlap
@@ -1573,128 +1632,14 @@ contains
   end subroutine getExcMulliken
 
 
-  !> Excited state Mulliken charges and dipole moments written to disc
-  subroutine writeExcMulliken(sym, nstat, dq, dqex, coord0, fdMulliken)
-
-    !> symmetry label
-    character, intent(in) :: sym
-
-    !> state index
-    integer, intent(in) :: nstat
-
-    !> ground state gross charge
-    real(dp), intent(in) :: dq(:)
-
-    !> change in atomic charges from ground to excited state
-    real(dp), intent(in) :: dqex(:)
-
-    !> central cell coordinates
-    real(dp), intent(in) :: coord0(:,:)
-
-    !> file unit for Mulliken data
-    integer, intent(in) :: fdMulliken
-
-    integer :: natom, m
-    real(dp) :: dipol(3), dipabs
-
-    natom = size(dq)
-
-    @:ASSERT(size(dq) == size(dqex))
-    @:ASSERT(all(shape(coord0) == [3,nAtom]))
-
-    ! Output of excited state Mulliken charges
-    open(fdMulliken, file=excitedQOut,position="append")
-    write(fdMulliken, "(a,a,i2)") "# MULLIKEN CHARGES of excited state ",&
-        & sym, nstat
-    write(fdMulliken, "(a,2x,A,i4)") "#", 'Natoms =',natom
-    write(fdMulliken, "('#',1X,A4,T15,A)")'Atom','netCharge'
-    write(fdMulliken,'("#",41("="))')
-    do m = 1,  natom
-      write(fdMulliken,"(i5,1x,f16.8)") m, -dq(m) - dqex(m)
-    end do
-    close(fdMulliken)
-
-    ! Calculation of excited state dipole moment
-    dipol(:) = -1.0_dp * matmul(coord0, dq + dqex)
-    dipabs = sqrt(sum(dipol**2))
-
-    open(fdMulliken, file=excitedDipoleOut, position="append")
-    write(fdMulliken, "(a,a,i2)") "Mulliken analysis of excited state ",&
-        & sym, nstat
-    write(fdMulliken, '(42("="))')
-    write(fdMulliken, "(a)") " "
-    write(fdMulliken, "(a)") "Mulliken exc. state dipole moment [Debye]"
-    write(fdMulliken, '(42("="))')
-    write(fdMulliken, "(3f14.8)") (dipol(m) * au__Debye, m = 1, 3)
-    write(fdMulliken, "(a)") " "
-    write(fdMulliken, "(a)") "Norm of exc. state dipole moment [Debye]"
-    write(fdMulliken, '(42("="))')
-    write(fdMulliken, "(e20.12)") dipabs * au__Debye
-    write(fdMulliken, *)
-    close(fdMulliken)
-
-  end subroutine writeExcMulliken
-
-
-  !> Calculate transition moments for transitions between Kohn-Sham states, including spin-flipping
-  !> transitions
-  subroutine calcTransitionDipoles(coord0, win, nmatup, getij, iAtomStart, stimc, grndEigVecs,&
-      & snglPartTransDip)
-
-    !> Atomic positions
-    real(dp), intent(in) :: coord0(:,:)
-
-    !> transition energies
-    integer, intent(in) :: win(:)
-
-    !> number of same-spin transitions
-    integer, intent(in) :: nmatup
-
-    !> index array for ground state square matrices
-    integer, intent(in) :: iAtomStart(:)
-
-    !> index array for excitation pairs
-    integer, intent(in) :: getij(:,:)
-
-    !> overlap times ground state wavefunctions
-    real(dp), intent(in) :: stimc(:,:,:)
-
-    !> ground state wavefunctions
-    real(dp), intent(in) :: grndEigVecs(:,:,:)
-
-    !> resulting transition dipoles
-    real(dp), intent(out) :: snglPartTransDip(:,:)
-
-    integer :: nxov, natom
-    integer :: indm, ii, jj
-    real(dp), allocatable :: qij(:)
-    logical :: updwn
-
-    nxov = size(win)
-    natom = size(coord0, dim=2)
-
-    ALLOCATE(qij(natom))
-
-    ! Calculate transition dipole elements
-    do indm = 1, nxov
-      call indxov(win, indm, getij, ii, jj)
-      updwn = (win(indm) <= nmatup)
-      call transq(ii, jj, iAtomStart, updwn, stimc, grndEigVecs, qij)
-      snglPartTransDip(indm, :) = matmul(coord0, qij)
-    end do
-
-  end subroutine calcTransitionDipoles
-
-
   !> Calculation of force from derivatives of excitation energy
   !> 1. we need the ground and excited Mulliken charges
   !> 2. we need P,(T,Z),W, X + Y from linear response
   !> 3. calculate dsmndr, dhmndr (dS/dR, dh/dR), dgabda (dGamma_{IAt1,IAt2}/dR_{IAt1}),
   !> dgext (dGamma-EXT_{IAt1,k}/dR_{IAt1})
-  subroutine addGradients(sym, nxov, natom, species0, iAtomStart, norb, homo,&
-      & nocc, nmatup, getij, win, grndEigVecs, pc, stimc, dq, dqex, gammaMat,&
-      & HubbardU, spinW, shift, woo, wov, wvv, xpy, coord0, orb,&
-      & skHamCont, skOverCont, derivator, rhoSqr, excgrad)
+  subroutine addGradients(sym, nxov, natom, species0, iAtomStart, norb, homo, getia,&
+      & win, grndEigVecs, pc, stimc, dq_ud, dqex, gammaMat, HubbardU, spinW, shift, woo, wov, wvv,&
+      & transChrg, xpy, coord0, orb, skHamCont, skOverCont, derivator, rhoSqr, excgrad)
 
     !> symmetry of the transition
     character, intent(in) :: sym
@@ -1715,35 +1660,28 @@ contains
     integer, intent(in) :: norb
 
     !> number of highest occupied state in ground state
-    integer, intent(in) :: homo
-
-    !> number of occupied states in calculation (not neccessarily same as HOMO in the case of
-    !> windowing)
-    integer, intent(in) :: nocc
-
-    !> single particle excitation energies
-    integer, intent(in) :: win(:)
-
-    !> number of up->up transitions
-    integer, intent(in) :: nmatup
+    integer, intent(in) :: homo(:)
 
     !> index array from composite transition index to specific single particle states
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
+
+    !> single particle transition index
+    integer, intent(in) :: win(:)
 
     !> ground state eigenvectors
     real(dp), intent(in) :: grndEigVecs(:,:,:)
 
     !> transition density matrix
-    real(dp), intent(in) :: pc(:,:)
+    real(dp), intent(in) :: pc(:,:,:)
 
     !> overlap times ground state eigenvectors
     real(dp), intent(in) :: stimc(:,:,:)
 
     !> ground state gross charges
-    real(dp), intent(in) :: dq(:)
+    real(dp), intent(in) :: dq_ud(:,:)
 
     !> charge differences from ground to excited state
-    real(dp), intent(in) :: dqex(:)
+    real(dp), intent(in) :: dqex(:,:)
 
     !> softened coulomb matrix
     real(dp), intent(in) :: gammaMat(:,:)
@@ -1758,13 +1696,16 @@ contains
     real(dp), intent(in) :: shift(:)
 
     !> W vector occupied part
-    real(dp), intent(in) :: woo(:)
+    real(dp), intent(in) :: woo(:,:)
 
     !> W vector occupied-virtual part
     real(dp), intent(in) :: wov(:)
 
     !> W vector virtual part
-    real(dp), intent(in) :: wvv(:)
+    real(dp), intent(in) :: wvv(:,:)
+
+    !> machinery for transition charges between single particle levels
+    type(TTransCharges), intent(in) :: transChrg
 
     !> X+Y Furche term
     real(dp), intent(in) :: xpy(:)
@@ -1776,86 +1717,123 @@ contains
     type(TOrbitals), intent(in) :: orb
 
     !> H0 data
-    type(OSlakoCont), intent(in) :: skHamCont
+    type(TSlakoCont), intent(in) :: skHamCont
 
     !> overlap data
-    type(OSlakoCont), intent(in) :: skOverCont
+    type(TSlakoCont), intent(in) :: skOverCont
 
     !> Differentiatior for the non-scc matrices
-    class(NonSccDiff), intent(in) :: derivator
+    class(TNonSccDiff), intent(in) :: derivator
 
-    !> ground state density matrix for spin-free case
-    real(dp), intent(in) :: rhoSqr(:,:)
+    !> ground state density matrix
+    real(dp), intent(in) :: rhoSqr(:,:,:)
 
     !> resulting excited state gradient
     real(dp), intent(out) :: excgrad(:,:)
 
-    real(dp), allocatable :: shift_excited(:), xpyq(:)
-    real(dp), allocatable :: shxpyq(:), xpycc(:,:), wcc(:,:)
-    real(dp), allocatable :: qij(:), temp(:)
+    real(dp), allocatable :: shift_excited(:,:), xpyq(:), xpyqds(:)
+    real(dp), allocatable :: shxpyq(:,:), xpycc(:,:,:), wcc(:,:,:), tmp5(:), tmp7(:), tmp11(:)
+    real(dp), allocatable :: qij(:), temp(:), dq(:), dm(:), dsigma(:)
     real(dp), allocatable :: dH0(:,:,:), dS(:,:,:)
-    integer :: ia, i, j, a, b, ab, ij, m, n, mu, nu, xyz, iAt1, iAt2
+    real(dp), allocatable :: Dens(:,:), SpinDens(:,:)
+    integer :: ia, i, j, a, b, ab, ij, m, n, mu, nu, xyz, iAt1, iAt2, s
     integer :: indalpha, indalpha1, indbeta, indbeta1
-    integer :: iSp1, iSp2
-    real(dp) :: tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, rab
+    integer :: iSp1, iSp2, iSpin, nSpin
+    real(dp) :: tmp1, tmp2, tmp3, tmp4, tmp6, tmp8, tmp9, tmp10, rab
     real(dp) :: diffvec(3), dgab(3), tmp3a, tmp3b
+    integer, allocatable :: nxoo(:), nxvv(:), nvir(:)
+    logical :: tSpin
 
-    logical :: updwn
+    nSpin = size(grndEigVecs, dim=3)
+    tSpin = (nSpin == 2)
 
-    integer :: nxoo, nxvv
-
-    ALLOCATE(shift_excited(natom))
+    ALLOCATE(shift_excited(natom, nSpin))
     ALLOCATE(xpyq(natom))
-    ALLOCATE(shxpyq(natom))
-    ALLOCATE(xpycc(norb, norb))
-    ALLOCATE(wcc(norb, norb))
+    ALLOCATE(shxpyq(natom, nSpin))
+    ALLOCATE(xpycc(norb, norb, nSpin))
+    ALLOCATE(wcc(norb, norb, nSpin))
     ALLOCATE(qij(natom))
     ALLOCATE(temp(norb))
+    ALLOCATE(tmp5(nSpin))
+    ALLOCATE(tmp7(nSpin))
+
+    ALLOCATE(Dens(norb,norb))
+    Dens(:,:) = sum(rhoSqr, dim=3)
 
     ALLOCATE(dH0(orb%mOrb, orb%mOrb, 3))
     ALLOCATE(dS(orb%mOrb, orb%mOrb, 3))
 
-    nxoo = size(woo)
-    nxvv = size(wvv)
+    ALLOCATE(nxoo(nSpin))
+    ALLOCATE(nxvv(nSpin))
+    ALLOCATE(nvir(nSpin))
+
+    nxoo(:) = (homo(:)*(homo(:)+1))/2
+    nvir(:) = norb - homo(:)
+    nxvv(:) = (nvir(:)*(nvir(:)+1))/2
+
+    ALLOCATE(dq(natom))
+    dq(:) = dq_ud(:,1)
+
+    if (tSpin) then
+      ALLOCATE(dm(natom))
+      ALLOCATE(xpyqds(natom))
+      ALLOCATE(tmp11(nSpin))
+
+      ALLOCATE(SpinDens(norb,norb))
+      SpinDens(:,:) = rhoSqr(:,:,1) - rhoSqr(:,:,2)
+
+      ALLOCATE(dsigma(2))
+      dsigma(1) = 1.0_dp
+      dsigma(2) = -1.0_dp
+      dm(:) = dq_ud(:,2)
+    end if
 
     excgrad = 0.0_dp
 
     ! excited state potentials at atomic sites
-    call hemv(shift_excited, gammaMat, dqex)
+    do iSpin = 1, nSpin
+      call hemv(shift_excited(:,iSpin), gammaMat, dqex(:,iSpin))
+    end do
 
     ! xypq(alpha) = sum_ia (X+Y)_ia q^ia(alpha)
     ! complexity norb * norb * norb
     xpyq(:) = 0.0_dp
-    do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
-      updwn = (win(ia) <= nmatup)
-      call transq(i, a, iAtomStart, updwn, stimc, grndEigVecs, qij)
-      xpyq(:) = xpyq(:) + xpy(ia) * qij(:)
-    end do
+    call transChrg%qMatVec(iAtomStart, stimc, grndEigVecs, getia, win, xpy,xpyq)
 
     ! complexity norb * norb
-    shxpyq(:) = 0.0_dp
-    if (sym == "S") then
-      call hemv(shxpyq, gammaMat, xpyq)
+    shxpyq(:,:) = 0.0_dp
+    if (.not. tSpin) then
+      if (sym == "S") then
+        call hemv(shxpyq(:,1), gammaMat, xpyq)
+      else
+        shxpyq(:,1) = xpyq(:) * spinW(species0)
+      end if
     else
-      shxpyq(:) = xpyq(:) * spinW(species0)
+      xpyqds(:) = 0.0_dp
+      call transChrg%qMatVecDs(iAtomStart, stimc, grndEigVecs, getia, win, xpy, xpyqds)
+      do iSpin = 1, nSpin
+        call hemv(shxpyq(:,iSpin), gammaMat, xpyq)
+        shxpyq(:,iSpin) = shxpyq(:,iSpin) + dsigma(iSpin) * spinW(species0) * xpyqds
+        shxpyq(:,iSpin) = 0.5_dp * shxpyq(:,iSpin)
+      end do
     end if
 
     ! calculate xpycc
     ! (xpycc)_{mu nu} = sum_{ia} (X + Y)_{ia} (grndEigVecs(mu,i)grndEigVecs(nu,a)
     ! + grndEigVecs(nu,i)grndEigVecs(mu,a))
     ! complexity norb * norb * norb
-    xpycc(:,:) = 0.0_dp
-
+    !
     ! xpycc(mu,nu) = sum_ia (X+Y)_ia grndEigVecs(mu,i) grndEigVecs(nu,a)
     ! xpycc(mu, nu) += sum_ia (X+Y)_ia grndEigVecs(mu,a) grndEigVecs(nu,i)
+    xpycc(:,:,:) = 0.0_dp
     do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
+      call indxov(win, ia, getia, i, a, iSpin)
+      ! should replace with DSYR2 call :
       do nu = 1, norb
         do mu = 1, norb
-          xpycc(mu,nu) = xpycc(mu,nu) + xpy(ia) *&
-              & ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
-              & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
+          xpycc(mu,nu,iSpin) = xpycc(mu,nu,iSpin) + xpy(ia) *&
+              & ( grndEigVecs(mu,i,iSpin)*grndEigVecs(nu,a,iSpin)&
+              & + grndEigVecs(mu,a,iSpin)*grndEigVecs(nu,i,iSpin) )
         end do
       end do
     end do
@@ -1866,41 +1844,49 @@ contains
     ! complexity norb * norb * norb
 
     ! calculate the occ-occ part
-    wcc(:,:) = 0.0_dp
+    wcc(:,:,:) = 0.0_dp
 
-    do ij = 1, nxoo
-      call indxoo(homo, nocc, ij, i, j)
-      do mu = 1, norb
-        do nu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + woo(ij) *&
-              & ( grndEigVecs(mu,i,1)*grndEigVecs(nu,j,1)&
-              & + grndEigVecs(mu,j,1)*grndEigVecs(nu,i,1) )
+    do iSpin = 1, nSpin
+      do ij = 1, nxoo(iSpin)
+        call indxoo(ij, i, j)
+        ! replace with DSYR2 call :
+        do mu = 1, norb
+          do nu = 1, norb
+            wcc(mu,nu,iSpin) = wcc(mu,nu,iSpin) + woo(ij,iSpin) *&
+                & ( grndEigVecs(mu,i,iSpin)*grndEigVecs(nu,j,iSpin)&
+                & + grndEigVecs(mu,j,iSpin)*grndEigVecs(nu,i,iSpin) )
+          end do
         end do
-      end do
 
+      end do
     end do
 
     ! calculate the occ-virt part : the same way as for xpycc
     do ia = 1, nxov
-      call indxov(win, ia, getij, i, a)
+      call indxov(win, ia, getia, i, a, iSpin)
+      ! again replace with DSYR2 call :
       do nu = 1, norb
         do mu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + wov(ia) *&
-              & ( grndEigVecs(mu,i,1)*grndEigVecs(nu,a,1)&
-              & + grndEigVecs(mu,a,1)*grndEigVecs(nu,i,1) )
+          wcc(mu,nu,iSpin) = wcc(mu,nu,iSpin) + wov(ia) *&
+              & ( grndEigVecs(mu,i,iSpin)*grndEigVecs(nu,a,iSpin)&
+              & + grndEigVecs(mu,a,iSpin)*grndEigVecs(nu,i,iSpin) )
         end do
       end do
     end do
 
     ! calculate the virt - virt part
-    do ab =1, nxvv
-      call indxvv(homo, ab, a, b)
-      do mu = 1, norb
-        do nu = 1, norb
-          wcc(mu,nu) = wcc(mu,nu) + wvv(ab) *&
-              & ( grndEigVecs(mu,a,1)*grndEigVecs(nu,b,1)&
-              & + grndEigVecs(mu,b,1)*grndEigVecs(nu,a,1) )
+    do iSpin = 1, nSpin
+      do ab =1, nxvv(iSpin)
+        call indxvv(homo(iSpin), ab, a, b)
+        ! replace with DSYR2 call :
+        do mu = 1, norb
+          do nu = 1, norb
+            wcc(mu,nu,iSpin) = wcc(mu,nu,iSpin) + wvv(ab,iSpin) *&
+                & ( grndEigVecs(mu,a,iSpin)*grndEigVecs(nu,b,iSpin)&
+                & + grndEigVecs(mu,b,iSpin)*grndEigVecs(nu,a,iSpin) )
+          end do
         end do
+
       end do
     end do
 
@@ -1930,19 +1916,31 @@ contains
         ! calculate the derivative of gamma
         dgab(:) = diffvec(:) * (-1.0_dp/rab**2 - expGammaPrime(rab, HubbardU(iSp1), HubbardU(iSp2)))
 
-        tmp3a = dq(iAt1) * dqex(iAt2) + dqex(iAt1) * dq(iAt2)
+        tmp3a = 0.0_dp
+        do iSpin = 1, nSpin
+          tmp3a = tmp3a + dq(iAt1) * dqex(iAt2,iSpin) + dqex(iAt1,iSpin) * dq(iAt2)
+        end do
 
-        if (sym == "S") then
-          tmp3b = 4.0_dp * xpyq(iAt1) * xpyq(iAt2)
+        if (.not. tSpin) then
+          if (sym == "S") then
+            tmp3b = 4.0_dp * xpyq(iAt1) * xpyq(iAt2)
+          else
+            tmp3b = 0.0_dp
+          end if
         else
-          tmp3b = 0.0_dp
+          tmp3b = 2.0_dp * xpyq(iAt1) * xpyq(iAt2)
         end if
 
         excgrad(:,iAt1) = excgrad(:,iAt1) + dgab(:) * ( tmp3a + tmp3b )
         excgrad(:,iAt2) = excgrad(:,iAt2) - dgab(:) * ( tmp3a + tmp3b )
 
-        tmp5 = shift_excited(iAt1) + shift_excited(iAt2)
-        tmp7 = 2.0_dp * ( shxpyq(iAt1) + shxpyq(iAt2) )
+        tmp5(:) = shift_excited(iAt1,:) + shift_excited(iAt2,:)
+        tmp7(:) = 2.0_dp * ( shxpyq(iAt1,:) + shxpyq(iAt2,:) )
+
+        if (tSpin) then
+          tmp9 = spinW(iSp1) * dm(iAt1) + spinW(iSp2) * dm(iAt2)
+          tmp11(:) = spinW(iSp1) * dqex(iAt1,:) + spinW(iSp2) * dqex(iAt2,:)
+        end if
 
         call derivator%getFirstDeriv(dH0, skHamCont, coord0, species0,&
             & iAt1, iAt2, orb)
@@ -1956,23 +1954,36 @@ contains
           tmp3 = 0.0_dp
           tmp4 = 0.0_dp
           tmp6 = 0.0_dp
+          tmp8 = 0.0_dp
+          tmp10 = 0.0_dp
 
-          do mu = indalpha, indalpha1
-            do nu = indbeta, indbeta1
-              m = mu - indalpha + 1
-              n = nu - indbeta + 1
+          do iSpin = 1, nSpin
 
-              tmp1 = tmp1 + 2.0_dp * dH0(n,m,xyz) * pc(mu,nu)
-              tmp2 = tmp2 + dS(n,m,xyz) * pc(mu,nu) * (shift(iAt1)+shift(iAt2))
-              tmp3 = tmp3 - dS(n,m,xyz) * wcc(mu,nu)
-              tmp4 = tmp4 + tmp5 * dS(n,m,xyz) * rhoSqr(mu,nu)
-              tmp6 = tmp6 + tmp7 * dS(n,m,xyz) * xpycc(mu,nu)
+            do mu = indalpha, indalpha1
+              do nu = indbeta, indbeta1
+                m = mu - indalpha + 1
+                n = nu - indbeta + 1
+
+                tmp1 = tmp1 + 2.0_dp * dH0(n,m,xyz) * pc(mu,nu,iSpin)
+                tmp2 = tmp2 + dS(n,m,xyz) * pc(mu,nu,iSpin) * (shift(iAt1)+shift(iAt2))
+                tmp3 = tmp3 - dS(n,m,xyz) * wcc(mu,nu,iSpin)
+                tmp4 = tmp4 + tmp5(iSpin) * dS(n,m,xyz) * Dens(mu,nu)
+                tmp6 = tmp6 + tmp7(iSpin) * dS(n,m,xyz) * xpycc(mu,nu,iSpin)
+
+                if (tSpin) then
+                  tmp8 = tmp8 + tmp9 * dS(n,m,xyz) * dsigma(iSpin) * pc(mu,nu,iSpin)
+                  tmp10 = tmp10 + tmp11(iSpin) * dS(n,m,xyz) * dsigma(iSpin) * SpinDens(mu,nu)
+                end if
+
+              end do
             end do
+
           end do
+
           excgrad(xyz,iAt1) = excgrad(xyz,iAt1)&
-              & + tmp1 + tmp2 + tmp4 + tmp6 + tmp3
+              & + tmp1 + tmp2 + tmp4 + tmp6 + tmp3 + tmp8 + tmp10
           excgrad(xyz,iAt2) = excgrad(xyz,iAt2)&
-              & - tmp1 - tmp2 - tmp4 - tmp6 - tmp3
+              & - tmp1 - tmp2 - tmp4 - tmp6 - tmp3 - tmp8 - tmp10
         end do
       end do
     end do
@@ -1981,20 +1992,17 @@ contains
 
 
   !> Write out excitations projected onto ground state
-  subroutine writeCoeffs(tt, grndEigVecs, occ, nocc, fdCoeffs, tCoeffs, tIncGroundState,&
+  subroutine writeCoeffs(tt, grndEigVecs, occ, fdCoeffs, tCoeffs, tIncGroundState,&
       & occNatural, naturalOrbs)
 
     !> T part of the matrix
-    real(dp), intent(in) :: tt(:,:)
+    real(dp), intent(in) :: tt(:,:,:)
 
     !> ground state eigenvectors
     real(dp), intent(in) :: grndEigVecs(:,:,:)
 
     !> ground state occupations
     real(dp), intent(in) :: occ(:,:)
-
-    !> number of filled states
-    integer, intent(in) :: nocc
 
     !> file descriptor to write data into
     integer, intent(in) :: fdCoeffs
@@ -2011,32 +2019,37 @@ contains
     !> Natural orbitals
     real(dp), intent(out), optional :: naturalOrbs(:,:,:)
 
-    real(dp), allocatable :: t2(:,:), occtmp(:)
-    integer :: norb, ii, jj, mm
+    real(dp), allocatable :: t2(:,:,:), occtmp(:,:)
+    integer :: norb, nSpin, ii, jj, mm, iSpin
+    logical :: tSpin
 
     norb = size(tt, dim=1)
+    nSpin = size(tt, dim=3)
+    tSpin = (nSpin == 2)
 
     if (present(occNatural).or.tCoeffs) then
 
-      ALLOCATE(t2(norb, norb))
+      ALLOCATE(t2(norb, norb, nSpin))
       t2 = tt
       if (tIncGroundState) then
-        do ii = 1, nocc
-          t2(ii,ii) = t2(ii,ii) + occ(ii,1)
+        do ii = 1, norb
+          t2(ii,ii,:) = t2(ii,ii,:) + occ(ii,:)
         end do
       end if
 
       if (present(occNatural)) then
-        naturalOrbs(:,:,1) = t2
-        call evalCoeffs(naturalOrbs(:,:,1) ,occNatural,grndEigVecs(:,:,1))
+        naturalOrbs = t2
+        call evalCoeffs(naturalOrbs(:,:,1), occNatural, grndEigVecs(:,:,1))
         if (tCoeffs) then
-          ALLOCATE(occtmp(size(occ)))
-          occTmp = occNatural
+          ALLOCATE(occtmp(size(occ), nSpin))
+          occTmp(:,1) = occNatural
         end if
       else
-        ALLOCATE(occtmp(size(occ)))
+        ALLOCATE(occtmp(size(occ), nSpin))
         occtmp = 0.0_dp
-        call evalCoeffs(t2,occNatural,grndEigVecs(:,:,1))
+        do iSpin = 1, nSpin
+          call evalCoeffs(t2(:,:,iSpin), occtmp(:,iSpin), grndEigVecs(:,:,iSpin))
+        end do
       end if
 
       ! Better to get this by post-processing DFTB+ output, but here for
@@ -2044,12 +2057,26 @@ contains
       if (tCoeffs) then
         open(fdCoeffs, file=excitedCoefsOut, position="append")
         write(fdCoeffs,*) 'T F'
-        do ii = 1, norb
-          jj = norb - ii + 1
-          write(fdCoeffs, '(1x,i3,1x,f13.10,1x,f13.10)') ii, occtmp(jj), 2.0_dp
-          write(fdCoeffs, '(6(f13.10,1x))') (cmplx(t2(mm,jj), kind=dp),&
-              & mm = 1, norb)
-        end do
+        if (.not. tSpin) then
+          do ii = 1, norb
+            jj = norb - ii + 1
+            write(fdCoeffs, '(1x,i3,1x,f13.10,1x,f13.10)') ii, occtmp(jj,1), 2.0_dp
+            write(fdCoeffs, '(6(f13.10,1x))') (cmplx(t2(mm,jj,1), kind=dp),&
+                & mm = 1, norb)
+          end do
+        else
+          do iSpin = 1, nSpin
+            write(fdCoeffs,*)
+            write(fdCoeffs, '(1x,a,1x,i1)') 'SPIN', iSpin
+            do ii = 1, norb
+              jj = norb - ii + 1
+              write(fdCoeffs, '(1x,i3,1x,f13.10,1x,f13.10)') ii, occtmp(jj,iSpin), 1.0_dp
+              write(fdCoeffs, '(6(f13.10,1x))') (cmplx(t2(mm,jj,iSpin), kind=dp),&
+                  & mm = 1, norb)
+            end do
+          end do
+        end if
+
         close(fdCoeffs)
       end if
 
@@ -2059,7 +2086,7 @@ contains
 
 
   !> Project MO density matrix onto ground state orbitals
-  subroutine evalCoeffs(t2,occ,eig)
+  subroutine evalCoeffs(t2, occ, eig)
 
     !> density matrix
     real(dp), intent(inout) :: t2(:,:)
@@ -2083,8 +2110,8 @@ contains
 
   !> Write out transitions from ground to excited state along with single particle transitions and
   !> dipole strengths
-  subroutine writeExcitations(sym, osz, nexc, nmatup, getij, win, eval, evec, wij, fdXplusY,&
-      & fdTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, fdExc, Ssq)
+  subroutine writeExcitations(sym, osz, nexc, nmatup, getia, win, eval, evec, wij, fdXplusY,&
+      & fdTrans, fdTradip, transitionDipoles, tWriteTagged, fdTagged, taggedWriter, fdExc, Ssq)
 
     !> Symmetry label for the type of transition
     character, intent(in) :: sym
@@ -2099,7 +2126,7 @@ contains
     integer, intent(in) :: nmatup
 
     !> index array between transitions in square and 1D representations
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
 
     !> index array for single particle excitions
     integer, intent(in) :: win(:)
@@ -2131,6 +2158,9 @@ contains
     !> file unit for tagged output (> -1 for write out)
     integer, intent(in) :: fdTagged
 
+    !> tagged writer
+    type(TTaggedWriter), intent(inout) :: taggedWriter
+
     !> file unit for excitation energies
     integer, intent(in) :: fdExc
 
@@ -2138,46 +2168,44 @@ contains
     real(dp), intent(in), optional :: Ssq(:)
 
     integer :: nmat
-    integer :: i, j, iweight, indo, m, n
-    integer :: iDeg
+    integer :: ii, jj, iweight, indo, m, n, s
     real(dp), allocatable :: wvec(:)
     real(dp), allocatable :: xply(:)
-    real(dp), allocatable :: eDeg(:)
-    real(dp), allocatable :: oDeg(:)
     integer, allocatable :: wvin(:)
     real(dp) :: rsqw, weight, wvnorm
     logical :: updwn, tSpin
     character :: sign
+    type(TDegeneracyFind) :: DegeneracyFind
+    logical :: tDegenerate
+    integer, allocatable :: degenerate(:,:)
+    real(dp), allocatable :: oDeg(:)
 
     @:ASSERT(fdExc > 0)
 
     tSpin = present(Ssq)
     nmat = size(wij)
-    ALLOCATE(wvec(nmat))
-    ALLOCATE(wvin(nmat))
-    ALLOCATE(xply(nmat))
-    ALLOCATE(eDeg(nexc))
-    ALLOCATE(oDeg(nexc))
-    wvec = 0.0_dp
-    wvin = 0
-    xply = 0.0_dp
-    eDeg = 0.0_dp
-    oDeg = 0.0_dp
+
+    allocate(wvec(nmat))
+    allocate(wvin(nmat))
+    allocate(xply(nmat))
+    wvec(:) = 0.0_dp
+    wvin(:) = 0
+    xply(:) = 0.0_dp
 
     if(fdXplusY > 0) then
       write(fdXplusY,*) nmat, nexc
     end if
 
-    do i = 1, nexc
-      if (eval(i) > 0.0_dp) then
+    do ii = 1, nexc
+      if (eval(ii) > 0.0_dp) then
 
         ! calculate weight of single particle transitions
-        rsqw = 1.0_dp / sqrt(eval(i))
+        rsqw = 1.0_dp / sqrt(eval(ii))
         ! (X+Y)^ia_I = sqrt(wij) / sqrt(omega) * F^ia_I
-        xply(:) = sqrt(rsqw) * sqrt(wij(:)) * evec(:,i)
-        wvec(:) = xply(:)**2
+        xply(:) = sqrt(rsqw) * sqrt(wij(:)) * evec(:,ii)
+        wvec(:) = xply**2
         wvnorm = 1.0_dp / sqrt(sum(wvec**2))
-        wvec(:) = wvec(:) * wvnorm
+        wvec(:) = wvec * wvnorm
 
         ! find largest coefficient in CI - should use maxloc
         call index_heap_sort(wvin,wvec)
@@ -2187,20 +2215,20 @@ contains
         weight = wvec(1)
         iweight = wvin(1)
 
-        call indxov(win, iweight, getij, m, n)
+        call indxov(win, iweight, getia, m, n, s)
         sign = sym
         if (tSpin) then
           sign = " "
           write(fdExc,&
               & '(1x,f10.3,4x,f14.8,2x,i5,3x,a,1x,i5,7x,f6.3,2x,f10.3,4x,&
               & f6.3)')&
-              & Hartree__eV * sqrt(eval(i)), osz(i), m, '->', n, weight,&
-              & Hartree__eV * wij(iweight), Ssq(i)
+              & Hartree__eV * sqrt(eval(ii)), osz(ii), m, '->', n, weight,&
+              & Hartree__eV * wij(iWeight), Ssq(ii)
         else
           write(fdExc,&
               & '(1x,f10.3,4x,f14.8,5x,i5,3x,a,1x,i5,7x,f6.3,2x,f10.3,6x,a)')&
-              & Hartree__eV * sqrt(eval(i)), osz(i), m, '->', n, weight,&
-              & Hartree__eV * wij(iweight), sign
+              & Hartree__eV * sqrt(eval(ii)), osz(ii), m, '->', n, weight,&
+              & Hartree__eV * wij(iWeight), sign
         end if
 
         if(fdXplusY > 0) then
@@ -2209,40 +2237,39 @@ contains
             sign = "D"
             if (updwn) sign = "U"
           end if
-          write(fdXplusY,'(1x,i5,3x,a,3x,ES17.10)') i,sign, sqrt(eval(i))
-          write(fdXplusY,'(6(1x,ES17.10))') xply(:)
+          write(fdXplusY,'(1x,i5,3x,a,3x,ES17.10)') ii, sign, sqrt(eval(ii))
+          write(fdXplusY,'(6(1x,ES17.10))') xply
         endif
 
         if (fdTrans > 0) then
           write(fdTrans, '(2x,a,T12,i5,T21,ES17.10,1x,a,2x,a)')&
-              & 'Energy ', i,  Hartree__eV * sqrt(eval(i)), 'eV', sign
+              & 'Energy ', ii,  Hartree__eV * sqrt(eval(ii)), 'eV', sign
           write(fdTrans,*)
-          write(fdTrans,'(2x,a,9x,a,8x,a)')&
-              & 'Transition', 'Weight', 'KS [eV]'
+          write(fdTrans,'(2x,a,9x,a,8x,a)')'Transition', 'Weight', 'KS [eV]'
           write(fdTrans,'(1x,45("="))')
 
           sign = " "
-          do j = 1, nmat
-            !if (wvec(j) < 1e-4_dp) exit ! ??????
-            indo = wvin(j)
-            call indxov(win, indo, getij, m, n)
+          do jj = 1, nmat
+            !if (wvec(jj) < 1e-4_dp) exit ! ??????
+            indo = wvin(jj)
+            call indxov(win, indo, getia, m, n, s)
             if (tSpin) then
               updwn = (win(indo) <= nmatup)
               sign = "D"
               if (updwn) sign = "U"
             end if
-            write(fdTrans,&
-                & '(i5,3x,a,1x,i5,1x,1a,T22,f10.8,T33,f14.8)')&
-                & m, '->', n, sign, wvec(j), Hartree__eV * wij(wvin(j))
+            write(fdTrans, '(i5,3x,a,1x,i5,1x,1a,T22,f10.8,T33,f14.8)')&
+                & m, '->', n, sign, wvec(jj), Hartree__eV * wij(wvin(jj))
           end do
           write(fdTrans,*)
         end if
 
-        if(fdTradip > 0) then
-          write(fdTradip, '(1x,i5,1x,f10.3,2x,3(ES13.6))')&
-              & i, Hartree__eV * sqrt(eval(i)), (transitionDipoles(i,j)&
-              & * au__Debye, j=1,3)
-        endif
+        if (fdTradip > 0) then
+          write(fdTradip, '(1x,i5,1x,f10.3,2x,3(ES14.6))')&
+              & ii, Hartree__eV * sqrt(eval(ii)), (transitionDipoles(ii,jj)&
+              & * au__Debye, jj=1,3)
+        end if
+
       else
 
         ! find largest coefficient in CI - should use maxloc
@@ -2252,20 +2279,19 @@ contains
 
         weight = wvec(1)
         iweight = wvin(1)
-        call indxov(win, iweight, getij, m, n)
+        call indxov(win, iWeight, getia, m, n, s)
         sign = sym
 
         if (tSpin) then
           sign = " "
           write(fdExc,&
               & '(6x,A,T12,4x,f14.8,2x,i5,3x,a,1x,i5,7x,A,2x,f10.3,4x,f6.3)')&
-              & '< 0', osz(i), m, '->', n, '-', Hartree__eV * wij(iweight),&
-              & Ssq(i)
+              & '< 0', osz(ii), m, '->', n, '-', Hartree__eV * wij(iWeight),&
+              & Ssq(ii)
         else
           write(fdExc,&
               & '(6x,A,T12,4x,f14.8,2x,i5,3x,a,1x,i5,7x,f6.3,2x,f10.3,6x,a)')&
-              & '< 0', osz(i), m, '->', n, weight,&
-              & Hartree__eV * wij(iweight), sign
+              & '< 0', osz(ii), m, '->', n, weight, Hartree__eV * wij(iWeight), sign
         end if
 
         if(fdXplusY > 0) then
@@ -2274,39 +2300,56 @@ contains
             sign = "D"
             if (updwn) sign = "U"
           end if
-          write(fdXplusY,'(1x,i5,3x,a,3x,A)') i,sign, '-'
+          write(fdXplusY,'(1x,i5,3x,a,3x,A)') ii,sign, '-'
         endif
 
         if (fdTrans > 0) then
           write(fdTrans, '(2x,a,1x,i5,5x,a,1x,a,3x,a)')&
-              & 'Energy ', i,  '-', 'eV', sign
+              & 'Energy ', ii,  '-', 'eV', sign
           write(fdTrans,*)
         end if
 
         if(fdTradip > 0) then
-          write(fdTradip, '(1x,i5,1x,A)') i, '-'
+          write(fdTradip, '(1x,i5,1x,A)') ii, '-'
         endif
 
       end if
 
     end do
 
-    ! Determine degenerate levels and sum oscillator strength over any degenerate levels
-    iDeg = 1
-    eDeg(1) = eval(1)
-    oDeg(1) = osz(1)
-    do i = 2, nexc
-      if(abs(eval(i)-eval(i-1)) < elecTolMax) then
-        oDeg(iDeg) = oDeg(iDeg) + osz(i)
-      else
-        iDeg = iDeg + 1
-        eDeg(iDeg) = eval(i)
-        oDeg(iDeg) = osz(i)
-      endif
-    end do
+    deallocate(wvec)
+    deallocate(wvin)
+    deallocate(xply)
+
     if (tWriteTagged) then
-      call writeTagged(fdTagged, tag_excEgy, eDeg(:iDeg))
-      call writeTagged(fdTagged, tag_excOsc, oDeg(:iDeg))
+
+      call DegeneracyFind%init(elecTolMax)
+      call DegeneracyFind%degeneracyTest(eval, tDegenerate)
+      if (.not.tDegenerate) then
+        call taggedWriter%write(fdTagged, tagLabels%excEgy, eval)
+        call taggedWriter%write(fdTagged, tagLabels%excOsc, osz)
+        if (fdTradip > 0) then
+          call taggedWriter%write(fdTagged, tagLabels%excDipole,&
+              & sqrt(sum(transitionDipoles**2,dim=2)))
+        end if
+      else
+        degenerate = DegeneracyFind%degenerateRanges()
+        call taggedWriter%write(fdTagged, tagLabels%excEgy, eval(degenerate(1,:)))
+        ! sum oscillator strength over any degenerate levels
+        allocate(oDeg(DegeneracyFind%degenerateGroups()))
+        do ii = 1, size(oDeg)
+          oDeg(ii) = sum(osz(degenerate(1,ii):degenerate(2,ii)))
+        end do
+        call taggedWriter%write(fdTagged, tagLabels%excOsc, oDeg)
+        if (fdTradip > 0) then
+          oDeg(:) = 0.0_dp
+          do ii = 1, size(oDeg)
+            oDeg(ii) = sqrt(sum(transitionDipoles(degenerate(1,ii):degenerate(2,ii),:)**2))
+          end do
+          call taggedWriter%write(fdTagged, tagLabels%excDipole, oDeg)
+        end if
+      end if
+
     end if
 
   end subroutine writeExcitations
@@ -2314,10 +2357,10 @@ contains
 
   !> Create transition density matrix in MO basis P = T + 1/2 Z symmetric (paper has T + Z
   !> asymmetric) (Zab = Zij = 0, Tia = 0)
-  subroutine calcPMatrix(t, rhs, win, getij, pc)
+  subroutine calcPMatrix(t, rhs, win, getia, pc)
 
     !> T matrix
-    real(dp), intent(in) :: t(:,:)
+    real(dp), intent(in) :: t(:,:,:)
 
     !> Z matrix
     real(dp), intent(in) :: rhs(:)
@@ -2326,88 +2369,113 @@ contains
     integer, intent(in) :: win(:)
 
     !> array of the occupied->virtual pairs (nTransitions,occ 1 or virtual 2)
-    integer, intent(in) :: getij(:,:)
+    integer, intent(in) :: getia(:,:)
 
     !> resulting excited state density matrix
-    real(dp), intent(out) :: pc(:,:)
+    real(dp), intent(out) :: pc(:,:,:)
 
-    integer :: ia, i, a
+    integer :: ias, i, a, s, nSpin
+
+    nSpin = size(pc, dim=3)
 
     pc = 0.0_dp
-    do ia = 1, size(rhs)
-      call indxov(win, ia, getij, i, a)
-      pc(i,a) = rhs(ia)
+    do ias = 1, size(rhs)
+      call indxov(win, ias, getia, i, a, s)
+      pc(i,a,s) = rhs(ias)
     end do
-    pc = 0.5_dp * ( pc + transpose(pc) )
+
+    do s = 1, nSpin
+      pc(:,:,s) = 0.5_dp * ( pc(:,:,s) + transpose(pc(:,:,s)) )
+    end do
 
     pc = pc + t
 
   end subroutine calcPMatrix
 
+  subroutine chargeTest(iAtomStart, sTimesGrndEigVecs, grndEigVecs, win, nxov_rd, nxov_ud, &
+    &  nxoo_ud, nxvv_ud, homo, gamma, getia, getij, getab, iaTrans, transChrg)
+    integer, intent(in) :: win(:), homo(:), iAtomStart(:), getia(:,:), getij(:,:), getab(:,:)
+    integer, intent(in) :: nxov_rd, nxov_ud(:), nxoo_ud(:), nxvv_ud(:), iaTrans(:,:,:)
+    real(dp), intent(in) :: sTimesGrndEigVecs(:,:,:), grndEigVecs(:,:,:), gamma(:,:)
+    type(TTransCharges) :: transChrg
+    integer ia, ii, aa, ss, ij, jj, ab, bb, iSpin, nSpin, nOrb, off, rr
+    real(dp), allocatable :: qIJ(:), qCache(:)
+    logical lUpdwn
+    real(dp) maxdev
 
-  !> Write single particle excitations to a file as well as potentially to tagged output file (in
-  !> that case, summing over degeneracies)
-  subroutine writeSPExcitations(wij, win, nmatup, getij, fdSPTrans, sposz, nxov, tSpin)
+    allocate(qIJ(size(gamma, dim=1)))
+    allocate(qCache(size(gamma, dim=1)))
+    nSpin = size(sTimesGrndEigVecs, dim=3)
+    nOrb = size(sTimesGrndEigVecs, dim=2)
+    
+    print *,'--> Number of orbitals per spin channel : ', nOrb
+    print *,'--> Number of ov transitions (up,dn,tot): ', nxov_ud(1), nxov_ud(2), sum(nxov_ud)
+    print *,'--> Number of ov transitions considered : ', nxov_rd
+    print *,'--> Number of oo transitions (up,dn,tot): ', nxoo_ud(1), nxoo_ud(2), sum(nxoo_ud)
+    print *,'--> Number of vv transitions (up,dn,tot): ', nxvv_ud(1), nxvv_ud(2), sum(nxvv_ud)
 
-    !> single particle excitation energies
-    real(dp), intent(in) :: wij(:)
+    maxdev = 0._dp
+    do ia = 1, nxov_rd
+      call indXov(win, ia, getIA, ii, aa, ss)
+      lUpdwn = (win(ia) <= nxov_ud(1))
+      qIJ = transQ(ii, aa, iAtomStart, lUpdwn, sTimesGrndEigVecs, grndEigVecs)
+      qCache = transChrg%qTransIA(ia, iAtomStart, sTimesGrndEigVecs, grndEigVecs, getia, win)
+      if(maxval(abs(qIJ-qCache)) .gt. maxdev) then
+         maxdev = maxval(abs(qIJ-qCache))
+      endif
+    end do
+    print *,'--> Max. deviation occ-vir trans charges: ', maxdev
 
-    !> index array for single particle transitions
-    integer, intent(in) :: win(:)
+    maxdev = 0._dp
+    off = 0
+    do iSpin = 1, nSpin
+       do ij = 1, nxoo_ud(iSpin) 
+          call indXoo(ij, ii, jj)
+          lUpdwn = (iSpin == 1)
+          qIJ = transQ(ii, jj, iAtomStart, lUpdwn, sTimesGrndEigVecs, grndEigVecs)
+          qCache = transChrg%qTransIJ(ij+off, iAtomStart, sTimesGrndEigVecs, grndEigVecs, getij)
+          if(maxval(abs(qIJ-qCache)) .gt. maxdev) then
+             maxdev = maxval(abs(qIJ-qCache))
+          endif
+       end do
+       off = nxoo_ud(1) 
+    enddo
+    print *,'--> Max. deviation occ-occ trans charges: ', maxdev
 
-    !> number of transitions within same spin channel
-    integer, intent(in) :: nmatup
+    maxdev = 0._dp
+    off = 0
+    do iSpin = 1, nSpin
+       do ab = 1, nxvv_ud(iSpin) 
+          lUpdwn = (iSpin == 1)
+          call indXvv(homo(iSpin), ab, aa, bb)
+          qIJ = transQ(aa, bb, iAtomStart, lUpdwn, sTimesGrndEigVecs, grndEigVecs)
+          qCache = transChrg%qTransAB(ab+off, iAtomStart, sTimesGrndEigVecs, grndEigVecs, getab)
+          if(maxval(abs(qIJ-qCache)) .gt. maxdev) then
+             maxdev = maxval(abs(qIJ-qCache))
+          endif
+       end do
+       off = nxvv_ud(1)
+    enddo
+    print *,'--> Max. deviation vir-vir trans charges: ', maxdev
 
-    !> index from composite index to occupied and virtual single particle states
-    integer, intent(in) :: getij(:,:)
+    do iSpin = 1, nSpin
+       do ij = 1, nxoo_ud(iSpin)
+          ii = getij(ij,1)
+          jj = getij(ij,2)
+          if(ij /= iaTrans(ii,jj,iSpin)) then
+             print *,'--> Index difference for oo index', ij
+          endif
+       enddo
+    enddo
+    do iSpin = 1, nSpin
+       do ab = 1, nxvv_ud(iSpin)
+          aa = getab(ab,1)
+          bb = getab(ab,2)
+          if(ab /= iaTrans(aa,bb,iSpin)) then
+             print *,'--> Index difference for vv index', ab
+          endif         
+       enddo
+    enddo
 
-    !> file descriptor for the single particle excitation data
-    integer, intent(in) :: fdSPTrans
-
-    !> single particle oscilation strengths
-    real(dp), intent(in) :: sposz(:)
-
-    !> Number of included single particle excitations to print out (assumes that win and wij are
-    !> sorted so that the wanted transitions are first in the array)
-    integer, intent(in) :: nxov
-
-    !> is this a spin-polarized calculation?
-    logical, intent(in) :: tSpin
-
-    integer :: indm, m, n
-    logical :: updwn
-    character :: sign
-
-    @:ASSERT(size(sposz)>=nxov)
-
-    if (fdSPTrans > 0) then
-      ! single particle excitations
-      open(fdSPTrans, file=singlePartOut, position="rewind", status="replace")
-      write(fdSPTrans,*)
-      write(fdSPTrans,'(7x,a,7x,a,8x,a)') '#      w [eV]',&
-          & 'Osc.Str.', 'Transition'
-      write(fdSPTrans,*)
-      write(fdSPTrans,'(1x,58("="))')
-      write(fdSPTrans,*)
-      do indm = 1, nxov
-        call indxov(win, indm, getij, m, n)
-        sign = " "
-        if (tSpin) then
-          updwn = (win(indm) <= nmatup)
-          if (updwn) then
-            sign = "U"
-          else
-            sign = "D"
-          end if
-        end if
-        write(fdSPTrans,&
-            & '(1x,i7,3x,f8.3,3x,f13.7,4x,i5,3x,a,1x,i5,1x,1a)')&
-            & indm, Hartree__eV * wij(indm), sposz(indm), m, '->', n, sign
-      end do
-      write(fdSPTrans,*)
-      close(fdSPTrans)
-    end if
-
-  end subroutine writeSPExcitations
-
-end module linrespgrad
+  end subroutine chargeTest
+end module dftbp_linrespgrad

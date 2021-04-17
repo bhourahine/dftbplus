@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,28 +8,169 @@
 #:include 'common.fypp'
 
 !> Contains routines to calculate the coulombic interaction in non periodic and periodic systems.
-module coulomb
-#:if WITH_SCALAPACK
-  use scalapackfx
-#:endif
+module dftbp_coulomb
+  use dftbp_assert
+  use dftbp_accuracy, only : dp, tolSameDist, tolSameDist2, nSearchIter
+  use dftbp_boundarycond, only : boundaryConditions
+  use dftbp_blasroutines, only : hemv
+  use dftbp_commontypes, only : TOrbitals
+  use dftbp_constants, only : pi
+  use dftbp_dynneighlist, only : TDynNeighList, TDynNeighList_init, TNeighIterator,&
+      & TNeighIterator_init
+  use dftbp_environment, only : TEnvironment
+  use dftbp_errorfunction, only : erfwrap, erfcwrap
+  use dftbp_message, only : error
 #:if WITH_MPI
-  use mpifx
+  use dftbp_mpifx, only : mpifx_allreduceip, MPI_SUM
 #:endif
-  use schedule
-  use environment
-  use assert
-  use accuracy
-  use message
-  use errorfunction
-  use constants, only : pi
-  use dynneighlist
+  use dftbp_periodic, only : TNeighbourList, getLatticePoints, getCellTranslations
+#:if WITH_SCALAPACK
+  use dftbp_scalapackfx, only : blacsgrid, scalafx_getdescriptor, scalafx_getlocalshape,&
+      & scalafx_indxl2g, scalafx_cpl2g, scalafx_islocal, scalafx_cpg2l, pblasfx_psymv, DLEN_,&
+      & CSRC_, RSRC_, MB_, NB_
+#:endif
+  use dftbp_schedule, only : distributeRangeInChunks, distributeRangeInChunks2, assembleChunks
   implicit none
 
   private
-
+  public :: TCoulombInput, TCoulomb, TCoulomb_init
   public :: invRCluster, invRPeriodic, sumInvR, addInvRPrime, getOptimalAlphaEwald, getMaxGEwald
   public :: getMaxREwald, invRStress
   public :: addInvRPrimeXlbomd
+  public :: ewaldReal, ewaldReciprocal, derivEwaldReal, derivEwaldReciprocal, derivStressEwaldRec
+
+
+  !> Input data for coulombic interaction container
+  type :: TCoulombInput
+
+    !> if > 0 -> manual setting for alpha
+    real(dp) :: ewaldAlpha = 0.0_dp
+
+    !> Ewald tolerance
+    real(dp) :: tolEwald = 0.0_dp
+
+    !> Boundary condition
+    integer :: boundaryCond = boundaryConditions%unknown
+
+  end type TCoulombInput
+
+
+  !> Calculates the coulombic interaction in non-periodic and periodic systems.
+  type :: TCoulomb
+    private
+
+    !> Parameter for Ewald
+    real(dp), public :: alpha
+
+    !> Stores 1/r between atom pairs
+    real(dp), allocatable, public :: invRMat(:,:)
+
+    ! number of atoms
+    integer :: nAtom_
+
+    !> Boundary condition for coulombic interaction evaluation
+    integer :: boundaryCond_
+
+    ! lattice vectors if periodic
+    real(dp) :: latVecs_(3, 3)
+
+    ! reciprocal lattice vectors
+    real(dp) :: recVecs_(3, 3)
+
+    ! Cell volume
+    real(dp) :: volume_
+
+    ! Coordinates of the atoms in the central cell
+    real(dp), allocatable :: coords_(:,:)
+
+    ! Lattice points for reciprocal Ewald
+    real(dp), allocatable :: gLatPoints_(:,:)
+
+    ! Real lattice points for asymmetric Ewald sum
+    real(dp), allocatable :: rLatPoints_(:,:)
+
+    ! Dynamic neighbour list for the real space Ewald summation
+    type(TDynNeighList), allocatable :: neighList_
+
+    ! evaluate Ewald parameter
+    logical :: autoEwald_
+
+    ! Ewald tolerance
+    real(dp) :: tolEwald_
+
+    ! are the coordinates current?
+    logical :: coordsUpdated_
+
+    ! are the charges current?
+    logical :: chargesUpdated_
+
+    ! Shift vector per atom
+    real(dp), allocatable :: shiftPerAtom_(:)
+
+    ! Negative gross charge per atom
+    real(dp), allocatable :: deltaQAtom_(:)
+
+#:if WITH_SCALAPACK
+    !> Descriptor for 1/R matrix
+    integer :: descInvRMat_(DLEN_)
+
+    !> Descriptor for charge vector
+    integer :: descQVec_(DLEN_)
+
+    !> Distributed potential
+    real(dp), allocatable :: shiftPerAtomGlobal_(:,:)
+
+    !> Distributed charge vector
+    real(dp), allocatable :: qGlobal_(:,:)
+#:endif
+
+  contains
+
+    !> update internal copy of coordinates
+    procedure :: updateCoords
+
+    !> update internal copy of lattice vectors
+    procedure :: updateLatVecs
+
+    !> get energy contributions
+    procedure :: addEnergy
+
+    !> get force contributions
+    procedure :: addGradients
+
+    !> get stress tensor contributions
+    procedure :: addStress
+
+    !> Updates with changed charges for the instance
+    procedure :: updateCharges
+
+    !> Update potential shifts for the instance
+    procedure :: updateShifts
+
+    !> Returns shifts per atom
+    procedure :: addShiftPerAtom
+
+    !> Returns shifts per shell
+    procedure :: addShiftPerShell
+
+    !> Get the variables relate to periodic information
+    procedure :: getPeriodicInfo
+
+    !> Calculates the -1/R**2 deriv contribution for all atoms for the non-periodic case, without
+    !> storing anything.
+    procedure :: addInvRPrimeClusterMat
+
+    !> Calculates the -1/R**2 deriv contribution for the periodic case, without storing anything.
+    procedure :: addInvRPrimePeriodicMat
+
+    !> Sums up the potential generated by external charges at the position of the atoms
+    procedure :: getPotential
+
+    !> Adds the forces created by the external charges on charged atoms
+    procedure :: addExternalPotGrad
+
+  end type TCoulomb
+
 
   !> 1/r interaction for all atoms with another group
   interface sumInvR
@@ -54,14 +195,430 @@ module coulomb
   end interface addInvRPrimeXlbomd
 
 
-  !> Maximal argument value of erf, after which it is constant
-  real(dp), parameter :: erfArgLimit = 10.0_dp
+  ! Maximal argument value of erf, after which it is constant
+  real(dp), parameter :: erfArgLimit_ = 10.0_dp
 
-  !> Chunk size to use when obtaining neighbours dynamically via an iterator
-  integer, parameter :: iterChunkSize = 1000
+  ! Chunk size to use when obtaining neighbours dynamically via an iterator
+  integer, parameter :: iterChunkSize_ = 1000
+
+  ! Boundary conditions the module can handle
+  integer, parameter :: implementedBoundaryConds_(*) = [&
+      & boundaryConditions%cluster, boundaryConditions%pbc3d]
 
 
 contains
+
+
+  !> Initializes a coulomb calculator
+  subroutine TCoulomb_init(this, input, env, nAtom)
+
+    !> Data structure
+    class(TCoulomb), intent(out) :: this
+
+    !> Input data for coulombic interaction container
+    class(TCoulombInput), intent(in) :: input
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Nr. of atoms in the system
+    integer, intent(in) :: nAtom
+
+
+  #:if WITH_SCALAPACK
+    integer :: nRowLoc, nColLoc
+  #:endif
+
+    @:ASSERT(any(input%boundaryCond == implementedBoundaryConds_))
+
+    this%nAtom_ = nAtom
+    allocate(this%coords_(3, nAtom))
+
+    this%boundaryCond_ = input%boundaryCond
+
+    if (this%boundaryCond_ == boundaryConditions%pbc3d) then
+      this%alpha = input%ewaldAlpha
+      this%autoEwald_ = this%alpha <= 0.0_dp
+      this%tolEwald_ = input%tolEwald
+      allocate(this%neighList_)
+      ! Using dummy cutoff for real space neighbour list. It will be updated with correct value once
+      ! lattice vectors and actual cutoff are known.
+      call TDynNeighList_init(this%neighList_, 0.0_dp, this%nAtom_, .true.)
+    end if
+
+  #:if WITH_SCALAPACK
+    if (env%blacs%atomGrid%iproc /= -1) then
+      call scalafx_getdescriptor(env%blacs%atomGrid, nAtom, nAtom,&
+          & env%blacs%rowBlockSize, env%blacs%columnBlockSize, this%descInvRMat_)
+      call scalafx_getlocalshape(env%blacs%atomGrid, this%descInvRMat_, nRowLoc, nColLoc)
+      allocate(this%invRMat(nRowLoc, nColLoc))
+      call scalafx_getdescriptor(env%blacs%atomGrid, 1, nAtom, env%blacs%rowBlockSize,&
+          & env%blacs%columnBlockSize, this%descQVec_)
+      call scalafx_getlocalshape(env%blacs%atomGrid, this%descQVec_, nRowLoc, nColLoc)
+      allocate(this%shiftPerAtomGlobal_(nRowLoc, nColLoc))
+      allocate(this%qGlobal_(nRowLoc, nColLoc))
+    end if
+  #:else
+    allocate(this%invRMat(nAtom, nAtom))
+  #:endif
+
+    ! Initialise arrays for charge differences
+    allocate(this%deltaQAtom_(nAtom))
+
+    ! Initialise arrays for potential shifts
+    allocate(this%shiftPerAtom_(nAtom))
+
+    this%coordsUpdated_ = .false.
+    this%chargesUpdated_ = .false.
+
+  end subroutine TCoulomb_init
+
+
+  !> Update internal stored coordinates
+  subroutine updateCoords(this, env, neighList, coords, species)
+
+    !> Data structure
+    class(TCoulomb), intent(inout) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> List of neighbours to atoms
+    type(TNeighbourList), intent(in) :: neighList
+
+    !> Atomic coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Central cell chemical species
+    integer, intent(in) :: species(:)
+
+    if (this%boundaryCond_ == boundaryConditions%pbc3d) then
+      call this%neighList_%updateCoords(coords(:, 1:this%nAtom_))
+    end if
+
+    ! If process is outside of atom grid, skip invRMat calculation
+    if (allocated(this%invRMat)) then
+      if (this%boundaryCond_ == boundaryConditions%pbc3d) then
+        call invRPeriodic(env, this%nAtom_, coords, this%neighList_, this%gLatPoints_,&
+            & this%alpha, this%volume_, this%invRMat)
+      else
+        call invRCluster(env, this%nAtom_, coords, this%invRMat)
+      end if
+    end if
+
+    this%coordsUpdated_ = .true.
+    this%chargesUpdated_ = .false.
+
+  end subroutine updateCoords
+
+
+  !> Update internal copy of lattice vectors
+  subroutine updateLatVecs(this, latVecs, recVecs, volume)
+
+    !> Data structure
+    class(TCoulomb), intent(inout) :: this
+
+    !> New lattice vectors
+    real(dp), intent(in) :: latVecs(:,:)
+
+    !> New reciprocal lattice vectors
+    real(dp), intent(in) :: recVecs(:,:)
+
+    !> New volume
+    real(dp), intent(in) :: volume
+
+    real(dp) :: maxREwald, maxGEwald
+
+    real(dp), allocatable :: dummy(:,:)
+
+    @:ASSERT(all(shape(latVecs) == shape(this%latVecs_)))
+
+    if (this%autoEwald_) then
+      this%alpha = getOptimalAlphaEwald(latVecs, recVecs, volume, this%tolEwald_)
+    end if
+    maxREwald = getMaxREwald(this%alpha, this%tolEwald_)
+    call this%neighList_%updateCutoff(maxREwald)
+
+    maxGEwald = getMaxGEwald(this%alpha, volume, this%tolEwald_)
+    call getLatticePoints(this%gLatPoints_, recVecs, latVecs/(2.0_dp*pi), maxGEwald,&
+        &onlyInside=.true., reduceByInversion=.true., withoutOrigin=.true.)
+    this%gLatPoints_ = matmul(recVecs, this%gLatPoints_)
+
+    this%volume_ = volume
+
+    ! Fold charges back to unit cell
+    call getCellTranslations(dummy, this%rLatPoints_, latVecs, recVecs / (2.0_dp * pi), maxREwald)
+
+    call this%neighList_%updateLatVecs(latVecs, recVecs / (2.0_dp * pi))
+
+    this%coordsUpdated_ = .false.
+    this%chargesUpdated_ = .false.
+
+  end subroutine updateLatVecs
+
+
+  !> Get energy contributions from coulombic interactions
+  subroutine addEnergy(this, energies, dQOut, dQOutAtom, dQOutShell)
+
+    !> Data structure
+    class(TCoulomb), intent(in) :: this
+
+    !> Energy contributions for each atom
+    real(dp), intent(inout) :: energies(:)
+
+    !> Negative gross charge (present for XLBOMD)
+    real(dp), intent(in), optional :: dQOut(:,:)
+
+    !> Negative gross charge per atom (present for XLBOMD)
+    real(dp), intent(in), optional :: dQOutAtom(:)
+
+    !> Negative gross charge per shell (present for XLBOMD)
+    real(dp), intent(in), optional :: dQOutShell(:,:)
+
+    @:ASSERT(this%coordsUpdated_)
+    @:ASSERT(this%chargesUpdated_)
+    @:ASSERT(present(dQOut) .eqv. present(dQOutAtom))
+    @:ASSERT(present(dQOut) .eqv. present(dQOutShell))
+    @:ASSERT(size(energies) == this%nAtom_)
+
+    if (present(dQOutAtom)) then
+      ! XLBOMD: 1/2 sum_A (2 q_A - n_A) * shift(n_A)
+      energies(:) = energies + 0.5_dp * this%shiftPerAtom_ * (2.0_dp * dQOutAtom &
+          & - this%deltaQAtom_)
+    else
+      energies(:) = energies + 0.5_dp * this%shiftPerAtom_ * this%deltaQAtom_
+    end if
+
+  end subroutine addEnergy
+
+
+  !> Get force contributions
+  subroutine addGradients(this, env, coords, species, iNeighbour, img2CentCell, &
+      & gradients, dQOut, dQOutAtom, dQOutShell)
+
+    !> Data structure
+    class(TCoulomb), intent(in) :: this
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Atomic coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Species for each atom
+    integer, intent(in) :: species(:)
+
+    !> List of neighbours for each atom
+    integer, intent(in) :: iNeighbour(0:,:)
+
+    !> Indexing of images of the atoms in the central cell
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Gradient contributions
+    real(dp), intent(inout) :: gradients(:,:)
+
+    !> Negative gross charge (present for XLBOMD)
+    real(dp), intent(in), optional :: dQOut(:,:)
+
+    !> Negative gross charge per atom (present for XLBOMD)
+    real(dp), intent(in), optional :: dQOutAtom(:)
+
+    !> Negative gross charge per shell (present for XLBOMD)
+    real(dp), intent(in), optional :: dQOutShell(:,:)
+
+    @:ASSERT(this%coordsUpdated_)
+    @:ASSERT(this%chargesUpdated_)
+    @:ASSERT(present(dQOut) .eqv. present(dQOutAtom))
+    @:ASSERT(present(dQOut) .eqv. present(dQOutShell))
+    @:ASSERT(all(shape(gradients) == [3, this%nAtom_]))
+
+    ! 1/R contribution
+    if (present(dQOutAtom)) then
+      if (this%boundaryCond_ == boundaryConditions%pbc3d) then
+        call addInvRPrimeXlbomd(env, this%nAtom_, coords, this%neighList_, &
+            & this%gLatPoints_, this%alpha, this%volume_, this%deltaQAtom_, &
+            & dQOutAtom, gradients)
+      else
+        call addInvRPrimeXlbomd(env, this%nAtom_, coords, this%deltaQAtom_, &
+            & dQOutAtom, gradients)
+      end if
+    else
+      if (this%boundaryCond_ == boundaryConditions%pbc3d) then
+        call addInvRPrime(env, this%nAtom_, coords, this%neighList_, &
+            & this%gLatPoints_, this%alpha, this%volume_, this%deltaQAtom_, gradients)
+      else
+        call addInvRPrime(env, this%nAtom_, coords, this%deltaQAtom_, gradients)
+      end if
+    end if
+
+  end subroutine addGradients
+
+
+  !> Get stress tensor contributions
+  subroutine addStress(this, env, coords, species, iNeighbour, img2CentCell, &
+      & stress)
+
+    !> Data structure
+    class(TCoulomb), intent(in) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Atomic coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Species for each atom.
+    integer, intent(in) :: species(:)
+
+    !> List of neighbours for each atom.
+    integer, intent(in) :: iNeighbour(0:,:)
+
+    !> Indexing of images of the atoms in the central cell.
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Stress tensor contributions
+    real(dp), intent(inout) :: stress(:,:)
+
+    real(dp) :: stTmp(3,3)
+
+    @:ASSERT(this%coordsUpdated_)
+    @:ASSERT(this%chargesUpdated_)
+    @:ASSERT(all(shape(stress) == [3, 3]))
+
+    ! 1/R contribution
+    stTmp = 0.0_dp
+    call invRStress(env, this%nAtom_, coords, this%neighList_, this%gLatPoints_, this%alpha,&
+        & this%volume_, this%deltaQAtom_, stTmp)
+
+    stress(:,:) = stress(:,:) - 0.5_dp * stTmp(:,:)
+
+  end subroutine addStress
+
+
+  !> Updates with changed charges for the instance.
+  subroutine updateCharges(this, env, qOrbital, q0, orb, species, deltaQ, deltaQAtom,&
+      & deltaQPerLShell)
+
+    !> Data structure
+    class(TCoulomb), intent(inout) :: this
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Orbital resolved charges
+    real(dp), intent(in) :: qOrbital(:,:,:)
+
+    !> Reference charge distribution (neutral atoms)
+    real(dp), intent(in) :: q0(:,:,:)
+
+    !> Contains information about the atomic orbitals in the system
+    type(TOrbitals), intent(in) :: orb
+
+    !> Species, shape: [nAtom]
+    integer, intent(in) :: species(:)
+
+    !> Negative gross charge
+    real(dp), intent(in) :: deltaQ(:,:)
+
+    !> Negative gross charge per shell
+    real(dp), intent(in) :: deltaQPerLShell(:,:)
+
+    !> Negative gross charge per atom
+    real(dp), intent(in) :: deltaQAtom(:)
+
+    @:ASSERT(this%coordsUpdated_)
+
+    this%deltaQAtom_(:) = deltaQAtom
+
+    this%chargesUpdated_ = .true.
+
+  end subroutine updateCharges
+
+
+  !> Update potential shifts. Call after updateCharges
+  subroutine updateShifts(this, env, orb, species, iNeighbour, img2CentCell)
+
+    !> Data structure
+    class(TCoulomb), intent(inout), target :: this
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Contains information about the atomic orbitals in the system
+    type(TOrbitals), intent(in) :: orb
+
+    !> Species of the atoms (should not change during run)
+    integer, intent(in) :: species(:)
+
+    !> Neighbor indexes
+    integer, intent(in) :: iNeighbour(0:,:)
+
+    !> Mapping on atoms in the central cell
+    integer, intent(in) :: img2CentCell(:)
+
+  #:if WITH_SCALAPACK
+    real(dp), pointer :: deltaQAtom2D(:,:), shiftPerAtom2D(:,:)
+    integer :: ll
+  #:endif
+
+    @:ASSERT(this%coordsUpdated_)
+    @:ASSERT(this%chargesUpdated_)
+
+    this%shiftPerAtom_(:) = 0.0_dp
+
+  #:if WITH_SCALAPACK
+    if (env%blacs%atomGrid%iproc /= -1) then
+      ll = size(this%deltaQAtom_)
+      deltaQAtom2D(1:1, 1:ll) => this%deltaQAtom_
+      ll = size(this%shiftPerAtom_)
+      shiftPerAtom2D(1:1, 1:ll) => this%shiftPerAtom_
+      call scalafx_cpl2g(env%blacs%atomGrid, deltaQAtom2D, this%descQVec_, 1, 1, &
+          & this%qGlobal_)
+      call pblasfx_psymv(this%invRMat, this%descInvRMat_, this%qGlobal_, &
+          & this%descQVec_, this%shiftPerAtomGlobal_, this%descQVec_)
+      call scalafx_cpg2l(env%blacs%atomGrid, this%descQVec_, 1, 1, &
+          & this%shiftPerAtomGlobal_, shiftPerAtom2D)
+    end if
+    call mpifx_allreduceip(env%mpi%groupComm, this%shiftPerAtom_, MPI_SUM)
+  #:else
+    call hemv(this%shiftPerAtom_, this%invRMat, this%deltaQAtom_, 'L')
+  #:endif
+
+  end subroutine updateShifts
+
+
+  !> Returns shifts per atom
+  subroutine addShiftPerAtom(this, shiftPerAtom)
+
+    !> Data structure
+    class(TCoulomb), intent(in) :: this
+
+    !> Shift per atom
+    real(dp), intent(inout) :: shiftPerAtom(:)
+
+    @:ASSERT(this%coordsUpdated_)
+    @:ASSERT(this%chargesUpdated_)
+    @:ASSERT(size(shiftPerAtom) == this%nAtom_)
+
+    shiftPerAtom(:) = shiftPerAtom + this%shiftPerAtom_
+
+  end subroutine addShiftPerAtom
+
+
+  !> Returns shifts per atom
+  subroutine addShiftPerShell(this, shiftPerShell)
+
+    !> Data structure
+    class(TCoulomb), intent(in) :: this
+
+    !> Shift per shell
+    real(dp), intent(inout) :: shiftPerShell(:,:)
+
+    @:ASSERT(this%coordsUpdated_)
+    @:ASSERT(this%chargesUpdated_)
+    @:ASSERT(size(shiftPerShell, dim=2) == this%nAtom_)
+
+  end subroutine addShiftPerShell
 
 
   !> Calculates the 1/R Matrix for all atoms for the non-periodic case.  Only the lower triangle is
@@ -237,7 +794,7 @@ contains
           vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
           dist = sum(vect**2)
           fTmp = charges1(iAt1) / sqrt(dist + epsSoften2)
-          if (dist < (erfArgLimit * blurWidths1(iAt1))**2) then
+          if (dist < (erfArgLimit_ * blurWidths1(iAt1))**2) then
             fTmp = fTmp * erfwrap(sqrt(dist) / blurWidths1(iAt1))
           end if
           invRVec(iAt0) = invRVec(iAt0) + fTmp
@@ -351,8 +908,8 @@ contains
 
     type(TNeighIterator) :: neighIter
     type(TDynNeighList), pointer :: pNeighList
-    real(dp) :: neighCoords(3, iterChunkSize)
-    integer :: neighImages(iterChunkSize)
+    real(dp) :: neighCoords(3, iterChunkSize_)
+    integer :: neighImages(iterChunkSize_)
     integer :: iAt1, iAt2, iAt2f, iNeigh, nNeigh, jj, ii, iLoc, jLoc
     logical :: tLocal
 
@@ -365,8 +922,8 @@ contains
     do jj = 1, size(invRMat, dim=2)
       iAt1 = scalafx_indxl2g(jj, descInvRMat(NB_), grid%mycol, descInvRMat(CSRC_), grid%ncol)
       call TNeighIterator_init(neighIter, pNeighList, iAt1)
-      nNeigh = iterChunkSize
-      do while (nNeigh == iterChunkSize)
+      nNeigh = iterChunkSize_
+      do while (nNeigh == iterChunkSize_)
         call neighIter%getNextNeighbours(nNeigh, coords=neighCoords, img2CentCell=neighImages)
         do iNeigh = 1, nNeigh
           iAt2f = neighImages(iNeigh)
@@ -487,13 +1044,13 @@ contains
     real(dp), intent(inout) :: invRMat(:,:)
 
     type(TNeighIterator) :: neighIter
-    real(dp) :: neighCoords(3, iterChunkSize)
-    integer :: neighImages(iterChunkSize)
+    real(dp) :: neighCoords(3, iterChunkSize_)
+    integer :: neighImages(iterChunkSize_)
     integer :: iAt2f, iNeigh, nNeigh
 
     call TNeighIterator_init(neighIter, pNeighList, iAt1)
-    nNeigh = iterChunkSize
-    do while (nNeigh == iterChunkSize)
+    nNeigh = iterChunkSize_
+    do while (nNeigh == iterChunkSize_)
       call neighIter%getNextNeighbours(nNeigh, coords=neighCoords, img2CentCell=neighImages)
       do iNeigh = 1, nNeigh
         iAt2f = neighImages(iNeigh)
@@ -700,7 +1257,7 @@ contains
   !> Calculates the -1/R**2 deriv contribution for charged atoms interacting with a group of charged
   !> objects (like point charges) for the non-periodic case, without storing anything.
   subroutine addInvRPrimeClusterAsymm(env, nAtom0, nAtom1, coord0, coord1, charge0, charge1,&
-      & deriv0, deriv1, blurWidths1)
+      & deriv0, deriv1, tHamDeriv, blurWidths1)
 
     !> Computational environment settings
     type(TEnvironment), intent(in) :: env
@@ -729,6 +1286,9 @@ contains
     !> Contains the derivative for the second group
     real(dp), intent(inout) :: deriv1(:,:)
 
+    !> Compute the derivative of Hamiltonians? Otherwise, compute the force
+    logical, intent(in) :: tHamDeriv
+
     !> if gaussian distribution for the charge
     real(dp), intent(in), optional :: blurWidths1(:)
 
@@ -738,55 +1298,96 @@ contains
     real(dp), allocatable :: localDeriv0(:,:), localDeriv1(:,:)
 
     allocate(localDeriv0(3, nAtom0))
-    allocate(localDeriv1(3, nAtom1))
     localDeriv0(:,:) = 0.0_dp
-    localDeriv1(:,:) = 0.0_dp
+
+    if (.not. tHamDeriv) then
+      allocate(localDeriv1(3, nAtom1))
+      localDeriv1(:,:) = 0.0_dp
+    end if
 
     call distributeRangeInChunks2(env, 1, nAtom0, 1, nAtom1, iAtFirst0, iAtLast0, iAtFirst1,&
         & iAtLast1)
 
     ! Doing blured and unblured cases separately to avoid ifs in the loop
     if (present(blurWidths1)) then
-      !$OMP PARALLEL DO&
-      !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, dist, ftmp, sigma, rs)&
-      !$OMP& REDUCTION(+:localDeriv0, localDeriv1) SCHEDULE(RUNTIME)
-      do iAt0 = iAtFirst0, iAtLast0
-        do iAt1 = iAtFirst1, iAtLast1
-          vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
-          dist = sqrt(sum(vect(:)**2))
-          fTmp = -vect(:) / (dist**3)
-          if (dist < erfArgLimit * blurWidths1(iAt1)) then
-            sigma = blurWidths1(iAt1)
-            rs = dist / sigma
-            fTmp = fTmp * (erfwrap(rs) - 2.0_dp/(sqrt(pi)*sigma) * dist * exp(-(rs**2)))
-          end if
-          fTmp = charge0(iAt0) * charge1(iAt1) * fTmp
-          localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
-          localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
+      if (tHamDeriv) then
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, dist, ftmp, sigma, rs)&
+        !$OMP& REDUCTION(+:localDeriv0) SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            dist = sqrt(sum(vect(:)**2))
+            fTmp = -vect(:) / (dist**3)
+            if (dist < erfArgLimit_ * blurWidths1(iAt1)) then
+              sigma = blurWidths1(iAt1)
+              rs = dist / sigma
+              fTmp = fTmp * (erfwrap(rs) - 2.0_dp/(sqrt(pi)*sigma) * dist * exp(-(rs**2)))
+            end if
+            fTmp = charge1(iAt1) * fTmp
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+          end do
         end do
-      end do
-      !$OMP END PARALLEL DO
+        !$OMP END PARALLEL DO
+      else
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, dist, ftmp, sigma, rs)&
+        !$OMP& REDUCTION(+:localDeriv0, localDeriv1) SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            dist = sqrt(sum(vect(:)**2))
+            fTmp = -vect(:) / (dist**3)
+            if (dist < erfArgLimit_ * blurWidths1(iAt1)) then
+              sigma = blurWidths1(iAt1)
+              rs = dist / sigma
+              fTmp = fTmp * (erfwrap(rs) - 2.0_dp/(sqrt(pi)*sigma) * dist * exp(-(rs**2)))
+            end if
+            fTmp = charge0(iAt0) * charge1(iAt1) * fTmp
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+            localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
+          end do
+        end do
+        !$OMP END PARALLEL DO
+      end if
     else
-      !$OMP PARALLEL DO&
-      !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, dist, ftmp)&
-      !$OMP& REDUCTION(+:localDeriv0, localDeriv1) SCHEDULE(RUNTIME)
-      do iAt0 = iAtFirst0, iAtLast0
-        do iAt1 = iAtFirst1, iAtLast1
-          vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
-          dist = sqrt(sum(vect(:)**2))
-          fTmp = -charge0(iAt0) * charge1(iAt1) / (dist**3) * vect(:)
-          localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
-          localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
+      if (tHamDeriv) then
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, dist, ftmp)&
+        !$OMP& REDUCTION(+:localDeriv0) SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            dist = sqrt(sum(vect(:)**2))
+            fTmp = -charge1(iAt1) / (dist**3) * vect(:)
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+          end do
         end do
-      end do
-      !$OMP END PARALLEL DO
+        !$OMP END PARALLEL DO
+      else
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, dist, ftmp)&
+        !$OMP& REDUCTION(+:localDeriv0, localDeriv1) SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            dist = sqrt(sum(vect(:)**2))
+            fTmp = -charge0(iAt0) * charge1(iAt1) / (dist**3) * vect(:)
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+            localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
+          end do
+        end do
+        !$OMP END PARALLEL DO
+      end if
     end if
 
     call assembleChunks(env, localDeriv0)
-    call assembleChunks(env, localDeriv1)
-
     deriv0(:,:) = deriv0 + localDeriv0
-    deriv1(:,:) = deriv1 + localDeriv1
+
+    if (.not. tHamDeriv) then
+      call assembleChunks(env, localDeriv1)
+      deriv1(:,:) = deriv1 + localDeriv1
+    end if
 
   end subroutine addInvRPrimeClusterAsymm
 
@@ -873,14 +1474,14 @@ contains
     real(dp), intent(inout) :: deriv(:,:)
 
     type(TNeighIterator) :: neighIter
-    real(dp) :: neighCoords(3, iterChunkSize)
-    integer :: neighImages(iterChunkSize)
+    real(dp) :: neighCoords(3, iterChunkSize_)
+    integer :: neighImages(iterChunkSize_)
     integer :: iAtom2f, iNeigh, nNeigh
     real(dp) :: rr(3)
 
     call TNeighIterator_init(neighIter, pNeighList, iAtom1)
-    nNeigh = iterChunkSize
-    do while (nNeigh == iterChunkSize)
+    nNeigh = iterChunkSize_
+    do while (nNeigh == iterChunkSize_)
       call neighIter%getNextNeighbours(nNeigh, coords=neighCoords, img2CentCell=neighImages)
       do iNeigh = 1, nNeigh
         iAtom2f = neighImages(iNeigh)
@@ -983,15 +1584,15 @@ contains
     real(dp), intent(inout) :: deriv(:,:)
 
     type(TNeighIterator) :: neighIter
-    real(dp) :: neighCoords(3, iterChunkSize)
+    real(dp) :: neighCoords(3, iterChunkSize_)
     real(dp) :: rr(3), contrib(3)
     real(dp) :: prefac
-    integer :: neighImages(iterChunkSize)
+    integer :: neighImages(iterChunkSize_)
     integer :: iAt2f, iNeigh, nNeigh
 
     call TNeighIterator_init(neighIter, pNeighList, iAt1)
-    nNeigh = iterChunkSize
-    do while (nNeigh == iterChunkSize)
+    nNeigh = iterChunkSize_
+    do while (nNeigh == iterChunkSize_)
       call neighIter%getNextNeighbours(nNeigh, coords=neighCoords, img2CentCell=neighImages)
       do iNeigh = 1, nNeigh
         iAt2f = neighImages(iNeigh)
@@ -1013,7 +1614,7 @@ contains
   !> Calculates the -1/R**2 deriv contribution for charged atoms interacting with a group of charged
   !> objects (like point charges) for the periodic case, without storing anything.
   subroutine addInvRPrimePeriodicAsymm(env, nAtom0, nAtom1, coord0, coord1, charge0, charge1, rVec,&
-      & gVec, alpha, vol, deriv0, deriv1, blurWidths1)
+      & gVec, alpha, vol, deriv0, deriv1, tHamDeriv, blurWidths1)
 
     !> Computational environment settings
     type(TEnvironment), intent(in) :: env
@@ -1054,6 +1655,9 @@ contains
     !> Contains the derivative for the second group on exit
     real(dp), intent(inout) :: deriv1(:,:)
 
+    !> Compute the derivative of Hamiltonians? Otherwise, compute the force
+    logical, intent(in) :: tHamDeriv
+
     !> Gaussian blur width of the charges in the 2nd group
     real(dp), intent(in), optional :: blurWidths1(:)
 
@@ -1065,36 +1669,97 @@ contains
     @:ASSERT(vol > 0.0_dp)
 
     allocate(localDeriv0(3, nAtom0))
-    allocate(localDeriv1(3, nAtom1))
     localDeriv0(:,:) = 0.0_dp
-    localDeriv1(:,:) = 0.0_dp
+
+    if (.not. tHamDeriv) then
+      allocate(localDeriv1(3, nAtom1))
+      localDeriv1(:,:) = 0.0_dp
+    end if
 
     call distributeRangeInChunks2(env, 1, nAtom0, 1, nAtom1, iAtFirst0, iAtLast0, iAtFirst1,&
         & iAtLast1)
 
     ! real space part
     if (present(blurwidths1)) then
+      if (tHamDeriv) then
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0)&
+        !$OMP& SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            fTmp(:) = derivEwaldReal(vect, rVec, alpha, blurWidth=blurWidths1(iAt1))&
+                & * charge1(iAt1)
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+          end do
+        end do
+        !$OMP END PARALLEL DO
+      else
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0, localDeriv1)&
+        !$OMP& SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            fTmp(:) = derivEwaldReal(vect, rVec, alpha, blurWidth=blurWidths1(iAt1))&
+                & * charge0(iAt0) * charge1(iAt1)
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+            localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
+          end do
+        end do
+        !$OMP END PARALLEL DO
+      end if
+    else
+      if (tHamDeriv) then
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0)&
+        !$OMP& SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            fTmp(:) = derivEwaldReal(vect, rVec, alpha) * charge1(iAt1)
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+          end do
+        end do
+        !$OMP END PARALLEL DO
+      else
+        !$OMP PARALLEL DO&
+        !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0, localDeriv1)&
+        !$OMP& SCHEDULE(RUNTIME)
+        do iAt0 = iAtFirst0, iAtLast0
+          do iAt1 = iAtFirst1, iAtLast1
+            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            fTmp(:) = derivEwaldReal(vect, rVec, alpha) * charge0(iAt0) * charge1(iAt1)
+            localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
+            localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
+          end do
+        end do
+        !$OMP END PARALLEL DO
+      end if
+    end if
+
+    if (tHamDeriv) then
+      ! reciprocal space part
       !$OMP PARALLEL DO&
-      !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0, localDeriv1)&
+      !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0)&
       !$OMP& SCHEDULE(RUNTIME)
       do iAt0 = iAtFirst0, iAtLast0
         do iAt1 = iAtFirst1, iAtLast1
           vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
-          fTmp(:) = derivEwaldReal(vect, rVec, alpha, blurWidth=blurWidths1(iAt1))&
-              & * charge0(iAt0) * charge1(iAt1)
+          fTmp(:) = derivEwaldReciprocal(vect, gVec, alpha, vol) * charge1(iAt1)
           localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
-          localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
         end do
       end do
       !$OMP END PARALLEL DO
     else
+      ! reciprocal space part
       !$OMP PARALLEL DO&
       !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0, localDeriv1)&
       !$OMP& SCHEDULE(RUNTIME)
       do iAt0 = iAtFirst0, iAtLast0
         do iAt1 = iAtFirst1, iAtLast1
           vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
-          fTmp(:) = derivEwaldReal(vect, rVec, alpha) * charge0(iAt0) * charge1(iAt1)
+          fTmp(:) = derivEwaldReciprocal(vect, gVec, alpha, vol) * charge0(iAt0) * charge1(iAt1)
           localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
           localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
         end do
@@ -1102,25 +1767,13 @@ contains
       !$OMP END PARALLEL DO
     end if
 
-    ! reciprocal space part
-    !$OMP PARALLEL DO&
-    !$OMP& DEFAULT(SHARED) PRIVATE(iAt1, vect, fTmp) REDUCTION(+:localDeriv0, localDeriv1)&
-    !$OMP& SCHEDULE(RUNTIME)
-    do iAt0 = iAtFirst0, iAtLast0
-      do iAt1 = iAtFirst1, iAtLast1
-        vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
-        fTmp(:) = derivEwaldReciprocal(vect, gVec, alpha, vol) * charge0(iAt0) * charge1(iAt1)
-        localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp(:)
-        localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp(:)
-      end do
-    end do
-    !$OMP END PARALLEL DO
-
     call assembleChunks(env, localDeriv0)
     deriv0(:,:) = deriv0 + localDeriv0
 
-    call assembleChunks(env, localDeriv1)
-    deriv1(:,:) = deriv1 + localDeriv1
+    if (.not. tHamDeriv) then
+      call assembleChunks(env, localDeriv1)
+      deriv1(:,:) = deriv1 + localDeriv1
+    end if
 
   end subroutine addInvRPrimePeriodicAsymm
 
@@ -1454,6 +2107,52 @@ contains
   end function derivEwaldReciprocal
 
 
+  !> Returns the derivative and stress of the reciprocal part of the Ewald sum
+  subroutine derivStressEwaldRec(rr, gVec, alpha, vol, recSum, sigma)
+
+    !> Vector where to calculate the Ewald sum.
+    real(dp), intent(in) :: rr(:)
+
+    !> Reciprocal space vectors to sum over.
+    !  Should not contain either origin nor inversion related points.
+    real(dp), intent(in) :: gVec(:, :)
+
+    !> Parameter for the Ewald summation.
+    real(dp), intent(in) :: alpha
+
+    !> Volume of the real space unit cell.
+    real(dp), intent(in) :: vol
+
+    !> contribution to the derivative value
+    real(dp), intent(out) :: recSum(3)
+
+    !> contribution to the derivative value
+    real(dp), intent(out) :: sigma(3, 3)
+
+    real(dp), parameter :: unity(3, 3) = reshape(&
+        & [1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 1.0_dp], [3, 3])
+
+    integer :: iG
+    real(dp) :: gg(3), g2, rg, eTerm, sTmp
+
+    recSum(:) = 0.0_dp
+    sigma(:,:) = 0.0_dp
+    do iG = 1, size(gVec, dim=2)
+      gg = gVec(:, iG)
+      g2 = sum(gg**2)
+      rg = dot_product(gg, rr)
+      eTerm = exp(-g2 / (4.0_dp * alpha**2)) / g2
+      recSum(:) = recSum - gg * sin(rg) * eTerm
+      sTmp = 2.0_dp * (1.0_dp / (4.0_dp * alpha * alpha) + 1.0_dp / g2)
+      sigma(:,:) = sigma + (-unity + sTmp * spread(gg, 1, 3)*spread(gg, 2, 3)) * cos(rg) * eTerm
+    end do
+    ! note factor of 2 as only summing over half of reciprocal space
+    recSum(:) = 2.0_dp * recSum * 4.0_dp * pi / vol
+    sigma(:,:) = 2.0_dp * sigma * 4.0_dp * pi / vol
+
+  end subroutine derivStressEwaldRec
+
+
   !> Returns the real space part of the Ewald sum.
   function ewaldReal(rr, rVec, alpha, blurWidth, epsSoften) result(realSum)
 
@@ -1492,7 +2191,7 @@ contains
         if (absRR < tolSameDist**2) then
           cycle
         end if
-        if (absRR < (erfArgLimit * blurWidth)**2) then
+        if (absRR < (erfArgLimit_ * blurWidth)**2) then
           realSum = realSum + erfwrap(sqrt(absRR) / blurWidth)/sqrt(absRR+epsSoften2)
         else
           realSum = realSum + 1.0_dp/sqrt(absRR+epsSoften2)
@@ -1547,7 +2246,7 @@ contains
         dewr(:) = dewr + rNew(:) * (-2.0_dp/sqrt(pi)*exp(-alpha*alpha*rr*rr)* alpha*rr&
             & - erfcwrap(alpha*rr))/(rr*rr*rr)
         ! deriv of erf(r/blur)/r
-        if (rr < erfArgLimit * blurWidth) then
+        if (rr < erfArgLimit_ * blurWidth) then
           dewr(:) = dewr + rNew(:) * (2.0_dp/sqrt(pi)*exp(-rr*rr/(blurWidth**2))*rr/blurWidth&
               & + erfcwrap(rr/blurWidth))/(rr*rr*rr)
         end if
@@ -1765,14 +2464,14 @@ contains
     real(dp), intent(inout) :: stress(:,:)
 
     type(TNeighIterator) :: neighIter
-    real(dp) :: neighCoords(3, iterChunkSize)
-    integer :: neighImages(iterChunkSize)
+    real(dp) :: neighCoords(3, iterChunkSize_)
+    integer :: neighImages(iterChunkSize_)
     integer :: iAtom2f, iNeigh, nNeigh, ii, jj
     real(dp) :: r(3), f(3)
 
     call TNeighIterator_init(neighIter, pNeighList, iAtom1)
-    nNeigh = iterChunkSize
-    do while (nNeigh == iterChunkSize)
+    nNeigh = iterChunkSize_
+    do while (nNeigh == iterChunkSize_)
       call neighIter%getNextNeighbours(nNeigh, coords=neighCoords, img2CentCell=neighImages)
       do iNeigh = 1, nNeigh
         iAtom2f = neighImages(iNeigh)
@@ -1797,5 +2496,239 @@ contains
   end subroutine addNeighbourContribsStress
 
 
+  !> Calculates the -1/R**2 deriv contribution for all atoms for the non-periodic case, without
+  !> storing anything.
+  subroutine addInvRPrimeClusterMat(this, env, coord, invRDeriv)
 
-end module coulomb
+    class(TCoulomb), intent(in) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> List of atomic coordinates.
+    real(dp), intent(in) :: coord(:,:)
+
+    !> derivative of inverse R matrix
+    real(dp), intent(inout) :: invRDeriv(:,:,:)
+
+    real(dp) :: dist, vect(3)
+    integer :: nAtom, iAtFirst, iAtLast
+    integer :: ii, jj
+
+    nAtom = size(invRDeriv,dim=1)
+
+    call distributeRangeInChunks(env, 1, nAtom, iAtFirst, iAtLast)
+
+    !$OMP PARALLEL DO&
+    !$OMP& DEFAULT(SHARED) PRIVATE(jj, vect, dist) REDUCTION(+:invRDeriv) SCHEDULE(RUNTIME)
+    do ii = iAtFirst, iAtLast
+      do jj = ii + 1, nAtom
+        vect(:) = coord(:,ii) - coord(:,jj)
+        dist = sqrt(sum(vect(:)**2))
+        invRDeriv(jj,ii,:) = invRDeriv(jj, ii, :) - vect / dist**3
+      end do
+    end do
+    !$OMP END PARALLEL DO
+
+    call assembleChunks(env, invRDeriv)
+
+  end subroutine addInvRPrimeClusterMat
+
+
+  !> Calculates the -1/R**2 deriv contribution for the periodic case, without storing anything.
+  subroutine addInvRPrimePeriodicMat(this, env, coord, invRDeriv)
+
+    !> Instance
+    class(TCoulomb), target, intent(in) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> List of atomic coordinates (all atoms).
+    real(dp), intent(in) :: coord(:,:)
+
+    !> derivative of inverse R matrix
+    real(dp), intent(inout) :: invRDeriv(:,:,:)
+
+    type(TDynNeighList), pointer :: pNeighList
+    real(dp) :: r(3)
+    integer :: nAtom, iAtom1, iAtom2
+    integer :: iAtFirst, iAtLast
+
+    nAtom = size(invRDeriv,dim=1)
+    pNeighList => this%neighList_
+
+    call distributeRangeInChunks(env, 1, nAtom, iAtFirst, iAtLast)
+
+    ! d(1/R)/dr real space
+    !$OMP PARALLEL DO&
+    !$OMP& DEFAULT(SHARED) REDUCTION(+:invRDeriv) SCHEDULE(RUNTIME)
+    do iAtom1 = iAtFirst, iAtLast
+      call addNeighbourContribsInvRPMat(iAtom1, pNeighList, coord, this%alpha, invRDeriv)
+    end do
+    !$OMP END PARALLEL DO
+
+    ! d(1/R)/dr reciprocal space
+    !$OMP PARALLEL DO&
+    !$OMP& DEFAULT(SHARED) PRIVATE(iAtom2,r) REDUCTION(+:invRDeriv) SCHEDULE(RUNTIME)
+    do iAtom1 = iAtFirst, iAtLast
+      do iAtom2 = iAtom1 + 1, nAtom
+        r(:) = coord(:,iAtom1) - coord(:,iAtom2)
+        invRDeriv(iAtom2,iAtom1,:) = invRDeriv(iAtom2,iAtom1,:) &
+            & + derivEwaldReciprocal(r, this%gLatPoints_, this%alpha, this%volume_)
+      end do
+    end do
+    !$OMP END PARALLEL DO
+
+    call assembleChunks(env, invRDeriv)
+
+  end subroutine addInvRPrimePeriodicMat
+
+
+  !> Neighbour summation with local scope for predictable OMP <= 4.0 behaviour
+  subroutine addNeighbourContribsInvRPMat(iAtom1, pNeighList, coords, alpha, invRDeriv)
+    integer, intent(in) :: iAtom1
+    type(TDynNeighList), pointer, intent(in) :: pNeighList
+    real(dp), intent(in) :: coords(:,:)
+    real(dp), intent(in) :: alpha
+    real(dp), intent(inout) :: invRDeriv(:,:,:)
+
+    type(TNeighIterator) :: neighIter
+    real(dp) :: neighCoords(3, iterChunkSize_)
+    integer :: neighImages(iterChunkSize_)
+    integer :: iAtom2f, iNeigh, nNeigh
+    real(dp) :: rr(3)
+
+    call TNeighIterator_init(neighIter, pNeighList, iAtom1)
+    nNeigh = iterChunkSize_
+    do while (nNeigh == iterChunkSize_)
+      call neighIter%getNextNeighbours(nNeigh, coords=neighCoords, img2CentCell=neighImages)
+      do iNeigh = 1, nNeigh
+        iAtom2f = neighImages(iNeigh)
+        if (iAtom2f /= iAtom1) then
+          rr(:) = coords(:,iAtom1) - neighCoords(:,iNeigh)
+          invRDeriv(iAtom2f,iAtom1,:) = &
+              & invRDeriv(iAtom2f,iAtom1,:) + derivRTerm(rr,alpha)
+        end if
+      end do
+    end do
+
+  end subroutine addNeighbourContribsInvRPMat
+
+
+  !> Get the variables relate to periodic information
+  subroutine getPeriodicInfo(this, rVec, gVec, alpha, vol)
+
+    !> Instance
+    class(TCoulomb), intent(in) :: this
+
+    !> real lattice points for Ewald-sum
+    real(dp), allocatable, intent(out) :: rVec(:,:)
+
+    !> lattice points for reciprocal Ewald
+    real(dp), allocatable, intent(out) :: gVec(:,:)
+
+    !> parameter for Ewald
+    real(dp), intent(out) :: alpha
+
+    !> parameter for cell volume
+    real(dp), intent(out) :: vol
+
+    gVec = this%gLatPoints_
+    rVec = this%rLatPoints_
+
+    alpha = this%alpha
+    vol = this%volume_
+
+  end subroutine getPeriodicInfo
+
+
+  !> Calculates the summed 1/R vector for all atoms for the non-periodic case asymmmetric case (like
+  !> interaction of atoms with point charges).
+  subroutine getPotential(this, env, coords, chargeCoords, charges, potential, blurWidths,&
+      & epsSoften)
+
+    !> Instance
+    class(TCoulomb), intent(in) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Coordinates where the potential should be calculated
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Coordinates of the point charges
+    real(dp), intent(in) :: chargeCoords(:,:)
+
+    !> Charges of the point charges
+    real(dp), intent(in) :: charges(:)
+
+    !> Potential in each specified point
+    real(dp), intent(out) :: potential(:)
+
+    !> Gaussian blur width of the point charges
+    real(dp), intent(in), optional :: blurWidths(:)
+
+    !> Short distance softening
+    real(dp), intent(in), optional :: epsSoften
+
+    if (this%boundaryCond_ == boundaryConditions%cluster) then
+      call sumInvRClusterAsymm(env, size(coords, dim=2), size(charges), coords, chargeCoords,&
+          & charges, potential, blurWidths1=blurWidths, epsSoften=epsSoften)
+    else
+      call sumInvRPeriodicAsymm(env, size(coords, dim=2), size(charges), coords, chargeCoords,&
+          & charges, this%rLatPoints_, this%gLatPoints_, this%alpha, this%volume_, potential,&
+          & blurWidths1=blurWidths, epsSoften=epsSoften)
+    end if
+
+  end subroutine getPotential
+
+
+  !> Adds the forces created by the external charges on charged atoms
+  subroutine addExternalPotGrad(this, env, atomCoords, extChargeCoords, atomCharges,&
+      & extCharges, atomGrads, extChargeGrads, tHamDeriv, extChargeBlurWidths)
+
+    !> Instance
+    class(TCoulomb), intent(in) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> List of atomic coordinates.
+    real(dp), intent(in) :: atomCoords(:,:)
+
+    !> List of the point charge coordinates
+    real(dp), intent(in) :: extChargeCoords(:,:)
+
+    !> Charge of the atoms.
+    real(dp), intent(in) :: atomCharges(:)
+
+    !> Charge of the point charges.
+    real(dp), intent(in) :: extCharges(:)
+
+    !> Contains the derivative for the first group
+    real(dp), intent(inout) :: atomGrads(:,:)
+
+    !> Contains the derivative for the second group
+    real(dp), intent(inout) :: extChargeGrads(:,:)
+
+    !> Compute the derivative of Hamiltonians? Otherwise, compute the force
+    logical, intent(in) :: tHamDeriv
+
+    !> if gaussian distribution for the charge
+    real(dp), intent(in), optional :: extChargeBlurWidths(:)
+
+    if (this%boundaryCond_ == boundaryConditions%cluster) then
+      call addInvRPrimeClusterAsymm(env, size(atomCharges), size(extCharges), atomCoords,&
+          & extChargeCoords, atomCharges, extCharges, atomGrads, extChargeGrads, tHamDeriv,&
+          & extChargeBlurWidths)
+    else
+      call addInvRPrimePeriodicAsymm(env, size(atomCharges), size(extCharges), atomCoords,&
+          & extChargeCoords, atomCharges, extCharges, this%rLatPoints_, this%gLatPoints_,&
+          & this%alpha, this%volume_, atomGrads, extChargeGrads, tHamDeriv, extChargeBlurWidths)
+    end if
+
+  end subroutine addExternalPotGrad
+
+
+end module dftbp_coulomb

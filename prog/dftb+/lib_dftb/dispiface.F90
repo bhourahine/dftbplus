@@ -1,21 +1,23 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
 
 !> Common interface for all dispersion modules.
-module dispiface
-  use accuracy, only : dp
-  use periodic, only : TNeighbourList
+module dftbp_dispiface
+  use dftbp_accuracy, only : dp
+  use dftbp_environment, only : TEnvironment
+  use dftbp_periodic, only : TNeighbourList
+  use dftbp_commontypes, only : TOrbitals
   implicit none
   private
   
-  public :: DispersionIface
+  public :: TDispersionIface
 
   !> Interface for classes providing dispersion.
-  type, abstract :: DispersionIface
+  type, abstract :: TDispersionIface
   contains
 
     !> update internal copy of coordinates
@@ -35,17 +37,33 @@ module dispiface
 
     !> get stress tensor contributions
     procedure(getStressIface), deferred :: getStress
-  end type DispersionIface
+
+    !> Updates with changed charges for the instance.
+    procedure :: updateCharges
+
+    !> Updates charges for dispersion models that make use of charges
+    procedure :: updateOnsiteCharges
+
+    !> Add potential contribution from  models which produce an atomic hamiltonian contribution
+    procedure :: addPotential
+
+    !> Is the dispersion energy available for use
+    procedure :: energyAvailable
+
+  end type TDispersionIface
 
 
   abstract interface
 
     !> Update internal stored coordinate
-    subroutine updateCoordsIface(this, neigh, img2CentCell, coords, species0)
-      import :: DispersionIface, TNeighbourList, dp
+    subroutine updateCoordsIface(this, env, neigh, img2CentCell, coords, species0, stat)
+      import :: TDispersionIface, TEnvironment, TNeighbourList, dp
 
       !> data structure
-      class(DispersionIface), intent(inout) :: this
+      class(TDispersionIface), intent(inout) :: this
+
+      !> Computational environment settings
+      type(TEnvironment), intent(in) :: env
 
       !> list of neighbours to atoms
       type(TNeighbourList), intent(in) :: neigh
@@ -58,15 +76,18 @@ module dispiface
 
       !> central cell chemical species
       integer, intent(in) :: species0(:)
+
+      !> Status of operation
+      integer, intent(out), optional :: stat
     end subroutine updateCoordsIface
 
 
     !> update internal copy of lattice vectors
     subroutine updateLatVecsIface(this, latVecs)
-      import :: DispersionIface, dp
+      import :: TDispersionIface, dp
 
       !> data structure
-      class(DispersionIface), intent(inout) :: this
+      class(TDispersionIface), intent(inout) :: this
 
       !> lattice vectors
       real(dp), intent(in) :: latVecs(:,:)
@@ -75,10 +96,10 @@ module dispiface
 
     !> get energy contributions
     subroutine getEnergiesIface(this, energies)
-      import :: DispersionIface, dp
+      import :: TDispersionIface, dp
 
       !> data structure
-      class(DispersionIface), intent(inout) :: this
+      class(TDispersionIface), intent(inout) :: this
 
       !> energy contributions for each atom
       real(dp), intent(out) :: energies(:)
@@ -86,23 +107,42 @@ module dispiface
 
 
     !> get force contributions
-    subroutine addGradientsIface(this, gradients)
-      import :: DispersionIface, dp
+    subroutine addGradientsIface(this, env, neigh, img2CentCell, coords, species0, &
+        & gradients, stat)
+      import :: TDispersionIface, TEnvironment, TNeighbourList, dp
 
       !> data structure
-      class(DispersionIface), intent(inout) :: this
+      class(TDispersionIface), intent(inout) :: this
+
+      !> Computational environment settings
+      type(TEnvironment), intent(in) :: env
+
+      !> list of neighbours to atoms
+      type(TNeighbourList), intent(in) :: neigh
+
+      !> image to central cell atom index
+      integer, intent(in) :: img2CentCell(:)
+
+      !> atomic coordinates
+      real(dp), intent(in) :: coords(:,:)
+
+      !> central cell chemical species
+      integer, intent(in) :: species0(:)
 
       !> gradient contributions for each atom
       real(dp), intent(inout) :: gradients(:,:)
+
+      !> Status of operation
+      integer, intent(out), optional :: stat
     end subroutine addGradientsIface
 
 
     !> get stress tensor contributions
     subroutine getStressIface(this, stress)
-      import :: DispersionIface, dp
+      import :: TDispersionIface, dp
 
       !> data structure
-      class(DispersionIface), intent(inout) :: this
+      class(TDispersionIface), intent(inout) :: this
 
       !> Stress tensor contributions
       real(dp), intent(out) :: stress(:,:)
@@ -111,10 +151,10 @@ module dispiface
 
     !> Distance cut off for dispersion interactions
     function getRCutoffIface(this) result(cutoff)
-      import :: DispersionIface, dp
+      import :: TDispersionIface, dp
 
       !> data structure
-      class(DispersionIface), intent(inout) :: this
+      class(TDispersionIface), intent(inout) :: this
 
       !> resulting cutoff
       real(dp) :: cutoff
@@ -122,4 +162,86 @@ module dispiface
 
   end interface
 
-end module dispiface
+contains
+
+  !> update charges, dummy interface if not needed
+  subroutine updateOnsiteCharges(this, qNetAtom, orb, referenceN0, species0, tCanUseCharges)
+
+    !> data structure
+    class(TDispersionIface), intent(inout) :: this
+
+    !> Net atomic populations
+    real(dp), intent(in), allocatable :: qNetAtom(:)
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> Reference neutal charge
+    real(dp), intent(in) :: referenceN0(:,:)
+
+    !> Atomic species of atoms
+    integer, intent(in) :: species0(:)
+
+    !> Are the charges from self-consistent output or otherwise suitable to use if needed
+    logical, intent(in) :: tCanUseCharges
+
+  end subroutine updateOnsiteCharges
+
+
+  !> Adds the atomic potential contribution from suitable dispersion models, no effect otherwise
+  subroutine addPotential(this, vDisp)
+
+    !> data structure
+    class(TDispersionIface), intent(in) :: this
+
+    !> Atomistic potential (dummy for most dispersion models)
+    real(dp), intent(inout) :: vDisp(:)
+
+  end subroutine addPotential
+
+
+  !> Is the dispersion energy available for use in the main code after calling getEnergies
+  function energyAvailable(this)
+
+    !> data structure
+    class(TDispersionIface), intent(in) :: this
+
+    !> result (dummy for most dispersion models)
+    logical :: energyAvailable
+
+    energyAvailable = .true.
+
+  end function energyAvailable
+
+
+  !> Updates with changed charges for the instance.
+  subroutine updateCharges(this, env, species, neigh, qq, q0, img2CentCell, orb)
+
+    !> Data structure
+    class(TDispersionIface), intent(inout) :: this
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Species, shape: [nAtom]
+    integer, intent(in) :: species(:)
+
+    !> Neighbour list.
+    type(TNeighbourList), intent(in) :: neigh
+
+    !> Orbital charges.
+    real(dp), intent(in) :: qq(:,:,:)
+
+    !> Reference orbital charges.
+    real(dp), intent(in) :: q0(:,:,:)
+
+    !> Mapping on atoms in central cell.
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Orbital information
+    type(TOrbitals), intent(in) :: orb
+
+  end subroutine updateCharges
+
+
+end module dftbp_dispiface

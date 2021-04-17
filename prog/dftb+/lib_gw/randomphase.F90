@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -9,11 +9,11 @@
 
 !> Contains subroutines to calculate the RPA polarizabilty, dielectric matrix and its inverse,
 !> needed in GW calculation.
-module RandomPhase
-  use accuracy, only : dp, brdRPA
-  use blasRoutines
-  use lapackRoutines
-  use TransDens
+module dftbp_RandomPhase
+  use dftbp_accuracy, only : dp, brdRPA
+  use dftbp_blasRoutines
+  use dftbp_lapackRoutines
+  use dftbp_TransDens
   implicit none
 
   private
@@ -157,4 +157,4 @@ contains
 
   end subroutine buildEpsInv
 
-end module RandomPhase
+end module dftbp_RandomPhase

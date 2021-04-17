@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,16 +8,16 @@
 #:include 'common.fypp'
 
 !> Implements the GW approximation for DFTB
-module GWApprox
-  use accuracy, only : dp, deltaSelfEnergy
-  use globalenv, only : stdOut
-  use blasroutines
-  use TransDens
-  use GammaMat
-  use RandomPhase
-  use PPModel
-  use gwXandXC
-  use environment
+module dftbp_GWApprox
+  use dftbp_accuracy, only : dp, deltaSelfEnergy
+  use dftbp_globalenv, only : stdOut
+  use dftbp_blasroutines
+  use dftbp_TransDens
+  use dftbp_GammaMat
+  use dftbp_RandomPhase
+  use dftbp_PPModel
+  use dftbp_gwXandXC
+  use dftbp_environment
   implicit none
   private
 
@@ -231,4 +231,4 @@ contains
 
   end subroutine gwDriver
 
-end module GWApprox
+end module dftbp_GWApprox

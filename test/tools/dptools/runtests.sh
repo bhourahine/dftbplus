@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PYTHON_TESTS="grids repeatgen straingen"
+PYTHON_TESTS="grids repeatgen straingen xyz2gen gen2xyz gen2cif dp_bands dp_dos"
 
 function abspath() {
   cd $1
@@ -19,7 +19,7 @@ workdir=$(abspath $workdir)
 if [ $# -gt 0 ]; then
   pythons=$*
 else
-  pythons="python"
+  pythons="python3"
 fi
 
 pythonpath="$packagedir/src"

@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,81 +8,22 @@
 #:include 'common.fypp'
 
 !> Routines to calculate contributions to the stress tensor
-module stress
-  use assert
-  use accuracy
-  use nonscc, only : NonSccDiff
-  use scc
-  use commontypes
-  use slakocont
-  use repcont
-  use schedule
-  use environment
+module dftbp_stress
+  use dftbp_assert
+  use dftbp_accuracy
+  use dftbp_nonscc, only : TNonSccDiff
+  use dftbp_scc
+  use dftbp_commontypes
+  use dftbp_slakocont
+  use dftbp_repcont
+  use dftbp_schedule
+  use dftbp_environment
   implicit none
   private
 
-  public :: getRepulsiveStress, getKineticStress, getNonSCCStress, getBlockStress, getBlockiStress
+  public :: getKineticStress, getNonSCCStress, getBlockStress, getBlockiStress
 
 contains
-
-
-  !> The stress tensor contribution from the repulsive energy term
-  subroutine getRepulsiveStress(st, coords, nNeighbourSK, iNeighbours, species, img2CentCell,&
-      & repCont, cellVol)
-
-    !> stress tensor
-    real(dp), intent(out) :: st(:,:)
-
-    !> coordinates (x,y,z, all atoms including possible images)
-    real(dp), intent(in) :: coords(:,:)
-
-    !> Number of neighbours for atoms in the central cell
-    integer, intent(in) :: nNeighbourSK(:)
-
-    !> Index of neighbours for a given atom.
-    integer, intent(in) :: iNeighbours(0:,:)
-
-    !> Species of atoms in the central cell.
-    integer, intent(in) :: species(:)
-
-    !> indexing array for periodic image atoms
-    integer, intent(in) :: img2CentCell(:)
-
-    !> Container for repulsive potentials.
-    type(ORepCont), intent(in) :: repCont
-
-    !> cell volume.
-    real(dp), intent(in) :: cellVol
-
-    integer :: iAt1, iNeigh, iAt2, iAt2f, ii, nAtom
-    real(dp) :: vect(3), intermed(3), prefac
-
-    @:ASSERT(all(shape(st) == [3, 3]))
-
-    nAtom = size(nNeighbourSK)
-    st(:,:) = 0.0_dp
-
-    do iAt1 = 1, nAtom
-      do iNeigh = 1, nNeighbourSK(iAt1)
-        iAt2 = iNeighbours(iNeigh,iAt1)
-        iAt2f = img2CentCell(iAt2)
-        vect(:) = coords(:,iAt1) - coords(:,iAt2)
-        call getEnergyDeriv(repCont, intermed, vect, species(iAt1), species(iAt2))
-        if (iAt1 == iAt2f) then
-          prefac = 0.5_dp
-        else
-          prefac = 1.0_dp
-        end if
-        do ii = 1, 3
-          st(:, ii) = st(:, ii) - prefac * intermed(:) * vect(ii)
-        end do
-      end do
-    end do
-
-    st = st / cellVol
-
-  end subroutine getRepulsiveStress
-
 
   !> The kinetic contribution to the stress tensor
   subroutine getKineticStress(st, mass, species, velo, cellVol)
@@ -134,7 +75,7 @@ contains
     real(dp), intent(out) :: st(:,:)
 
     !> Derivative calculator for (H0,S)
-    class(NonSccDiff), intent(in) :: derivator
+    class(TNonSccDiff), intent(in) :: derivator
 
     !> density matrix in packed format
     real(dp), intent(in) :: DM(:)
@@ -143,10 +84,10 @@ contains
     real(dp), intent(in) :: EDM(:)
 
     !> Container for SK Hamiltonian integrals
-    type(OSlakoCont), intent(in) :: skOverCont
+    type(TSlakoCont), intent(in) :: skOverCont
 
     !> Container for SK overlap integrals
-    type(OSlakoCont), intent(in) :: skHamCont
+    type(TSlakoCont), intent(in) :: skHamCont
 
     !> list of all atomic coordinates
     real(dp), intent(in) :: coords(:,:)
@@ -244,7 +185,7 @@ contains
     real(dp), intent(out) :: st(:,:)
 
     !> density matrix in packed format
-    class(NonSccDiff), intent(in) :: derivator
+    class(TNonSccDiff), intent(in) :: derivator
 
     !> energy-weighted density matrix in packed format
     real(dp), intent(in) :: DM(:,:)
@@ -253,10 +194,10 @@ contains
     real(dp), intent(in) :: EDM(:)
 
     !> Container for SK overlap integrals
-    type(OSlakoCont), intent(in) :: skHamCont
+    type(TSlakoCont), intent(in) :: skHamCont
 
     !> list of all atomic coordinates
-    type(OSlakoCont), intent(in) :: skOverCont
+    type(TSlakoCont), intent(in) :: skOverCont
 
     !> list of all atomic species
     real(dp), intent(in) :: coords(:,:)
@@ -379,7 +320,7 @@ contains
     real(dp), intent(out) :: st(:,:)
 
     !> density matrix in packed format
-    class(NonSccDiff), intent(in) :: derivator
+    class(TNonSccDiff), intent(in) :: derivator
 
     !> imaginary part of density matrix in packed format
     real(dp), intent(in) :: DM(:,:)
@@ -391,10 +332,10 @@ contains
     real(dp), intent(in) :: EDM(:)
 
     !> Container for SK overlap integrals
-    type(OSlakoCont), intent(in) :: skHamCont
+    type(TSlakoCont), intent(in) :: skHamCont
 
     !> list of all atomic coordinates
-    type(OSlakoCont), intent(in) :: skOverCont
+    type(TSlakoCont), intent(in) :: skOverCont
 
     !> list of all atomic species
     real(dp), intent(in) :: coords(:,:)
@@ -518,4 +459,5 @@ contains
 
   end subroutine getBlockiStress
 
-end module stress
+
+end module dftbp_stress

@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -12,33 +12,36 @@
 !> To do: Add other methods, including possibly Pederson and Jackson method
 !> PRB 43, 7312 (1991). Also fix exact occupation for electron numers, using
 !> interpolation instead of bisection.
-module etemp
-  use assert
-  use accuracy, only : dp, elecTol, elecTolMax, mExpArg
-  use errorfunction
-  use message
-  use hermite
-  use sorting
-  use constants
-  use factorial, only : fact
+module dftbp_etemp
+  use dftbp_assert
+  use dftbp_accuracy, only : dp, elecTol, elecTolMax, mExpArg
+  use dftbp_errorfunction
+  use dftbp_message
+  use dftbp_hermite
+  use dftbp_sorting
+  use dftbp_constants
+  use dftbp_factorial, only : fact
   implicit none
   private
 
-  public :: Efilling, electronFill, Fermi, Gaussian, Methfessel
+  public :: Efilling, electronFill, fillingTypes
 
+  type :: TFillingTypesEnum
 
-  !> Definition of a type of broadening function - Fermi-Dirac in this case
-  integer, parameter :: Fermi = 0
+    !> Definition of a type of broadening function - Fermi-Dirac in this case
+    integer :: Fermi = 0
 
+    !> Definition of a type of broadening function - Gaussian in this case
+    integer :: Gaussian = 1
 
-  !> Definition of a type of broadening function - Gaussian in this case
-  integer, parameter :: Gaussian = 1
+    !> Definition of a type of broadening function - Methfessel-Paxton, for higher orders use
+    !> Methfessel + n as a value
+    integer :: Methfessel = 2
 
+  end type TFillingTypesEnum
 
-  !> Definition of a type of broadening function - Methfessel-Paxton, for higher orders use
-  !> Methfessel + n as a value
-  integer, parameter :: Methfessel = 1
-
+  !> Enumerated filling types.
+  type(TFillingTypesEnum), parameter :: fillingTypes = TFillingTypesEnum()
 
   !> Twice the machine precision
   real(dp), parameter :: epsilon2 = 2.0_dp * epsilon(1.0_dp)
@@ -85,7 +88,6 @@ contains
 
     !> Choice of distribution functions, currently Fermi, Gaussian and Methfessle-Paxton
     !> supported. The flags is defined symbolically, so (Methfessel + 2) gives the 2nd order M-P
-
     !> scheme
     integer, intent(in) :: distrib
 
@@ -107,23 +109,31 @@ contains
     @:ASSERT(size(kWeight) > 0)
     @:ASSERT(all(kWeight >= 0.0_dp))
 
-    @:ASSERT(distrib >= Fermi)
+    @:ASSERT(distrib >= fillingTypes%Fermi)
 
     ! If no electrons there, we are ready
     if (nElectrons < epsilon(1.0_dp)) then
       filling(:,:,:) = 0.0_dp
       Ebs(:) = 0.0_dp
-      Ef = 0.0_dp
+      ! place the Fermi energy well below the lowest eigenvalue
+      Ef = minval(eigenvals) - 1000.0_dp * (kT + epsilon(1.0_rsp))
       TS(:) = 0.0_dp
       E0(:) = 0.0_dp
       return
     end if
 
+    if (size(filling,dim=1)*size(filling,dim=3) <= nElectrons) then
+      ! place the Fermi energy well above the highest eigenvalue, as nOrbs * spin <= nElec
+      Ef = maxval(eigenvals) + 1000.0_dp * (kT + epsilon(1.0_rsp))
+      call electronFill(Ebs, filling, TS, E0, Ef, eigenvals, kT, distrib, kWeight)
+      return
+    end if
+
     ! For integer number of electrons, try middle gap for Ef
-    if (nElectrons - floor(nElectrons) < epsilon(1.0_dp)) then
+    if (abs(nElectrons - nint(nElectrons)) <= elecTol) then
       Ef = middleGap(eigenvals, kWeight, nElectrons)
       nElec = electronCount(Ef, eigenvals, kT, distrib, kWeight)
-      if (abs(nElectrons - nElec) <= elecTol) then
+      if (abs(nElectrons - nElec) <= elecTolMax) then
         call electronFill(Ebs, filling, TS, E0, Ef, eigenvals, kT, distrib, kWeight)
         return
       end if
@@ -175,7 +185,7 @@ contains
     nElec = electronCount(Ef, eigenvals, kT, distrib, kWeight)
     ! Polish resulting root with Newton-Raphson type steps
     if (abs(nElectrons - nElec) > elecTol) then
-      if (distrib == Fermi) then ! only derivs for Fermi so far
+      if (distrib == fillingTypes%Fermi) then ! only derivs for Fermi so far
         if (abs(derivElectronCount(Ef, eigenvals, kT, distrib, kWeight)) >= epsilon(1.0_dp)) then
           EfOld = Ef
           Ef = Ef - (electronCount(Ef, eigenvals, kT, distrib, kWeight) - nElectrons)&
@@ -210,24 +220,24 @@ contains
   !> Calculates the number of electrons for a given Fermi energy and distribution function
   function electronCount(Ef,eigenvals,kT,distrib,kWeight)
 
-    !> Fermi energy for given distribution
+    !> Electrons for this Fermi energy
     real(dp) :: electronCount
 
-    !> The eigenvalues of the levels, 1st index is energy 2nd index is k-point and 3nd index is spin
+    !> Fermi energy for given distribution
     real(dp), intent(in) :: Ef
 
-    !> Thermal energy in atomic units
+    !> The eigenvalues of the levels, 1st index is energy 2nd index is k-point and 3nd index is spin
     real(dp), intent(in) :: eigenvals(:,:,:)
 
-    !> Choice of distribution functions, currently Fermi, Gaussian and Methfessle-Paxton
-    !> supported. The flags is defined sumbolically, so (Methfessel + 2) gives the 2nd order M-P
-
-    !> scheme
+    !> Thermal energy in atomic units
     real(dp), intent(in) :: kT
 
-    !> k-point weightings
+    !> Choice of distribution functions, currently Fermi, Gaussian and Methfessle-Paxton
+    !> supported. The flags is defined symbolically, so (Methfessel + 2) gives the 2nd order M-P
+    !> scheme
     integer, intent(in) :: distrib
 
+    !> k-point weightings
     real(dp), intent(in) :: kWeight(:)
 
     integer :: MPorder
@@ -239,8 +249,8 @@ contains
 
     w = 1.0_dp/kT
     electronCount=0.0_dp
-    if (distrib /= Fermi) then
-      MPorder = distrib - 1
+    if (distrib /= fillingTypes%Fermi) then
+      MPorder = distrib - fillingTypes%Methfessel - 1
       allocate(A(0:MPorder))
       allocate(hermites(0:2*MPorder))
       call Aweights(A,MPorder)
@@ -274,13 +284,13 @@ contains
             x = ( eigenvals(j,i,ispin) - Ef ) / kT
             ! Where the compiler does not handle inf gracefully, trap the exponential function for
             ! small input values
-#:if EXP_TRAP
+          #:if EXP_TRAP
             if (x <= mExpArg) then
               electronCount = electronCount + kWeight(i)/(1.0_dp + exp(x))
             end if
-#:else
+          #:else
             electronCount = electronCount + kWeight(i)/(1.0_dp + exp(x))
-#:endif
+          #:endif
           end do
         end do
       end do
@@ -294,12 +304,13 @@ contains
   !> To do: support Methfestle-Paxton
   function derivElectronCount(Ef,eigenvals,kT,distrib,kWeight)
 
-    !> Fermi energy for given distribution
+    !> Derivative of electrons wrt to Ef
     real(dp) :: derivElectronCount
 
-    !> The eigenvalues of the levels, 1st index is energy
+    !> Fermi energy for given distribution
     real(dp), intent(in) :: Ef
 
+    !> The eigenvalues of the levels, 1st index is energy
     !> 2nd index is k-point and 3nd index is spin
     real(dp), intent(in) :: eigenvals(:,:,:)
 
@@ -319,7 +330,7 @@ contains
 
     w = 1.0_dp/kT
     derivElectronCount=0.0_dp
-    if (distrib /= Fermi) then
+    if (distrib /= fillingTypes%Fermi) then
       call error("Fermi distribution only supported")
     else
       do ispin = 1, size(eigenvals,dim=3)
@@ -329,15 +340,15 @@ contains
             if (x<10.0_dp) then
               ! Where the compiler does not handle inf gracefully, trap the exponential function for
               ! small input values
-#:if EXP_TRAP
+            #:if EXP_TRAP
               if (x <= mExpArg) then
                 derivElectronCount = derivElectronCount + &
                     & (w*kWeight(i)) * (exp(x)/((1.0_dp + exp(x))**2))
               end if
-#:else
+            #:else
               derivElectronCount = derivElectronCount + &
                   & (w*kWeight(i)) * (exp(x)/((1.0_dp + exp(x))**2))
-#:endif
+            #:endif
             end if
           end do
         end do
@@ -377,7 +388,6 @@ contains
 
     !> Choice of distribution functions, currently Fermi, Gaussian and Methfessle-Paxton
     !> supported. The flags is defined symbolically, so (Methfessel + 2) gives the 2nd order M-P
-
     !> scheme
     integer, intent(in) :: distrib
 
@@ -405,8 +415,8 @@ contains
     E0(:) = 0.0_dp
 
     ! The Gaussian and Methfessel-Paxton broadening functions first
-    if (distrib /= Fermi) then
-      MPorder = distrib - 1
+    if (distrib /= fillingTypes%Fermi) then
+      MPorder = distrib - fillingTypes%Methfessel -1
       allocate(A(0:MPorder))
       allocate(hermites(0 : 2 * MPorder))
       call Aweights(A, MPorder)
@@ -455,15 +465,15 @@ contains
             x = (eigenvals(j, i, iSpin) - Ef) / kT
             ! Where the compiler does not handle inf gracefully, trap the exponential function for
             ! small values
-#:if EXP_TRAP
+          #:if EXP_TRAP
             if (x > mExpArg) then
               filling(j, i, iSpin) = 0.0_dp
             else
               filling(j, i, iSpin) = 1.0_dp / (1.0_dp + exp(x))
             endif
-#:else
+          #:else
             filling(j, i, iSpin) = 1.0_dp / (1.0_dp + exp(x))
-#:endif
+          #:endif
             if (filling(j, i, iSpin) <= elecTol) then
               exit
             end if
@@ -543,6 +553,11 @@ contains
       nElec = nElec + kWeight(iKpt)
       ind = ind + 1
     end do
+
+    ! just in case the system has all levels filled, but eventually this means Ef has to be above
+    ! last eigenvalue:
+    ind = min(size(eigenvals), ind)
+
     iLev = tmpIndx(ind)
     jOrb = mod(iLev - 1, size1) + 1
     jKpt = mod((iLev - 1) / size1, size2) + 1
@@ -551,4 +566,4 @@ contains
 
   end function middleGap
 
-end module etemp
+end module dftbp_etemp

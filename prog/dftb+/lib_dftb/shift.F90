@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -9,10 +9,10 @@
 
 !> Contains routines to calculate contributions to typical DFTB Hamiltonian parts using various
 !> generalisations of H_mu,nu = 0.5*S_mu,nu*(V_mu + V_nu)
-module shift
-  use assert
-  use accuracy
-  use commontypes
+module dftbp_shift
+  use dftbp_assert
+  use dftbp_accuracy
+  use dftbp_commontypes
 
   implicit none
 
@@ -83,7 +83,7 @@ contains
     @:ASSERT(size(iPair,dim=2)==nAtom)
     @:ASSERT(size(shift,dim=1)==nAtom)
 
-    nSpin = size(shift,dim=2)
+    nSpin = size(ham,dim=2)
     @:ASSERT(nSpin == 1 .or. nSpin == 2 .or. nSpin == 4)
 
     do iSpin = 1, nSpin
@@ -153,9 +153,8 @@ contains
     @:ASSERT(size(iPair,dim=2)==nAtom)
     @:ASSERT(size(shift,dim=1)==orb%mShell)
     @:ASSERT(size(shift,dim=2)==nAtom)
-    @:ASSERT(size(ham,dim=2)==size(shift,dim=3))
 
-    nSpin = size(shift,dim=3)
+    nSpin = size(ham,dim=2)
 
     do iSpin = 1, nSpin
       do iAt1= 1, nAtom
@@ -233,9 +232,8 @@ contains
     @:ASSERT(size(shift,dim=1)==orb%mOrb)
     @:ASSERT(size(shift,dim=2)==orb%mOrb)
     @:ASSERT(size(shift,dim=3)==nAtom)
-    @:ASSERT(size(ham,dim=2)==size(shift,dim=4))
 
-    nSpin = size(shift,dim=4)
+    nSpin = size(ham,dim=2)
 
     do iSpin = 1, nSpin
       do iAt1 = 1, nAtom
@@ -341,4 +339,4 @@ contains
 
   end subroutine addshell_block
 
-end module shift
+end module dftbp_shift

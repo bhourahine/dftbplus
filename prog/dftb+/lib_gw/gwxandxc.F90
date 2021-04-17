@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2018  DFTB+ developers group                                                      !
+!  Copyright (C) 2006 - 2020  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -9,12 +9,12 @@
 
 !> Contains subroutines to calculate the Hartee-Fock exchange part of the GW self energy and the DFT
 !> exchange and correlation contribution
-module gwXandXC
-  use accuracy, only : dp
-  use blasroutines
-  use TransDens
-  use gammaMat
-  use environment
+module dftbp_gwXandXC
+  use dftbp_accuracy, only : dp
+  use dftbp_blasroutines
+  use dftbp_TransDens
+  use dftbp_gammaMat
+  use dftbp_environment
   implicit none
 
   private
@@ -271,4 +271,4 @@ contains
   end subroutine dftbXC
 
 
-end module gwXandXC
+end module dftbp_gwXandXC
