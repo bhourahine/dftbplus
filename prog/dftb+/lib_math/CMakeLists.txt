@@ -4,6 +4,7 @@ set(sources-fpp
   ${curdir}/angmomentum.F90
   ${curdir}/bisect.F90
   ${curdir}/blasroutines.F90
+  ${curdir}/conjugategrad.F90
   ${curdir}/degeneracy.F90
   ${curdir}/determinant.F90
   ${curdir}/eigensolver.F90
@@ -19,6 +20,7 @@ set(sources-fpp
   ${curdir}/randomgenpool.F90
   ${curdir}/ranlux.F90
   ${curdir}/simplealgebra.F90
+  ${curdir}/sparseblas.F90
   ${curdir}/sorting.F90)
 
 if(WITH_MPI)
