@@ -21,7 +21,8 @@ module dftbp_conjgradaxb
 
   !> Conjugate gradient
   interface conjgrad
-    module procedure dense
+    module procedure denseReal
+    module procedure denseCmplx
     module procedure sparse
     module procedure dense_multiRHS
     module procedure sparse_multiRHS
@@ -56,7 +57,7 @@ contains
 
   !> Calculates x in A x = b using halting criteria |A x - b| < tol
   !> note based on wikipedia pseudocode
-  subroutine dense(A, b, x, tol)
+  subroutine denseReal(A, b, x, tol)
 
     !> square symmetric positive definite matrix
     real(dp), intent(in) :: A(:,:)
@@ -101,7 +102,58 @@ contains
       rsold = rsnew
     end do
 
-  end subroutine dense
+  end subroutine denseReal
+
+
+  !> Calculates x in A x = b using halting criteria |A x - b| < tol
+  !> note based on wikipedia pseudocode
+  subroutine denseCmplx(A, b, x, tol)
+
+    !> square hermitian matrix
+    complex(dp), intent(in) :: A(:,:)
+
+    !> RHS
+    complex(dp), intent(in) :: b(:)
+
+    !> on entry initial guess to solution, on exit the solution
+    complex(dp), intent(inout) :: x(:)
+
+    !> halting tolerance if present (internally defaults to epsilon otherwise)
+    real(dp), intent(in), optional :: tol
+
+    complex(dp) :: r(size(b)), p(size(b)), Ap(size(b)), alpha
+    real(dp) :: rsold, rsnew, tol_
+    integer :: ii
+
+    @:ASSERT(size(A,dim=1) == size(A,dim=2))
+    @:ASSERT(size(b) == size(x))
+    @:ASSERT(size(A,dim=1) == size(x))
+
+    if (present(tol)) then
+      tol_ = tol
+    else
+      tol_ = epsilon(1.0_dp)
+    end if
+    tol_ = max(tol_, epsilon(1.0_dp))
+    tol_ = tol_**2
+
+    r(:) = b - matmul(A, x)
+    p(:) = r
+    rsold = real(dot_product(r, r),dp)
+    do ii = 1, size(A, dim=1)
+      Ap(:) = matmul(A, p)
+      alpha = cmplx(rsold, 0.0_dp, dp) / dot_product(p, Ap)
+      x(:) = x + alpha * p
+      r(:) = r - alpha * Ap
+      rsnew = real(dot_product(r, r), dp)
+      if (rsnew < tol_) then
+        exit
+      end if
+      p(:) = r + cmplx(rsnew / rsold, 0.0_dp, dp) * p ! Fletcher-Reeves
+      rsold = rsnew
+    end do
+
+  end subroutine denseCmplx
 
 
   !> Version of the dense subroutine using the DFTB+ sparse matrix structure to store A
