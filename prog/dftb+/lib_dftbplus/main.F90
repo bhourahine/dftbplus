@@ -1003,8 +1003,8 @@ contains
 
             if (allocated(this%onSiteElements)) then
               call addOnsShift(this%potential%intBlock, this%potential%iOrbitalBlock,&
-                  & this%qBlockOut, this%qiBlockOut, this%q0, this%onSiteElements, this%species,&
-                  & this%orb)
+                  & this%qBlockOut, this%qiBlockOut, this%onSiteElements, this%species, this%orb,&
+                  & this%q0)
             end if
 
             this%potential%intBlock(:,:,:,:) = this%potential%intBlock + this%potential%extBlock
