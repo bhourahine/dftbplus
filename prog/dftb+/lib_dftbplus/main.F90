@@ -105,7 +105,7 @@ module dftbp_main
   use dftbp_initprogram, only : TDftbPlusMain, TCutoffs, TNegfInt, autotestTag, bandOut, fCharges,&
       & fShifts, fStopScc, mdOut, userOut, fStopDriver, hessianOut, resultsTag
   use dftbp_blockpothelper, only : appendBlockReduced
-  use dftbp_staticperturb, only : staticPerturWrtE
+  use dftbp_staticperturb, only : perturbWrtE
   implicit none
 
   private
@@ -365,7 +365,7 @@ contains
 
     if (this%isDFTBPT) then
       if (this%isPolarisability .and. .not.(this%tPeriodic .or. this%tNegf)) then
-        call staticPerturWrtE(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
+        call perturbWrtE(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
             & this%eigvecsCplx, this%ham, this%over, this%orb, this%nAtom, this%species,&
             & this%speciesName, this%neighbourList, this%nNeighbourSK, this%denseDesc,&
             & this%iSparseStart, this%img2CentCell, this%coord, this%scc, this%maxSccIter,&
@@ -374,7 +374,8 @@ contains
             & this%onSiteElements, this%iEqBlockOnSite, this%rangeSep, this%nNeighbourLC,&
             & this%pChrgMixer, this%taggedWriter, this%tWriteAutotest, autotestTag,&
             & this%tWriteResultsTag, resultsTag, this%tWriteDetailedOut, userOut,&
-            & this%kPoint, this%kWeight, this%iCellVec, this%cellVec, this%tPeriodic)
+            & this%kPoint, this%kWeight, this%iCellVec, this%cellVec, this%tPeriodic,&
+            & this%omegaPolarisability)
       end if
     end if
 
