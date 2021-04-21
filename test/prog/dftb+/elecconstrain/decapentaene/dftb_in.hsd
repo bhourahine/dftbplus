@@ -124,8 +124,9 @@ Hamiltonian = DFTB {
 #      }
 
     }
-    Driver = fire {}
-    Tolerance = 1.0E-4
+    Driver = Fire {}
+    Tolerance = 1.0E-9
+    Iterations = 500
   }
   Charge = 0.000000000000000E+000
   Eigensolver = Standard {}

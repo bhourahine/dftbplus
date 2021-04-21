@@ -860,7 +860,7 @@ contains
 
         if (allocated(this%elecConstrain)) then
           constrShift(:,:,:,:) = 0.0_dp
-          nConstrIter = 200
+          nConstrIter = this%elecConstrain%getMaxIter()
         else
           nConstrIter = 1
         end if

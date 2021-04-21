@@ -50,6 +50,9 @@ module dftbp_elecconstraints
     !> Derivative tolerance for constraint
     real(dp) :: constrTol
 
+    !> Number of iterations for enforcing constraint
+    integer :: nConstrIter
+
     !> Alpha factor to introduce variation into the space
     real(dp) :: diisAlpha
 
@@ -63,6 +66,12 @@ module dftbp_elecconstraints
 
 
   type TElecConstraint
+
+    !> Number of iterations for enforcing constraint
+    integer :: nConstrIter
+
+    !> Optimizer
+    type(TGeoOpt), allocatable :: pVcOpt
 
     !> Value of the constraint
     real(dp), allocatable :: Nc(:)
@@ -84,12 +93,10 @@ module dftbp_elecconstraints
     !> Weighting factor for orbitals in the constraint
     type(TWrappedReal1), allocatable :: w(:)
 
-    !> Optimizer
-    type(TGeoOpt), allocatable :: pVcOpt
-
   contains
 
     procedure constrain
+    procedure getMaxIter
 
   end type TElecConstraint
 
@@ -119,6 +126,7 @@ contains
     type(string) :: buffer, buffer2
     integer :: iConstr, nConstr
 
+
     call getChildValue(node, "Driver", child, "gdiis", child=child2)
     call getNodeName(child, buffer)
 
@@ -139,7 +147,8 @@ contains
     case default
       call detailedError(child, "Unknown driver '" // char(buffer) // "'")
     end select
-    call getChildValue(node, "tolerance", input%constrTol, 1.0E-8_dp)
+    call getChildValue(node, "Tolerance", input%constrTol, 1.0E-8_dp)
+    call getChildValue(node, "Iterations", input%nConstrIter, 200)
 
     call getChildValue(node, "Regions", val, "", child=child, allowEmptyValue=.true.,&
         & dummyValue=.true., list=.true.)
@@ -211,7 +220,6 @@ contains
     this%Vc = 0.0_dp ! should enable optional initialization of Vc from input
 
     allocate(this%pVcOpt)
-    !input%constrTol
     select case(input%iConstrOpt)
     case(geoOptTypes%steepestDesc)
       call error("Not yet implemented")
@@ -234,6 +242,8 @@ contains
       call init(this%pVcOpt, pFire)
     end select
     call reset(this%pVcOpt, this%Vc)
+
+    this%nConstrIter = input%nConstrIter
 
     this%Nc = input%AtomNc
 
@@ -269,6 +279,19 @@ contains
     end do
 
   end subroutine TElecConstraint_init
+
+
+  !> Returns maximum number of iterations for constraint driver
+  pure function getMaxIter(this)
+
+    !> Instance
+    class(TElecConstraint), intent(in) :: this
+
+    integer :: getMaxIter
+
+    getMaxIter = this%nConstrIter
+
+  end function getMaxIter
 
 
   !> Apply constraint to system
