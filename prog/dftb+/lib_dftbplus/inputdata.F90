@@ -212,6 +212,9 @@ module dftbp_inputdata
     !> Is this is a static electric field perturbation calculation
     logical :: isStaticEPerturbation = .false.
 
+    !> Energies for frequency driving in dynamic polarizability
+    real(dp), allocatable :: omegaPolarisability(:)
+
     !> printing of atom resolved energies
     logical :: tAtomicEnergy = .false.
 

@@ -513,6 +513,9 @@ module dftbp_initprogram
     !> Static polarisability
     logical :: isPolarisability = .false.
 
+    !> Frequencies at which to calculate polarizability
+    real(dp), allocatable :: omegaPolarisability(:)
+
     !> use commands from socket communication to control the run
     logical :: tSocket
 
@@ -2108,7 +2111,27 @@ contains
 
     this%isDFTBPT = input%ctrl%isDFTBPT
     if (this%isDFTBPT) then
+
       this%isPolarisability = input%ctrl%isStaticEPerturbation
+
+      ii = 0
+      jj = 1
+      if (this%isPolarisability) then
+        ii = 1
+        jj = 2
+      end if
+      if (allocated(input%ctrl%omegaPolarisability)) then
+        ii = ii + size(input%ctrl%omegaPolarisability)
+      end if
+      if (ii > 0) then
+        ! place any static (0 energy case) at start of array
+        allocate(this%omegaPolarisability(ii))
+        this%omegaPolarisability(:) = 0.0_dp
+        if (jj <= ii) then
+          this%omegaPolarisability(jj:) = input%ctrl%omegaPolarisability
+        end if
+      end if
+
       if (this%tNegf) then
         call error("Currently the perturbation expresions for NEGF are not implemented")
       end if
@@ -3595,6 +3618,8 @@ contains
               & magnetisation=this%nEl(1)-this%nEl(2))
         end if
       end if
+
+
     endif
 
     if (.not. allocated(this%reks)) then
