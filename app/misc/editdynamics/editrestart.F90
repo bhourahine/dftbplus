@@ -6,10 +6,12 @@
 !--------------------------------------------------------------------------------------------------!
 
 #:include 'common.fypp'
+#:include 'error.fypp'
 
 program editRestart
   use dftbp_common_environment, only : TEnvironment, TEnvironment_init
   use dftbp_common_globalenv, only : initGlobalEnv, destructGlobalEnv, stdOut, withMpi
+  use dftbp_io_message, only : error
   use dftbp_timedep_dynamicsrestart, only : writeRestartFile, readRestartFile
   use editdynamics_inputdata, only : TInputData
   use editdynamics_parser, only : parseInput
