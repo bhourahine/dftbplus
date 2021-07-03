@@ -17,7 +17,7 @@ module dftbp_dftbplus_main
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
   use dftbp_common_status, only : TStatus
   use dftbp_derivs_numderivs2, only : TNumderivs, next, getHessianMatrix
-  use dftbp_derivs_staticperturb, only : staticPerturWrtE
+  use dftbp_derivs_staticperturb, only : staticPerturWrtE, polarizabilityKernel
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
   use dftbp_dftb_densitymatrix, only : makeDensityMatrix
   use dftbp_dftb_determinants, only : TDftbDeterminants, TDftbDeterminants_init, determinants
@@ -375,38 +375,50 @@ contains
     end if
 
     if (this%tLocalCurrents) then
-      call this%negfInt%local_currents(env, this%parallelKS%localKS, this%ints%hamiltonian, this%ints%overlap,&
-          & this%neighbourList, this%nNeighbourSK, this%cutOff%skCutoff, this%denseDesc%iAtomStart,&
-          & this%iSparseStart, this%img2CentCell, this%iCellVec, this%cellVec, this%rCellVec,&
-          & this%orb, this%kPoint, this%kWeight, this%coord0Fold, this%species0, this%speciesName,&
-          & this%mu, this%lCurrArray)
+      call this%negfInt%local_currents(env, this%parallelKS%localKS, this%ints%hamiltonian,&
+          & this%ints%overlap, this%neighbourList, this%nNeighbourSK, this%cutOff%skCutoff,&
+          & this%denseDesc%iAtomStart, this%iSparseStart, this%img2CentCell, this%iCellVec,&
+          & this%cellVec, this%rCellVec, this%orb, this%kPoint, this%kWeight, this%coord0Fold,&
+          & this%species0, this%speciesName, this%mu, this%lCurrArray)
     end if
 
     if (this%tTunn) then
-      call this%negfInt%calc_current(env, this%parallelKS%localKS, this%ints%hamiltonian, this%ints%overlap,&
-          & this%neighbourList%iNeighbour, this%nNeighbourSK, this%densedesc%iAtomStart,&
-          & this%iSparseStart, this%img2CentCell, this%iCellVec, this%cellVec, this%orb,&
-          & this%kPoint, this%kWeight, this%tunneling, this%current, this%ldos, this%leadCurrents,&
-          & this%writeTunn, this%tWriteLDOS, this%regionLabelLDOS, this%mu)
+      call this%negfInt%calc_current(env, this%parallelKS%localKS, this%ints%hamiltonian,&
+          & this%ints%overlap, this%neighbourList%iNeighbour, this%nNeighbourSK,&
+          & this%densedesc%iAtomStart, this%iSparseStart, this%img2CentCell, this%iCellVec,&
+          & this%cellVec, this%orb, this%kPoint, this%kWeight, this%tunneling, this%current,&
+          & this%ldos, this%leadCurrents, this%writeTunn, this%tWriteLDOS, this%regionLabelLDOS,&
+          & this%mu)
     end if
 
   #:endif
 
-    if (this%isDFTBPT) then
-      if (this%isStatEResp .and. .not.(this%tPeriodic .or. this%tNegf)) then
+    if (this%isDFTBPT .and. .not.this%tNegf) then
+      if (this%isStatEResp .and. .not.this%tPeriodic) then
         call staticPerturWrtE(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
-            & this%eigvecsCplx, this%ints%hamiltonian, this%ints%overlap, this%orb, this%nAtom, this%species,&
-            & this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
-            & this%img2CentCell, this%coord, this%scc, this%maxSccIter, this%sccTol,&
-            & this%isSccConvRequired, this%nMixElements, this%nIneqOrb, this%iEqOrbitals,&
-            & this%tempElec, this%Ef, this%tFixEf, this%spinW, this%thirdOrd, this%dftbU,&
-            & this%iEqBlockDftbu, this%onSiteElements, this%iEqBlockOnSite, this%rangeSep,&
-            & this%nNeighbourLC, this%pChrgMixer, this%kPoint, this%kWeight, this%iCellVec,&
-            & this%cellVec, this%tPeriodic, this%polarisability, this%dEidE, this%dqOut,&
-            & this%neFermi, this%dEfdE)
+            & this%eigvecsCplx, this%ints%hamiltonian, this%ints%overlap, this%orb, this%nAtom,&
+            & this%species, this%neighbourList, this%nNeighbourSK, this%denseDesc,&
+            & this%iSparseStart, this%img2CentCell, this%coord, this%scc, this%maxSccIter,&
+            & this%sccTol, this%isSccConvRequired, this%nMixElements, this%nIneqOrb,&
+            & this%iEqOrbitals, this%tempElec, this%Ef, this%tFixEf, this%spinW, this%thirdOrd,&
+            & this%dftbU, this%iEqBlockDftbu, this%onSiteElements, this%iEqBlockOnSite,&
+            & this%rangeSep, this%nNeighbourLC, this%pChrgMixer, this%kPoint, this%kWeight,&
+            & this%iCellVec, this%cellVec, this%tPeriodic, this%polarisability, this%dEidE,&
+            & this%dqOut, this%neFermi, this%dEfdE)
         if (this%tWriteBandDat) then
           call writeDerivBandOut(derivEBandOut, this%dEidE, this%kWeight)
         end if
+      end if
+      if (this%isRespKernelPert) then
+        call polarizabilityKernel(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
+            & this%eigvecsCplx, this%ints%hamiltonian, this%ints%overlap, this%orb, this%nAtom,&
+            & this%species, this%neighbourList, this%nNeighbourSK, this%denseDesc,&
+            & this%iSparseStart, this%img2CentCell, this%isRespKernelRPA, this%scc,&
+            & this%maxSccIter, this%sccTol, this%isSccConvRequired, this%nMixElements,&
+            & this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef, this%tFixEf, this%spinW,&
+            & this%thirdOrd, this%dftbU, this%iEqBlockDftbu, this%onSiteElements,&
+            & this%iEqBlockOnSite, this%rangeSep, this%nNeighbourLC, this%pChrgMixer, this%kPoint,&
+            & this%kWeight, this%iCellVec, this%cellVec, this%tHelical, this%coord)
       end if
 
     end if

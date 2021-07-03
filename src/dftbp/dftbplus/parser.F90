@@ -4909,13 +4909,23 @@ contains
 
       call getChildValue(node, "WriteBandOut", ctrl%tWriteBandDat, tWriteBandDatDef)
 
+      ctrl%isDFTBPT = .false.
+
       ! electric field polarisability of system
       call getChild(node, "Polarisability", child=child, requested=.false.)
       if (associated(child)) then
         ctrl%isDFTBPT = .true.
         call getChildValue(child, "Static", ctrl%isStatEPerturb, .true.)
-      else
-        ctrl%isDFTBPT = .false.
+      end if
+      call getChild(node, "ResponseKernel", child=child, requested=.false.)
+      if (associated(child)) then
+        ctrl%isDFTBPT = .true.
+        ctrl%isRespKernelPert = .true.
+        if (ctrl%tSCC) then
+          call getChildValue(child, "RPA", ctrl%isRespKernelRPA, .false.)
+        else
+          ctrl%isRespKernelRPA = .true.
+        end if
       end if
 
     end if

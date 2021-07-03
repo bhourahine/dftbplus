@@ -539,6 +539,12 @@ module dftbp_dftbplus_initprogram
     !> Static polarisability
     logical :: isStatEResp = .false.
 
+    !> Is the response kernel (and frontier eigenvalue derivatives) calculated by perturbation
+    logical :: isRespKernelPert
+
+    !> Should the response Kernel use RPA (non-SCC) or self-consistent
+    logical :: isRespKernelRPA
+
     !> Electric static polarisability
     real(dp), allocatable :: polarisability(:,:)
 
@@ -2222,6 +2228,15 @@ contains
     this%isDFTBPT = input%ctrl%isDFTBPT
     if (this%isDFTBPT) then
       this%isStatEResp = input%ctrl%isStatEPerturb
+      this%isRespKernelPert = input%ctrl%isRespKernelPert
+      if (this%isRespKernelPert) then
+        this%isRespKernelRPA = input%ctrl%isRespKernelRPA
+        if (.not.this%isRespKernelRPA .and. .not.this%tSccCalc) then
+          call error("RPA option only relevant for SCC calculations of response kernel")
+        end if
+      else
+        this%isRespKernelRPA = .false.
+      end if
       if (this%tNegf) then
         call error("Currently the perturbation expressions for NEGF are not implemented")
       end if
@@ -2229,11 +2244,15 @@ contains
         call error("Perturbation expression for polarisability require eigenvalues and&
             & eigenvectors")
       end if
-      if (this%tPeriodic) then
-        call error("Currently the perturbation expressions periodic systems are not implemented")
-      end if
-      if (this%tHelical) then
-        call error("Currently the perturbation expressions periodic systems are not implemented")
+      if (this%isStatEResp) then
+        if (this%tPeriodic) then
+          call error("Currently the electric field perturbation expressions periodic systems are&
+              & not implemented")
+        end if
+        if (this%tHelical) then
+          call error("Currently the electric field perturbation expressions for helical systems are&
+              & not implemented")
+        end if
       end if
       if (this%t3rd) then
         call error("Only full 3rd order currently supported for perturbation")
