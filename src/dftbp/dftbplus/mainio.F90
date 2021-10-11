@@ -45,6 +45,7 @@ module dftbp_dftbplus_mainio
   use dftbp_type_commontypes, only : TOrbitals, TParallelKS
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_linkedlist, only : TListCharLc, TListIntR1, len, get, elemShape, intoArray
+  use dftbp_type_multipole, only : TMultipole
   use dftbp_type_orbitals, only : orbitalNames, getShellNames
 #:if WITH_MPI
   use dftbp_extlibs_mpifx, only : mpifx_recv, mpifx_send, mpifx_bcast
@@ -2590,7 +2591,7 @@ contains
   !> Charge data to go to detailed.out
   subroutine writeDetailedOut2(fd, q0, qInput, qOutput, orb, species, tDFTBU, tImHam,&
       & tPrintMulliken, orbitalL, qBlockOut, nSpin, tOnSite, iAtInCentralRegion,&
-      & cm5Cont, qNetAtom)
+      & cm5Cont, qNetAtom, multipoles)
 
     !> File ID
     integer, intent(in) :: fd
@@ -2639,6 +2640,9 @@ contains
 
     !> Onsite mulliken population per atom
     real(dp), intent(in), optional :: qNetAtom(:)
+
+    !> Atomic multipole moments
+    type(TMultipole), intent(in), optional :: multipoles
 
     real(dp), allocatable :: qOutputUpDown(:,:,:), qBlockOutUpDown(:,:,:,:)
     real(dp) :: angularMomentum(3)
@@ -2690,6 +2694,29 @@ contains
          end do
          write(fd, *)
       end if
+
+      if (present(multipoles)) then
+
+        if (allocated(multipoles%dipoleAtom)) then
+          write(fd, "(A)") " Atomic dipole moments (a.u.)"
+          write(fd, "(A5, 1X, A16)")" Atom", " Dipole"
+          do ii = 1, size(iAtInCentralRegion)
+            iAt = iAtInCentralRegion(ii)
+            write(fd, "(I5, 1X, 3F16.8)") iAt, multipoles%dipoleAtom(:,iAt)
+          end do
+          write(fd, *)
+        end if
+        if (allocated(multipoles%quadrupoleAtom)) then
+          write(fd, "(A)") " Atomic quadrupole moments (a.u.)"
+          write(fd, "(A5, 1X, A16)")" Atom", " Quadrupole"
+          do ii = 1, size(iAtInCentralRegion)
+            iAt = iAtInCentralRegion(ii)
+            write(fd, "(I5, 1X, 6F12.8)") iAt, multipoles%quadrupoleAtom(:,iAt)
+          end do
+          write(fd, *)
+        end if
+      end if
+
     end if
 
     if (nSpin == 4) then

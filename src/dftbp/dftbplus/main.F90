@@ -1098,7 +1098,7 @@ contains
               & this%species, allocated(this%dftbU), this%tImHam .or. this%tSpinOrbit,&
               & this%tPrintMulliken, this%orbitalL, this%qBlockOut, this%nSpin,&
               & allocated(this%onSiteElements), this%iAtInCentralRegion, this%cm5Cont,&
-              & this%qNetAtom)
+              & this%qNetAtom, this%multipoleOut)
           call writeDetailedOut3(this%fdDetailedOut, this%qInput, this%qOutput,&
               & this%dftbEnergy(this%deltaDftb%iDeterminant), this%species, allocated(this%dftbU),&
               & this%tPrintMulliken, this%Ef, this%extPressure, this%cellVol, this%tAtomicEnergy,&
@@ -1150,7 +1150,8 @@ contains
         call writeDetailedOut2(this%fdDetailedOut, this%q0, this%qInput, this%qOutput, this%orb,&
             & this%species, allocated(this%dftbU), this%tImHam.or.this%tSpinOrbit,&
             & this%tPrintMulliken, this%orbitalL, this%qBlockOut, this%nSpin,&
-            & allocated(this%onSiteElements), this%iAtInCentralRegion, this%cm5Cont, this%qNetAtom)
+            & allocated(this%onSiteElements), this%iAtInCentralRegion, this%cm5Cont, this%qNetAtom,&
+            & this%multipoleOut)
         call writeDetailedOut3(this%fdDetailedOut, this%qInput, this%qOutput,&
             & this%dftbEnergy(this%deltaDftb%iDeterminant), this%species, allocated(this%dftbU),&
             & this%tPrintMulliken, this%Ef, this%extPressure, this%cellVol, this%tAtomicEnergy,&
