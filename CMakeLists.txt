@@ -258,6 +258,17 @@ add_subdirectory(src/dftbp)
 add_subdirectory(app)
 add_subdirectory(tools)
 
+if (WITH_ELSI_RCI)
+  # Until the cmake for that project improves, explicitly include its
+  # library and interface modules
+  add_library(bar STATIC IMPORTED)
+  set_target_properties(bar PROPERTIES
+    IMPORTED_LOCATION "${ELSI_RCI_LIBRARY_DIR}/libelsi_rci.a"
+    INCLUDE_DIRECTORIES "${ELSI_RCI_INCLUDE_DIR}/"
+    )
+  target_include_directories(dftbplus PUBLIC ${ELSI_RCI_INCLUDE_DIR})
+  target_link_libraries(dftb+ dftbplus bar)
+endif()
 
 #
 # Testing

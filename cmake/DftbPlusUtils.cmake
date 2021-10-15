@@ -94,6 +94,10 @@ function (dftbp_add_fypp_defines fyppflags)
     list(APPEND _fyppflags -DWITH_PEXSI)
   endif()
 
+  if(WITH_ELSI_RCI)
+    list(APPEND _fyppflags -DWITH_ELSI_RCI)
+  endif()
+
   if(WITH_GPU)
     list(APPEND _fyppflags -DWITH_GPU)
   endif()
@@ -189,6 +193,10 @@ function (dftbp_ensure_config_consistency)
 
   if(WITH_ARPACK AND WITH_MPI)
     message(FATAL_ERROR "Building with ARPACK requires MPI-parallel build disabled")
+  endif()
+
+  if(WITH_ELSI_RCI AND WITH_MPI)
+    message(FATAL_ERROR "Building with ELSI_RCI currently requires MPI-parallel build disabled")
   endif()
 
   if(WITH_PYTHON AND NOT WITH_API)

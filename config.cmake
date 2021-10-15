@@ -33,6 +33,9 @@ option(WITH_SOCKETS "Whether socket communication should be allowed for" FALSE)
 option(WITH_ARPACK "Whether the ARPACK library should be included (needed for TD-DFTB)" FALSE)
 # Works only with non-MPI (serial) build, needed for Casida linear response
 
+option(WITH_ELSI_RCI "Whether DFTB+ should use the ELSI_RCI library for TD-DFTB" FALSE)
+# Serial at the moment, eventually MPI parallel
+
 option(WITH_DFTD3 "Whether the DFTD3 library should be included" FALSE)
 # NOTE: Due to the license of the DFTD3 library, the combined code must be distributed under the
 # GPLv3 license (as opposed to the LGPLv3 license of the DFTB+ package)

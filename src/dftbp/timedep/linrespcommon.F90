@@ -272,7 +272,7 @@ contains
   !> calculate the transition block at a specific atom
   subroutine transDens(ii, jj, iAt, iAtomStart, nOrb, updwn, ovrXev, grndEigVecs, qq_ij)
 
-    !> Index of inital state.
+    !> Index of initial state.
     integer, intent(in) :: ii
 
     !> Index of final state.
@@ -349,6 +349,7 @@ contains
     S_pq = sum(grndEigVecs(:,pp,1)*ovrXev(:,qq,2))
 
   end function MOoverlap
+
 
   !> Square root of differences in occupations between filled and empty states
   !> We need occupations per spin channel ([0:1]) also for closed shell systems
@@ -688,6 +689,7 @@ contains
 
   end subroutine actionAplusB 
 
+
   !> Multiplies the excitation supermatrix with a supervector.
   !> (A-B)_ias,jbt * v_jbt is computed (and similar for singlet/triplet)
   !> (see definitions in Marc Casida, in Recent Advances in Density Functional Methods,
@@ -858,6 +860,7 @@ contains
 
   end subroutine actionAminusB
 
+
   !> Generates initial matrices M+ and M- for the RPA algorithm by Stratmann
   !> (JCP 109 8218 (1998).
   !> M+/- = (A+/-B)_ias,jbt (spin polarized) (A+/-B)^{S/T}_ia,jb (closed shell) 
@@ -865,7 +868,7 @@ contains
   !> Also computed is v+/- = (A+/-B)_ias,jbt with ias <= nMat, jbt <= initDim
   !> Note: Routine not set up to handle onsite corrections.
   !> Note: Not yet OpenMP parallelized
-  subroutine intialSubSpaceMatrixApmB(transChrg, initDim, wIJ, sym, win, nmatup, iAtomStart,&
+  subroutine initialSubSpaceMatrixApmB(transChrg, initDim, wIJ, sym, win, nmatup, iAtomStart,&
       & sTimesGrndEigVecs, grndEigVecs, occNr, sqrOccIA, getIA, getIJ, getAB, iaTrans, gamma,&
       & lrGamma, species0, spinW, tSpin, tRangeSep, vP, vM, mP, mM)
 
@@ -1083,7 +1086,8 @@ contains
       end do
     end do
 
-  end subroutine intialSubSpaceMatrixApmB
+  end subroutine initialSubSpaceMatrixApmB
+
 
   subroutine onsiteEner(spin, sym, wij, sqrOccIA, win, nmatup, iAtomStart, getIA, species0, ovrXev,&
       & grndEigVecs, ons_en, orb, vin, vout)
@@ -1180,6 +1184,7 @@ contains
     end do
 
   end subroutine onsiteEner
+
 
   !> calculating spin polarized excitations
   !> Note: the subroutine is generalized to account for spin and partial occupancy
@@ -1386,7 +1391,7 @@ contains
   end subroutine calcTransitionDipoles
 
 
-    !> Calculate <S^2> as a measure of spin contamination (smaller magnitudes are better, 0.5 is
+  !> Calculate <S^2> as a measure of spin contamination (smaller magnitudes are better, 0.5 is
   !> considered an upper threshold for reliability according to Garcia thesis)
   subroutine getExcSpin(Ssq, nmatup, getIA, win, eval, xpy, filling, ovrXev, grndEigVecs)
 
@@ -1598,6 +1603,7 @@ contains
 
   end subroutine writeSPExcitations
 
+
   !> Excited state Mulliken charges and dipole moments written to disc
   subroutine writeExcMulliken(sym, nstat, dq, dqex, coord0, fdMulliken)
 
@@ -1660,6 +1666,7 @@ contains
 
   end subroutine writeExcMulliken
 
+
   !> increase dimension of vector from sizeIn to fac*sizeIn
   pure subroutine incSizeVec(sizeIn, fac, vec)
 
@@ -1675,6 +1682,7 @@ contains
     call move_alloc(temp, vec)
 
   end subroutine incSizeVec
+
 
   !> increase size of (sizeIn,n) array to (fac*sizeIn,n)
   pure subroutine incSizeMatDimOne(sizeIn, fac, mat)
@@ -1694,6 +1702,7 @@ contains
 
   end subroutine incSizeMatDimOne
 
+
   !> increase size of (n,sizeIn) array to (n, fac*sizeIn)
   pure subroutine incSizeMatDimTwo(sizeIn, fac, mat)
 
@@ -1712,6 +1721,7 @@ contains
 
   end subroutine incSizeMatDimTwo
 
+
   !> increase size of (sizeIn,sizeIn) array to (fac1*sizeIn,fac2*sizeIn)
   pure subroutine incSizeMatBothDim(sizeIn, fac1, fac2, mat)
 
@@ -1727,6 +1737,7 @@ contains
     call move_alloc(temp, mat)
 
   end subroutine incSizeMatBothDim
+
 
   !> Same routine exists in rs_linresp and will be removed 
   !> Calculate square root and inverse of sqrt of a real, symmetric positive definite matrix
@@ -1783,6 +1794,7 @@ contains
     end do
 
   end subroutine orthonormalizeVectors
+
 
   !> Encapsulate memory extension for Stratmann solver 
   subroutine incMemStratmann(memDim, workDim, vecB, vP, vM, mP, mM, mH, mMsqrt, mMsqrtInv, &

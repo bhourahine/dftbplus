@@ -14,6 +14,15 @@ module dftbp_timedep_linresptypes
 
   public
 
+  type TSolverTypesEnum
+    integer :: arpack = 1
+    integer :: stratmann = 2
+    integer :: rci = 3
+  end type TSolverTypesEnum
+
+  !> Actual values for elecSolverTypes.
+  type(TSolverTypesEnum), parameter :: solverTypes = TSolverTypesEnum()
+
   !> Data type for linear response internal settings
   type :: TLinResp
 
@@ -94,10 +103,10 @@ module dftbp_timedep_linresptypes
     !> Should the density matrix be stored to disc?
     logical :: tWriteDensityMatrix
 
-    ! ARPACK/Stratmann related
+    ! Solver related
 
-    !> Should we use the Arpack solver for the RPA equations? (or the Stratman one)
-    logical :: tUseArpack = .true. 
+    !> Should we use the Arpack, Stratmann or ELSI_RCI solver for the RPA equations?
+    integer :: iSolver
 
     !> write state of Arnoldi solver to disc
     logical :: tArnoldi

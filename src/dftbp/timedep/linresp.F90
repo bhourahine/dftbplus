@@ -22,11 +22,12 @@ module dftbp_timedep_linresp
   use dftbp_dftb_scc, only : TScc
   use dftbp_dftb_slakocont, only : TSlakoCont
   use dftbp_extlibs_arpack, only : withArpack
+  use dftbp_extlibs_elsirciiface, only : withElsiRCI
   use dftbp_io_fileid, only : getFileId 
   use dftbp_io_message, only : error
   use dftbp_io_taggedoutput, only : TTaggedWriter
   use dftbp_timedep_linrespgrad, only : LinRespGrad_old
-  use dftbp_timedep_linresptypes, only : TLinResp
+  use dftbp_timedep_linresptypes, only : TLinResp, solverTypes
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_dftb_rangeseparated, only : TRangeSepFunc
@@ -140,9 +141,17 @@ contains
     real(dp), allocatable :: onSiteMatrixElements(:,:,:,:)
 
     this%tinit = .false.
-    this%tUseArpack = ini%tUseArpack
+    if (ini%tUseArpack) then
+      this%iSolver = solverTypes%arpack
+      if (.not. withArpack) then
+        call error("Arpack solver requested, but not compiled into this binary")
+      end if
+    else
+      this%iSolver = solverTypes%stratmann
+    end if
     this%subSpaceFactorStratmann = ini%subSpaceFactorStratmann
-    if (withArpack) then
+
+    if (withArpack .or. withElsiRCI) then
 
       this%nExc = ini%nExc
       this%tEnergyWindow = ini%tEnergyWindow
@@ -231,6 +240,8 @@ contains
       this%fdArnoldi = getFileId()
       this%tinit = .true.
 
+    elseif (withElsiRCI) then
+
     else
 
       call error('Internal error: Illegal routine call to LinResp_init.')
@@ -307,14 +318,19 @@ contains
 
     real(dp), pointer :: dummyPtr(:,:,:) => null()
 
-    if (withArpack) then
+    if (withArpack .or. withElsiRCI) then
+
       @:ASSERT(this%tInit)
       @:ASSERT(size(orb%nOrbAtom) == this%nAtom)
+
       call LinRespGrad_old(tSpin, this, denseDesc%iAtomStart, eigVec, eigVal, sccCalc, dqAt,&
           & coords0, SSqrReal, filling, species0, iNeighbour, img2CentCell, orb, tWriteTagged,&
           & fdTagged, taggedWriter, rangeSep, excEnergy, allExcEnergies, dummyPtr)
+
     else
+
       call error('Internal error: Illegal routine call to LinResp_calcExcitations')
+
     end if
 
   end subroutine linResp_calcExcitations
@@ -437,7 +453,9 @@ contains
       end if
 
     else
+
       call error('Internal error: Illegal routine call to LinResp_addGradients.')
+
     endif
 
   end subroutine LinResp_addGradients
