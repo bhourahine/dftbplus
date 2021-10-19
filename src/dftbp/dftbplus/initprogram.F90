@@ -491,6 +491,9 @@ module dftbp_dftbplus_initprogram
     !> calculate an electric dipole?
     logical :: tDipole
 
+    !> calculate an electric quadrupole?
+    logical :: tQuadrupole
+
     !> Do we need atom resolved E?
     logical :: tAtomicEnergy
 
@@ -928,6 +931,9 @@ module dftbp_dftbplus_initprogram
 
     !> dipole moments, when available, for whichever determinants are present
     real(dp), allocatable :: dipoleMoment(:, :)
+
+    !> quadrupole moments, when available, for whichever determinants are present
+    real(dp), allocatable :: quadrupoleMoment(:, :, :)
 
     !> Coordinates to print out
     real(dp), pointer :: pCoord0Out(:,:)
@@ -2166,8 +2172,10 @@ contains
     if (input%ctrl%nrChrg == 0.0_dp .and. .not.(this%tPeriodic.or.this%tHelical) .and.&
         & this%tMulliken) then
       this%tDipole = .true.
+      this%tQuadrupole = .true.
     else
       this%tDipole = .false.
+      this%tQuadrupole = .false.
     end if
 
     if (this%tMulliken) then
@@ -4629,6 +4637,13 @@ contains
         allocate(this%dipoleMoment(3, this%deltaDftb%nDeterminant()+1))
       else
         allocate(this%dipoleMoment(3, this%deltaDftb%nDeterminant()))
+      end if
+    end if
+    if (this%tQuadrupole) then
+      if (this%deltaDftb%isSpinPurify) then
+        allocate(this%quadrupoleMoment(3, 3, this%deltaDftb%nDeterminant()+1))
+      else
+        allocate(this%quadrupoleMoment(3, 3, this%deltaDftb%nDeterminant()))
       end if
     end if
 

@@ -1235,6 +1235,10 @@ contains
       end if
     #:endblock DEBUG_CODE
     end if
+    if (this%tQuadrupole .and. .not. allocated(this%reks) .and. .not. this%tRestartNoSC) then
+      call getDipoleMoment(this%qOutput, this%q0, this%multipoleOut%quadrupoleAtom, this%coord,&
+          & this%quadrupoleMoment(:,:,this%deltaDftb%iDeterminant), this%iAtInCentralRegion)
+    end if
 
     call env%globalTimer%startTimer(globalTimers%eigvecWriting)
 
@@ -4553,7 +4557,7 @@ contains
   end subroutine getXlbomdCharges
 
 
-  !> Calculates dipole moment.
+   !> Calculates dipole moment.
   subroutine getDipoleMoment(qOutput, q0, dipAtom, coord, dipoleMoment, iAtInCentralRegion)
 
     !> electrons in orbitals
@@ -4587,7 +4591,7 @@ contains
     if (present(dipAtom)) then
       do ii = 1, size(iAtInCentralRegion)
         iAtom = iAtInCentralRegion(ii)
-        dipoleMoment(:) = dipoleMoment(:) - dipAtom(:, iAtom)
+        dipoleMoment(:) = dipoleMoment - dipAtom(:, iAtom)
       end do
     end if
 
@@ -4670,6 +4674,54 @@ contains
     end if
 
   end subroutine checkDipoleViaHellmannFeynman
+
+
+  !> Calculates (traceless) quadrupole moment.
+  subroutine getQuadrupoleMoment(qOutput, q0, quadAtom, coord, quadMoment, iAtInCentralRegion)
+
+    !> electrons in orbitals
+    real(dp), intent(in) :: qOutput(:,:,:)
+
+    !> reference atomic charges
+    real(dp), intent(in) :: q0(:,:,:)
+
+    !> Quadrupole populations for each atom
+    real(dp), intent(in), optional :: quadAtom(:,:,:)
+
+    !> atomic coordinates
+    real(dp), intent(in) :: coord(:,:)
+
+    !> resulting dipole moment
+    real(dp), intent(out) :: quadMoment(:,:)
+
+    !> atoms in the central cell (or device region if transport)
+    integer, intent(in) :: iAtInCentralRegion(:)
+
+    integer :: nAtom, ii, iAtom, jj, kk
+    real(dp), parameter :: delta(3,3) =&
+        & reshape([1.0_dp,0.0_dp,0.0_dp,0.0_dp,1.0_dp,0.0_dp,0.0_dp,0.0_dp,1.0_dp],[3,3])
+
+    nAtom = size(qOutput, dim=2)
+    quadMoment(:,:) = 0.0_dp
+    do ii = 1, size(iAtInCentralRegion)
+      iAtom = iAtInCentralRegion(ii)
+      do kk = 1, 3
+        do jj = 1, 3
+          quadMoment(jj,kk) = quadMoment(jj,kk)&
+              & + sum(q0(:, iAtom, 1) - qOutput(:, iAtom, 1))&
+              & *(3.0_dp * coord(jj,iAtom) * coord(kk,iAtom) - delta(jj,kk)*sum(coord(:,iAtom)**2))
+        end do
+      end do
+    end do
+
+    if (present(quadAtom)) then
+      do ii = 1, size(iAtInCentralRegion)
+        iAtom = iAtInCentralRegion(ii)
+        quadMoment(:,:) = quadMoment - quadAtom(:, :, iAtom)
+      end do
+    end if
+
+  end subroutine getQuadrupoleMoment
 
 
   !> Calculate the energy weighted density matrix
@@ -7465,6 +7517,8 @@ contains
     end if
 
   end subroutine getReksNextInputDensity
+
+
   !> Set correct dipole moment according to type of REKS calculation
   subroutine assignDipoleMoment(dipoleTmp, dipoleMoment, iDet, tDipole, reks, isSingleState)
 
