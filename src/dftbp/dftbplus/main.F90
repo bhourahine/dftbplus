@@ -1236,7 +1236,7 @@ contains
     #:endblock DEBUG_CODE
     end if
     if (this%tQuadrupole .and. .not. allocated(this%reks) .and. .not. this%tRestartNoSC) then
-      call getDipoleMoment(this%qOutput, this%q0, this%multipoleOut%quadrupoleAtom, this%coord,&
+      call getQuadrupoleMoment(this%qOutput, this%q0, this%multipoleOut%quadrupoleAtom, this%coord,&
           & this%quadrupoleMoment(:,:,this%deltaDftb%iDeterminant), this%iAtInCentralRegion)
     end if
 
@@ -4686,7 +4686,7 @@ contains
     real(dp), intent(in) :: q0(:,:,:)
 
     !> Quadrupole populations for each atom
-    real(dp), intent(in), optional :: quadAtom(:,:,:)
+    real(dp), intent(in), optional :: quadAtom(:,:)
 
     !> atomic coordinates
     real(dp), intent(in) :: coord(:,:)
@@ -4717,9 +4717,21 @@ contains
     if (present(quadAtom)) then
       do ii = 1, size(iAtInCentralRegion)
         iAtom = iAtInCentralRegion(ii)
-        quadMoment(:,:) = quadMoment - quadAtom(:, :, iAtom)
+        quadMoment(1,1) = quadMoment(1,1) - quadAtom(1, iAtom)
+        quadMoment(2,3) = quadMoment(2,3) - quadAtom(2, iAtom)
+        quadMoment(3,2) = quadMoment(3,2) - quadAtom(2, iAtom)
+        quadMoment(2,2) = quadMoment(2,2) - quadAtom(3, iAtom)
+        quadMoment(1,3) = quadMoment(1,3) - quadAtom(4, iAtom)
+        quadMoment(3,1) = quadMoment(3,1) - quadAtom(4, iAtom)
+        quadMoment(3,2) = quadMoment(3,2) - quadAtom(5, iAtom)
+        quadMoment(3,3) = quadMoment(3,3) - quadAtom(6, iAtom)
       end do
     end if
+
+    write(stdOut, *)"Quadrupole"
+    do ii = 1, 3
+      write(stdOut, *)quadMoment(:,ii)
+    end do
 
   end subroutine getQuadrupoleMoment
 
