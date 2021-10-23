@@ -18,6 +18,7 @@ module dftbp_dftbplus_main
   use dftbp_common_status, only : TStatus
   use dftbp_derivs_numderivs2, only : TNumderivs, next, getHessianMatrix
   use dftbp_derivs_staticperturb, only : staticPerturWrtE, polarizabilityKernel
+  use dftbp_derivs_hessian, only : q0Derivs
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
   use dftbp_dftb_densitymatrix, only : makeDensityMatrix
   use dftbp_dftb_determinants, only : TDftbDeterminants, TDftbDeterminants_init, determinants

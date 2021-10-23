@@ -52,7 +52,7 @@ contains
     #:if WITH_SCALAPACK
       & desc,&
     #:endif
-      & dEi, dPsi, errStatus, isHelical, coord)
+      & dEi, dPsi, errStatus, isHelical, coord, dOver)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -144,6 +144,9 @@ contains
     !> Coordinates of all atoms including images
     real(dp), intent(in), optional :: coord(:,:)
 
+    !> Derivative of the overlap (if relevant to perturbation)
+    real(dp), intent(in), optional :: dOver(:)
+
   #:if WITH_SCALAPACK
     integer :: iGlob, jGlob
   #:else
@@ -151,18 +154,21 @@ contains
   #:endif
     integer :: ii, jj, iS, iK
 
-    real(dp) :: workLocal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2))
-    real(dp), allocatable :: dRho(:,:)
+    real(dp), allocatable :: dRho(:,:), dOverSqr(:,:), workLocal(:,:), work2Local(:,:)
     real(dp), allocatable :: eigVecsTransformed(:,:)
     logical :: isTransformed
 
     logical :: isHelical_
+
+    logical :: isBasisChanging
 
     if (present(isHelical)) then
       isHelical_ = isHelical
     else
       isHelical_ = .false.
     end if
+
+    isBasisChanging = present(dOver)
 
     iK = parallelKS%localKS(1, iKS)
     iS = parallelKS%localKS(2, iKS)
@@ -174,9 +180,15 @@ contains
       dPsi(:, :, iS) = 0.0_dp
     end if
 
+    allocate(workLocal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)))
     workLocal(:,:) = 0.0_dp
     allocate(dRho(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)))
     dRho(:,:) = 0.0_dp
+
+    if (isBasisChanging) then
+      allocate(dOverSqr(size(eigVecsReal,dim=1), size(eigVecsReal,dim=1)))
+      dOverSqr(:,:) = 0.0_dp
+    end if
 
   #:if WITH_SCALAPACK
 
@@ -293,6 +305,16 @@ contains
           & iSparseStart, img2CentCell)
     end if
 
+    if (isBasisChanging) then
+      if (isHelical_) then
+        call unpackHelicalHS(dOverSqr, dOver, neighbourList%iNeighbour, nNeighbourSK,&
+            & denseDesc%iAtomStart, iSparseStart, img2CentCell, orb, species, coord)
+      else
+        call unpackHS(dOverSqr, dOver, neighbourList%iNeighbour, nNeighbourSK,&
+            & denseDesc%iAtomStart, iSparseStart, img2CentCell)
+      end if
+    end if
+
     if (allocated(rangeSep)) then
       if (isHelical_) then
         @:RAISE_ERROR(errStatus, -1, "Helical geometry range separation not currently possible")
@@ -303,8 +325,21 @@ contains
           & nNeighbourLC, denseDesc%iAtomStart, iSparseStart, orb, dRho, workLocal)
     end if
 
-    ! form |c> H' <c|
+    ! form H' <c|
     call symm(workLocal, 'l', dRho, eigVecsReal(:,:,iS))
+
+    if (isBasisChanging) then
+      ! Form -e_i S' <c_i|
+      allocate(work2Local(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)))
+      call symm(work2Local, 'l', dOverSqr, eigVecsReal(:,:,iS))
+      do ii = 1, nOrb
+        work2Local(:,ii) = eigvals(ii,iK,iS) * work2Local(:,ii)
+      end do
+      workLocal(:,:) = workLocal - work2Local
+      deallocate(work2Local)
+    end if
+
+    ! left multiply by |c>
     workLocal(:,:) = matmul(transpose(eigVecsReal(:,:,iS)), workLocal)
 
     ! orthogonalise degenerate states against perturbation, producing |c~> H' <c~|
@@ -321,25 +356,43 @@ contains
 
     ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
     ! the elements
-    do iFilled = 1, nFilled(iS)
-      do iEmpty = nEmpty(iS), nOrb
-        if (.not.transform%degenerate(iFilled,iEmpty) .or. iEmpty == iFilled) then
-          workLocal(iEmpty, iFilled) = workLocal(iEmpty, iFilled) * &
-              & invDiff(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), Ef(iS), tempElec)&
-              & *theta(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), tempElec)
-        else
-          ! rotation should already have set these elements to zero
-          workLocal(iEmpty, iFilled) = 0.0_dp
-        end if
+    if (isBasisChanging) then
+      do iFilled = 1, nOrb
+        do iEmpty = 1, nOrb
+          if (.not.transform%degenerate(iFilled,iEmpty) .or. iEmpty == iFilled) then
+            workLocal(iEmpty, iFilled) = workLocal(iEmpty, iFilled) * &
+                & invDiff(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), Ef(iS), tempElec)&
+                & *theta(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), tempElec)
+          else
+            ! rotation should already have set these elements to zero
+            workLocal(iEmpty, iFilled) = 0.0_dp
+          end if
+        end do
       end do
-    end do
+    else
+      do iFilled = 1, nFilled(iS)
+        do iEmpty = nEmpty(iS), nOrb
+          if (.not.transform%degenerate(iFilled,iEmpty) .or. iEmpty == iFilled) then
+            workLocal(iEmpty, iFilled) = workLocal(iEmpty, iFilled) * &
+                & invDiff(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), Ef(iS), tempElec)&
+                & *theta(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), tempElec)
+          else
+            ! rotation should already have set these elements to zero
+            workLocal(iEmpty, iFilled) = 0.0_dp
+          end if
+        end do
+      end do
+    end if
 
     eigvecsTransformed = eigVecsReal(:,:,iS)
     call transform%applyUnitary(eigvecsTransformed)
 
     ! calculate the derivatives of the eigenvectors
-    workLocal(:, :nFilled(iS)) =&
-        & matmul(eigvecsTransformed(:, nEmpty(iS):), workLocal(nEmpty(iS):, :nFilled(iS)))
+    if (isBasisChanging) then
+      workLocal(:,:) = matmul(eigvecsTransformed, workLocal)
+    else
+      workLocal(:,:) = matmul(eigvecsTransformed(:, nEmpty(iS):), workLocal(nEmpty(iS):,:))
+    end if
 
     if (allocated(dPsi)) then
       dPsi(:, :, iS) = workLocal
