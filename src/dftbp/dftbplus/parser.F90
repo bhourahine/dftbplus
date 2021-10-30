@@ -15,8 +15,8 @@ module dftbp_dftbplus_parser
   use dftbp_common_globalenv, only : stdout, withMpi, withScalapack, abortProgram
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
   use dftbp_common_unitconversion, only : lengthUnits, energyUnits, forceUnits, pressureUnits,&
-      & timeUnits, EFieldUnits, freqUnits, massUnits, VelocityUnits, dipoleUnits, chargeUnits,&
-      & volumeUnits, angularUnits
+      & timeUnits, EFieldUnits, BFieldUnits, freqUnits, massUnits, VelocityUnits, dipoleUnits,&
+      & chargeUnits, volumeUnits, angularUnits
   use dftbp_dftb_coordnumber, only : TCNInput, getElectronegativity, getCovalentRadius, cnType
   use dftbp_dftb_dftbplusu, only : plusUFunctionals
   use dftbp_dftb_dftd4param, only : getEeqChi, getEeqGam, getEeqKcn, getEeqRad
@@ -25,6 +25,7 @@ module dftbp_dftbplus_parser
   use dftbp_dftb_encharges, only : TEeqInput
   use dftbp_dftb_etemp, only : fillingTypes
   use dftbp_dftb_halogenx, only : halogenXSpecies1, halogenXSpecies2
+  use dftbp_dftb_magfield, only : TMagFieldInp
   use dftbp_dftb_periodic, only : TNeighbourList, TNeighbourlist_init, getSuperSampling, &
       & getCellTranslations, updateNeighbourList
   use dftbp_dftb_rangeseparated, only : TRangeSepSKTag, rangeSepTypes
@@ -2297,7 +2298,7 @@ contains
     call getChildValue(node, "ElectricField", value1, "", child=child, allowEmptyValue=.true.,&
         & dummyValue=.true., list=.true.)
 
-    ! external applied field
+    ! external applied electric field
     call getChild(child, "External", child2, requested=.false.)
     if (associated(child2)) then
       allocate(ctrl%electricField)
@@ -2456,6 +2457,20 @@ contains
         call detailedError(child, "No atomic potentials specified")
       end if
 
+    end if
+
+    ! external applied magnetic field
+    call getChild(node, "MagneticField", child, requested=.false.)
+    if (associated(child)) then
+      allocate(ctrl%magneticField)
+      allocate(ctrl%magneticField%B(3))
+      call getChildValue(child, "HField", ctrl%magneticField%B, modifier=modifier, child=child2)
+      call convertByMul(char(modifier), BFieldUnits, child2, ctrl%magneticField%B)
+      allocate(ctrl%magneticField%origin(3))
+      call getChildValue(child, "GaugeOrigin", ctrl%magneticField%origin, modifier=modifier,&
+          & child=child2)
+      call convertByMul(char(modifier), LengthUnits, child2, ctrl%magneticField%origin)
+      ctrl%magneticField%isVectorPotentialUsed = .true.
     end if
 
   end subroutine readExternal

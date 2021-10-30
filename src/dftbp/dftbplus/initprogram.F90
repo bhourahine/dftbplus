@@ -36,6 +36,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_dftb_h5correction, only : TH5CorrectionInput
   use dftbp_dftb_halogenx, only : THalogenX, THalogenX_init
   use dftbp_dftb_hamiltonian, only : TRefExtPot
+  use dftbp_dftb_magfield, only : TMagField, TMagField_init, TMagFieldInp
   use dftbp_dftb_nonscc, only : TNonSccDiff, NonSccDiff_init, diffTypes
   use dftbp_dftb_onsitecorrection, only : Ons_getOrbitalEquiv, Ons_blockIndx
   use dftbp_dftb_orbitalequiv, only : OrbitalEquiv_merge, OrbitalEquiv_reduce
@@ -369,10 +370,8 @@ module dftbp_dftbplus_initprogram
     !> Barostat coupling strength
     real(dp) :: BarostatStrength
 
-
     !> H and S are real
     logical :: tRealHS
-
 
     !> nr. of electrons
     real(dp), allocatable :: nEl(:)
@@ -727,8 +726,11 @@ module dftbp_dftbplus_initprogram
     !> Electric field
     type(TEfield), allocatable :: eField
 
-    !> Is an arbitrary external field (including electric) present
-    logical :: isExtField
+    !> Is an arbitrary external electric field present
+    logical :: isExtEField
+
+    !> Magnetic field
+    type(TMagField), allocatable :: magField
 
     !> Partial density of states (PDOS) projection regions
     type(TListIntR1) :: iOrbRegion
@@ -1423,6 +1425,10 @@ contains
         this%tRealHS = .false.
       end if
     end if
+    if (allocated(input%ctrl%magneticField)) then
+      ! for the moment, assume a magnetic vector potential is therefore present
+      this%tRealHS = .false.
+    end if
 
   #:if WITH_MPI
 
@@ -1709,8 +1715,25 @@ contains
     else
       allocate(this%chargePerShell(0,0,0))
     end if
-    call TIntegral_init(this%ints, this%nSpin, .not.allocated(this%reks), this%tImHam, &
-        & this%nDipole, this%nQuadrupole)
+
+    if (allocated(input%ctrl%magneticField)) then
+      allocate(this%magField)
+      call TMagField_init(this%magField, input%ctrl%magneticField, this%latVec, errStatus)
+      if (errStatus%hasError()) then
+        call error(errStatus%message)
+      end if
+
+      ! for the moment, assume a magnetic vector potential is therefore present
+      call TIntegral_init(this%ints, this%nSpin, .not.allocated(this%reks), this%tImHam, &
+          & this%nDipole, this%nQuadrupole, .true.)
+
+    else
+
+      call TIntegral_init(this%ints, this%nSpin, .not.allocated(this%reks), this%tImHam, &
+          & this%nDipole, this%nQuadrupole, .false.)
+
+    end if
+
     allocate(this%iSparseStart(0, this%nAtom))
 
     this%tempAtom = input%ctrl%tempAtom
@@ -1804,7 +1827,7 @@ contains
     if (allocated(input%ctrl%electricField) .or. allocated(input%ctrl%atomicExtPotential)) then
       allocate(this%eField)
     end if
-    this%isExtField = allocated(this%eField)
+    this%isExtEField = allocated(this%eField)
 
     if (allocated(input%ctrl%electricField)) then
       allocate(this%eField%EFieldStrength)
@@ -1820,9 +1843,9 @@ contains
       @:ASSERT(.not.this%eField%isTDEfield .or. this%tMD)
     end if
 
-    this%tMulliken = input%ctrl%tMulliken .or. this%tPrintMulliken .or. this%isExtField .or.&
-        & this%tFixEf .or. this%tSpinSharedEf .or. this%isRangeSep .or.&
-        & this%electronicSolver%iSolver == electronicSolverTypes%GF
+    this%tMulliken = input%ctrl%tMulliken .or. this%tPrintMulliken .or. this%isExtEField .or.&
+        & allocated(this%magField) .or. this%tFixEf .or. this%tSpinSharedEf .or. this%isRangeSep&
+        & .or. this%electronicSolver%iSolver == electronicSolverTypes%GF
     this%tAtomicEnergy = input%ctrl%tAtomicEnergy
     this%tPrintEigVecs = input%ctrl%tPrintEigVecs
     this%tPrintEigVecsTxt = input%ctrl%tPrintEigVecsTxt
@@ -2346,7 +2369,7 @@ contains
     end if
 
     if (allocated(this%solvation)) then
-      if ((this%tExtChrg .or. this%isExtField) .and. this%solvation%isEFieldModified()) then
+      if ((this%tExtChrg .or. this%isExtEField) .and. this%solvation%isEFieldModified()) then
         call error('External fields are not currently compatible with this implicit solvent.')
       end if
     end if
@@ -2558,7 +2581,7 @@ contains
       elseif (this%iDistribFn /= fillingTypes%Fermi) then
         call error("Choice of filling function incompatible with XLBOMD")
       end if
-      if (this%tExtChrg .or. this%isExtField) then
+      if (this%tExtChrg .or. this%isExtEField) then
         call error("External fields currently disabled for XLBOMD calculations")
       end if
       if (this%hamiltonianType /= hamiltonianTypes%dftb) then
@@ -2687,7 +2710,7 @@ contains
     if (allocated(this%reks)) then
       call checkReksConsistency(input%ctrl%reksInp, this%solvation, this%onSiteElements,&
           & this%kPoint, this%nEl, this%nKPoint, this%tSccCalc, this%tSpin, this%tSpinOrbit,&
-          & allocated(this%dftbU), this%isExtField, this%isLinResp, this%tPeriodic, this%tLatOpt,&
+          & allocated(this%dftbU), this%isExtEField, this%isLinResp, this%tPeriodic, this%tLatOpt,&
           & this%tReadChrg, this%tPoisson, input%ctrl%tShellResolved)
       ! here, this%nSpin changes to 2 for REKS
       call TReksCalc_init(this%reks, input%ctrl%reksInp, this%electronicSolver, this%orb,&
@@ -3414,7 +3437,7 @@ contains
       write(stdOut, "(T30,A)") "External charges specified"
     end if
 
-    if (this%isExtField) then
+    if (this%isExtEField) then
 
       if (allocated(this%eField%EFieldStrength)) then
         if (this%eField%isTDEfield) then
@@ -3620,7 +3643,7 @@ contains
         call error("Bond energies during electron dynamics currently requires a real hamiltonian.")
       end if
 
-      if (this%isExtField) then
+      if (this%isExtEField) then
         call error("Electron dynamics does not work yet with static external fields/potentials in&
             & the initial ground state.")
       end if
@@ -4589,7 +4612,7 @@ contains
       allocate(this%rhoPrim(0, this%nSpin))
     end if
     allocate(this%h0(0))
-    if (this%tImHam) then
+    if (this%tImHam .or. allocated(this%magField)) then
       allocate(this%iRhoPrim(0, this%nSpin))
     end if
 
@@ -5494,7 +5517,7 @@ contains
 
 
   subroutine checkReksConsistency(reksInp, solvation, onSiteElements, kPoint, nEl, nKPoint,&
-      & tSccCalc, tSpin, tSpinOrbit, isDftbU, isExtField, isLinResp, tPeriodic, tLatOpt, tReadChrg,&
+      & tSccCalc, tSpin, tSpinOrbit, isDftbU, isExtEField, isLinResp, tPeriodic, tLatOpt, tReadChrg,&
       & tPoisson, isShellResolved)
 
     !> data type for REKS input
@@ -5528,7 +5551,7 @@ contains
     logical, intent(in) :: isDftbU
 
     !> external electric field
-    logical, intent(in) :: isExtField
+    logical, intent(in) :: isExtEField
 
     !> Calculate Casida linear response excitations
     logical, intent(in) :: isLinResp
@@ -5560,7 +5583,7 @@ contains
       call error("REKS is not compatible with spin-orbit (LS-coupling) calculation")
     else if (isDftbU) then
       call error("REKS is not compatible with DFTB+U calculation")
-    else if (isExtField) then
+    else if (isExtEField) then
       call error("REKS is not compatible with external field and potentials, only point charge&
           & embedding is implemented")
     else if (isLinResp) then

@@ -65,7 +65,6 @@ module dftbp_dftb_sparse2dense
     module procedure packHS_cmplx_kpts
     module procedure packHSPauli
     module procedure packHSPauli_kpts
-    module procedure packhs_cmplx
   end interface packHS
 
 
@@ -120,14 +119,14 @@ contains
   !> Unpacks sparse matrix to square form (complex version) Note the non on-site blocks are only
   !> filled in the lower triangle part of the matrix. To fill the matrix completely, apply the
   !> blockSymmetrizeHS subroutine.
-  subroutine unpackHS_cmplx_kpts(square, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
-      & iAtomStart, iSparseStart, img2CentCell)
+  subroutine unpackHS_cmplx_kpts(square, sparse, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
+      & cellVec, iAtomStart, iSparseStart, img2CentCell, iSparse)
 
     !> Square form matrix on exit.
     complex(dp), intent(out) :: square(:, :)
 
-    !> Sparse matrix
-    real(dp), intent(in) :: orig(:)
+    !> Real part of real-space matrix in sparse form
+    real(dp), intent(in) :: sparse(:)
 
     !> Relative coordinates of the K-point where the sparse matrix should be unfolded.
     real(dp), intent(in) :: kPoint(:)
@@ -153,9 +152,12 @@ contains
     !> Map from images of atoms to central cell atoms
     integer, intent(in) :: img2CentCell(:)
 
+    !> Imaginary part of real-space matrix in sparse form
+    real(dp), intent(in), optional :: iSparse(:)
+
     complex(dp) :: phase
     integer :: nAtom
-    integer :: iOrig, ii, jj
+    integer :: iStart, ii, jj
     integer :: iNeigh
     integer :: iOldVec, iVec
     integer :: iAtom1, iAtom2, iAtom2f
@@ -173,13 +175,14 @@ contains
 
     square(:, :) = cmplx(0, 0, dp)
     kPoint2p(:) = 2.0_dp * pi * kPoint
+
     iOldVec = 0
     phase = 1.0_dp
     do iAtom1 = 1, nAtom
       ii = iAtomStart(iAtom1)
       nOrb1 = iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
-        iOrig = iSparseStart(iNeigh, iAtom1) + 1
+        iStart = iSparseStart(iNeigh, iAtom1) + 1
         iAtom2 = iNeighbour(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
         jj = iAtomStart(iAtom2f)
@@ -191,9 +194,32 @@ contains
           iOldVec = iVec
         end if
         square(jj:jj+nOrb2-1, ii:ii+nOrb1-1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)&
-            & + phase * reshape(orig(iOrig:iOrig+nOrb1*nOrb2-1), [nOrb2, nOrb1])
+            & + phase * reshape(sparse(iStart:iStart+nOrb1*nOrb2-1), [nOrb2, nOrb1])
       end do
     end do
+
+    if (present(iSparse)) then
+      iOldVec = 0
+      phase = imag
+      do iAtom1 = 1, nAtom
+        ii = iAtomStart(iAtom1)
+        nOrb1 = iAtomStart(iAtom1 + 1) - ii
+        do iNeigh = 0, nNeighbourSK(iAtom1)
+          iStart = iSparseStart(iNeigh, iAtom1) + 1
+          iAtom2 = iNeighbour(iNeigh, iAtom1)
+          iAtom2f = img2CentCell(iAtom2)
+          jj = iAtomStart(iAtom2f)
+          nOrb2 = iAtomStart(iAtom2f + 1) - jj
+          iVec = iCellVec(iAtom2)
+          if (iVec /= iOldVec) then
+            phase = imag * exp((0.0_dp, 1.0_dp) * dot_product(kPoint2p, cellVec(:, iVec)))
+            iOldVec = iVec
+          end if
+          square(jj:jj+nOrb2-1, ii:ii+nOrb1-1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)&
+              & + phase * reshape(iSparse(iStart:iStart+nOrb1*nOrb2-1), [nOrb2, nOrb1])
+        end do
+      end do
+    end if
 
   end subroutine unpackHS_cmplx_kpts
 
@@ -760,11 +786,11 @@ contains
 
 
   !> Pack squared matrix in the sparse form (complex version).
-  subroutine packHS_cmplx_kpts(primitive, square, kPoint, kWeight, iNeighbour, nNeighbourSK, mOrb,&
-      & iCellVec, cellVec, iAtomStart, iSparseStart, img2CentCell)
+  subroutine packHS_cmplx_kpts(sparse, square, kPoint, kWeight, iNeighbour, nNeighbourSK, mOrb,&
+      & iCellVec, cellVec, iAtomStart, iSparseStart, img2CentCell, iSparse)
 
     !> Sparse matrix
-    real(dp), intent(inout) :: primitive(:)
+    real(dp), intent(inout) :: sparse(:)
 
     !> Square form matrix
     complex(dp), intent(in) :: square(:, :)
@@ -799,6 +825,9 @@ contains
     !> Mapping between image atoms and corresponding atom in the central cell.
     integer, intent(in) :: img2CentCell(:)
 
+    !> Imaginary part of sparse matrix
+    real(dp), intent(inout), optional :: iSparse(:)
+
     complex(dp) :: phase
     integer :: nAtom
     integer :: iOrig, ii, jj, kk
@@ -814,7 +843,7 @@ contains
 
     nAtom = size(iNeighbour, dim=2)
   #:block DEBUG_CODE
-    sizePrim = size(primitive)
+    sizePrim = size(sparse)
   #:endblock DEBUG_CODE
 
     @:ASSERT(nAtom > 0)
@@ -826,6 +855,7 @@ contains
     @:ASSERT(size(iAtomStart) == nAtom + 1)
 
     kPoint2p(:) = 2.0_dp * pi * kPoint
+
     iOldVec = 0
     phase = 1.0_dp
     do iAtom1 = 1, nAtom
@@ -836,7 +866,6 @@ contains
         iAtom2 = iNeighbour(iNeigh, iAtom1)
         iAtom2f = img2CentCell(iAtom2)
         jj = iAtomStart(iAtom2f)
-        @:ASSERT(jj >= ii)
         nOrb2 = iAtomStart(iAtom2f + 1) - jj
         iVec = iCellVec(iAtom2)
         if (iVec /= iOldVec) then
@@ -844,19 +873,46 @@ contains
           iOldVec = iVec
         end if
         tmpSqr(1:nOrb2, 1:nOrb1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)
-
         ! Hermitian the on-site block before packing, just in case
         if (iAtom1 == iAtom2f) then
           do kk = 1, nOrb2
             tmpSqr(kk, kk+1:nOrb1) = conjg(tmpSqr(kk+1:nOrb1, kk))
           end do
         end if
-
-        @:ASSERT(sizePrim >= iOrig + nOrb1*nOrb2 - 1)
-        primitive(iOrig : iOrig + nOrb1 * nOrb2 - 1) = primitive(iOrig : iOrig + nOrb1*nOrb2 - 1)&
+        sparse(iOrig : iOrig + nOrb1 * nOrb2 - 1) = sparse(iOrig : iOrig + nOrb1*nOrb2 - 1)&
             & + kWeight * real(phase * reshape(tmpSqr(1:nOrb2, 1:nOrb1), [nOrb1*nOrb2]), dp)
       end do
     end do
+
+    if (present(iSparse)) then
+      iOldVec = 0
+      phase = imag
+      do iAtom1 = 1, nAtom
+        ii = iAtomStart(iAtom1)
+        nOrb1 = iAtomStart(iAtom1 + 1) - ii
+        do iNeigh = 0, nNeighbourSK(iAtom1)
+          iOrig = iSparseStart(iNeigh, iAtom1) + 1
+          iAtom2 = iNeighbour(iNeigh, iAtom1)
+          iAtom2f = img2CentCell(iAtom2)
+          jj = iAtomStart(iAtom2f)
+          nOrb2 = iAtomStart(iAtom2f + 1) - jj
+          iVec = iCellVec(iAtom2)
+          if (iVec /= iOldVec) then
+            phase = imag * exp(cmplx(0, -1, dp) * dot_product(kPoint2p(:), cellVec(:, iVec)))
+            iOldVec = iVec
+          end if
+          tmpSqr(1:nOrb2, 1:nOrb1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)
+          ! Hermitian the on-site block before packing, just in case
+          if (iAtom1 == iAtom2f) then
+            do kk = 1, nOrb2
+              tmpSqr(kk, kk+1:nOrb1) = conjg(tmpSqr(kk+1:nOrb1, kk))
+            end do
+          end if
+          iSparse(iOrig : iOrig + nOrb1 * nOrb2 - 1) = iSparse(iOrig : iOrig + nOrb1*nOrb2 - 1)&
+              & + kWeight * real(phase * reshape(tmpSqr(1:nOrb2, 1:nOrb1), [nOrb1*nOrb2]), dp)
+        end do
+      end do
+    end if
 
   end subroutine packHS_cmplx_kpts
 
@@ -1645,74 +1701,6 @@ contains
     end do
 
   end subroutine packHSPauliImag_kpts
-
-
-  !> Pack squared matrix in the sparse form (complex version without k-points).
-  subroutine packhs_cmplx(prim, iPrim, square, iNeighbour, nNeighbourSK, mOrb, iAtomStart,&
-      & iSparseStart, img2CentCell)
-
-    !> Sparse matrix, real part
-    real(dp), intent(inout) :: prim(:)
-
-    !> Sparse matrix, imaginary part
-    real(dp), intent(inout) :: iPrim(:)
-
-    !> Hermitian matrix
-    complex(dp), intent(in) :: square(:, :)
-
-    !> Neighbour list for the atoms (First index from 0!)
-    integer, intent(in) :: iNeighbour(0:, :)
-
-    !> Nr. of neighbours for the atoms.
-    integer, intent(in) :: nNeighbourSK(:)
-
-    !> Maximal number of orbitals on an atom.
-    integer, intent(in) :: mOrb
-
-    !> Atom offset for the squared matrix
-    integer, intent(in) :: iAtomStart(:)
-
-    !> indexing array for the sparse Hamiltonian
-    integer, intent(in) :: iSparseStart(0:, :)
-
-    !> Mapping between image atoms and corresponding atom in the central cell.
-    integer, intent(in) :: img2CentCell(:)
-
-    integer :: nAtom
-    integer :: iOrig, ii, jj, kk
-    integer :: iNeigh
-    integer :: iAtom1, iAtom2, iAtom2f
-    integer :: nOrb1, nOrb2
-    complex(dp) :: tmpSqr(mOrb, mOrb)
-
-    nAtom = size(iNeighbour, dim=2)
-
-    do iAtom1 = 1, nAtom
-      ii = iAtomStart(iAtom1)
-      nOrb1 = iAtomStart(iAtom1 + 1) - ii
-      do iNeigh = 0, nNeighbourSK(iAtom1)
-        iOrig = iSparseStart(iNeigh, iAtom1) + 1
-        iAtom2 = iNeighbour(iNeigh, iAtom1)
-        iAtom2f = img2CentCell(iAtom2)
-        jj = iAtomStart(iAtom2f)
-        nOrb2 = iAtomStart(iAtom2f + 1) - jj
-        tmpSqr(1:nOrb2, 1:nOrb1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)
-
-        ! Hermitian symmetrise the on-site block before packing, just in case
-        if (iAtom1 == iAtom2f) then
-          do kk = 1, nOrb2
-            tmpSqr(kk, kk+1:nOrb1) = conjg(tmpSqr(kk+1:nOrb1, kk))
-          end do
-        end if
-
-        prim(iOrig : iOrig + nOrb1*nOrb2 - 1) = prim(iOrig : iOrig + nOrb1 * nOrb2 - 1)&
-            & + reshape(real(tmpSqr(1:nOrb2, 1:nOrb1),dp), [nOrb1 * nOrb2])
-        iPrim(iOrig : iOrig + nOrb1*nOrb2 - 1) = iPrim(iOrig : iOrig + nOrb1 * nOrb2 - 1)&
-            & + reshape(aimag(tmpSqr(1:nOrb2, 1:nOrb1)), [nOrb1 * nOrb2])
-      end do
-    end do
-
-  end subroutine packhs_cmplx
 
 
   !> Pack only the charge (spin channel 1) part of a 2 component matrix

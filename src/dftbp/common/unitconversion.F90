@@ -185,13 +185,13 @@ module dftbp_common_unitconversion
   integer, parameter :: nBFieldUnit = 5
 
 
-  !> Magnetic field units (Atomic "Gaussian" CGS unit system!)
+  !> Magnetic flux density
   type(unit), parameter :: BFieldUnits(nBFieldUnit) = [&
-      & unit("t                 ", 1.0E+24_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
-      & unit("tesla             ", 1.0E+24_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
-      & unit("gauss             ", 1.0E+20_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
-      & unit("g                 ", 1.0E+20_dp*c/(hbar*Coulomb__au*AA__Bohr**2)),&
-      & unit("au                  ", 1.0_dp)&
+      & unit("t                 ", 1.0E-20_dp*(Bohr__AA**2)/(hbar*Coulomb__au)),&
+      & unit("tesla             ", 1.0E-20_dp*(Bohr__AA**2)/(hbar*Coulomb__au)),&
+      & unit("g                 ", 1.0E-24_dp*(Bohr__AA**2)/(hbar*Coulomb__au)),&
+      & unit("gauss             ", 1.0E-24_dp*(Bohr__AA**2)/(hbar*Coulomb__au)),&
+      & unit("au                ", 1.0_dp)&
       & ]
 
 

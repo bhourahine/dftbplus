@@ -81,9 +81,8 @@ module dftbp_common_constants
   !> electron g factor
   real(dp), parameter :: gfac = 2.00231930436153_dp
 
-  !> Bohr magneton atomic CGS units
-  real(dp), parameter :: mu_B = alpha_fs/2.0_dp
-
+  !> Bohr magneton from SI units (e h / 2 m_e)
+  real(dp), parameter :: mu_B = pi
 
   !> kcal/mol -> eV
   real(dp), parameter :: kcal_mol__eV = 4.33931346011e-2_dp

@@ -17,6 +17,7 @@ module dftbp_dftbplus_inputdata
   use dftbp_dftb_etemp, only : fillingTypes
   use dftbp_dftb_extfields, only : TElecFieldInput
   use dftbp_dftb_h5correction, only : TH5CorrectionInput
+  use dftbp_dftb_magfield, only : TMagFieldInp
   use dftbp_dftb_repulsive_chimesrep, only : TChimesRepInp
   use dftbp_dftb_repulsive_pairrepulsive, only : TPairRepulsiveItem
   use dftbp_dftb_pmlocalisation, only : TPipekMezeyInp
@@ -399,6 +400,9 @@ module dftbp_dftbplus_inputdata
 
     !> Homogeneous external electric field
     type(TElecFieldInput), allocatable :: electricField
+
+    !> Homogeneous external magnetic field
+    type(TMagFieldInp), allocatable :: magneticField
 
     !> Potential(s) at atomic sites
     type(TAtomExtPotInput), allocatable :: atomicExtPotential

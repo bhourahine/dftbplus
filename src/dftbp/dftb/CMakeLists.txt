@@ -22,7 +22,6 @@ set(sources-fpp
   ${curdir}/dispuffdata.F90
   ${curdir}/elecconstraints.F90
   ${curdir}/elstatpot.F90
-  #${curdir}/emfields.F90
   ${curdir}/energytypes.F90
   ${curdir}/encharges.F90
   ${curdir}/etemp.F90
@@ -33,6 +32,7 @@ set(sources-fpp
   ${curdir}/h5correction.F90
   ${curdir}/halogenx.F90
   ${curdir}/hamiltonian.F90
+  ${curdir}/magfield.F90
   ${curdir}/nonscc.F90
   ${curdir}/onscorrection.F90
   ${curdir}/orbitalequiv.F90
@@ -56,7 +56,8 @@ set(sources-fpp
   ${curdir}/stress.F90
   ${curdir}/thirdorder.F90
   ${curdir}/uniquehubbard.F90
-  ${curdir}/vdwdata.F90)
+  ${curdir}/vdwdata.F90
+  ${curdir}/vectorpots.F90)
 
 if(WITH_MBD)
   list(APPEND sources-fpp ${curdir}/dispmbd.F90)

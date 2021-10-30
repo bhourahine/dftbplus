@@ -25,6 +25,7 @@ module dftbp_elecsolvers_elsisolver
   use dftbp_io_message, only : error, warning, cleanshutdown
   use dftbp_math_angmomentum, only : getLOnsite
   use dftbp_type_commontypes, only : TParallelKS, TOrbitals
+  use dftbp_type_integral, only : TIntegral
   use dftbp_type_densedescr, only : TDenseDescr
 #:if WITH_MPI
   use dftbp_dftb_sparse2dense, only : unpackHPauliBlacs,&
@@ -816,10 +817,10 @@ contains
 
 
   !> Returns the density matrix using ELSI non-diagonalisation routines.
-  subroutine TElsiSolver_getDensity(this, env, denseDesc, ham, over, neighbourList, nNeighbourSK,&
+  subroutine TElsiSolver_getDensity(this, env, denseDesc, integrals, neighbourList, nNeighbourSK,&
       & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, tHelical, orb, species,&
       & coord, tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tMulliken, parallelKS, Ef,&
-      & energy, rhoPrim, Eband, TS, iHam, xi, orbitalL, HSqrReal, SSqrReal, iRhoPrim, HSqrCplx,&
+      & energy, rhoPrim, Eband, TS,  xi, orbitalL, HSqrReal, SSqrReal, iRhoPrim, HSqrCplx,&
       & SSqrCplx)
 
     !> Electronic solver information
@@ -831,11 +832,8 @@ contains
     !> Dense matrix descriptor
     type(TDenseDescr), intent(in) :: denseDesc
 
-    !> hamiltonian in sparse storage
-    real(dp), intent(in) :: ham(:,:)
-
-    !> sparse overlap matrix
-    real(dp), intent(in) :: over(:)
+    !> hamiltonian etc. in sparse storage
+    type(TIntegral), intent(in) :: integrals
 
     !> list of neighbours for each atom
     type(TNeighbourList), intent(in) :: neighbourList
@@ -906,9 +904,6 @@ contains
     !> electronic entropy times temperature
     real(dp), intent(out) :: TS(:)
 
-    !> imaginary part of hamiltonian
-    real(dp), intent(in), allocatable :: iHam(:,:)
-
     !> spin orbit constants
     real(dp), intent(in), allocatable :: xi(:,:)
 
@@ -935,12 +930,16 @@ contains
     integer :: nSpin
     integer :: iKS, iK, iS
 
+    if (allocated()) then
+      call error("Magnetic field not implemented yet for ELSI")
+    end if
+
     ! as each spin and k-point combination forms a separate group for this solver, then iKS = 1
     iKS = 1
     iK = parallelKS%localKS(1, iKS)
     iS = parallelKS%localKS(2, iKS)
 
-    nSpin = size(ham, dim=2)
+    nSpin = size(integrals%hamiltonian, dim=2)
     if (nSpin == 2 .and. .not. tSpinSharedEf) then
       call error("ELSI currently requires shared Fermi levels over spin")
     end if
@@ -958,23 +957,25 @@ contains
     if (nSpin /= 4) then
       if (tRealHS) then
         if (this%isSparse) then
-          call getDensityRealSparse(this, parallelKS, ham, over, neighbourList%iNeighbour,&
-              & nNeighbourSK, denseDesc%iAtomStart, iSparseStart, img2CentCell, tHelical, orb,&
-              & species, coord, rhoPrim, Eband)
+          call getDensityRealSparse(this, parallelKS, integrals%hamiltonian, integrals%overlap,&
+              & neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart, iSparseStart,&
+              & img2CentCell, tHelical, orb, species, coord, rhoPrim, Eband)
         else
-          call getDensityRealDense(this, env, denseDesc, ham, over, neighbourList,&
-              & nNeighbourSK, iSparseStart, img2CentCell, tHelical, orb, species, coord,&
-              & parallelKS, rhoPrim, Eband, HSqrReal, SSqrReal)
+          call getDensityRealDense(this, env, denseDesc, integrals%hamiltonian, integrals%overlap,&
+              & neighbourList, nNeighbourSK, iSparseStart, img2CentCell, tHelical, orb, species,&
+              & coord, parallelKS, rhoPrim, Eband, HSqrReal, SSqrReal)
         end if
       else
         if (this%isSparse) then
           call getDensityCmplxSparse(this, parallelKS, kPoint(:,iK), kWeight(iK), iCellVec,&
-              & cellVec, ham, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
-              & iSparseStart, img2CentCell, tHelical, orb, species, coord, rhoPrim, Eband)
+              & cellVec, integrals%hamiltonian, integrals%overlap, neighbourList%iNeighbour,&
+              & nNeighbourSK, denseDesc%iAtomStart, iSparseStart, img2CentCell, tHelical, orb,&
+              & species, coord, rhoPrim, Eband)
         else
-          call getDensityCmplxDense(this, env, denseDesc, ham, over, neighbourList,&
-              & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight,&
-              & tHelical, orb, species, coord, parallelKS, rhoPrim, Eband, HSqrCplx, SSqrCplx)
+          call getDensityCmplxDense(this, env, denseDesc, integrals%hamiltonian, integrals%overlap,&
+              & neighbourList, nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, kPoint,&
+              & kWeight, tHelical, orb, species, coord, parallelKS, rhoPrim, Eband, HSqrCplx,&
+              & SSqrCplx)
         end if
       end if
       call ud2qm(rhoPrim)
@@ -982,10 +983,10 @@ contains
       if (this%isSparse) then
         call error("Internal error: getDensityFromElsiSolver : sparse pauli not yet implemented")
       else
-        call getDensityPauliDense(this, env, denseDesc, ham, over, neighbourList,&
-            & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb,&
-            & species, tSpinOrbit, tDualSpinOrbit, tMulliken, parallelKS, energy, rhoPrim, Eband,&
-            & iHam, xi, orbitalL, iRhoPrim, HSqrCplx, SSqrCplx)
+        call getDensityPauliDense(this, env, denseDesc, integrals%hamiltonian, integrals%overlap,&
+            & neighbourList, nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, kPoint,&
+            & kWeight, orb, species, tSpinOrbit, tDualSpinOrbit, tMulliken, parallelKS, energy,&
+            & rhoPrim, Eband, integrals%iHamiltonian, xi, orbitalL, iRhoPrim, HSqrCplx, SSqrCplx)
       end if
     end if
 
