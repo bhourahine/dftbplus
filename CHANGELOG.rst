@@ -18,6 +18,8 @@ Added
 - (Optionally) Rescale externally applied fields and dipole moments
   when implicit solvents are used
 
+- Dynamic polarizability and response kernel at finite frequencies
+
 
 Changed
 -------
@@ -29,6 +31,8 @@ Changed
   value is ill-defined (charged systems or periodic cases), but its
   derivative may be meaningful.
 
+- Re-enable q=0 (sawtooth) electric fields for periodic/helical structures
+
 
 Fixed
 -----
@@ -36,6 +40,10 @@ Fixed
 - incorrect atomic mass unit for xTB calculations
 
 - electronic temperature read for Green's function solver
+
+- MPI code for spin polarised metallic perturbation at q=0 for spin
+  polarized molecules with processor groups
+
 
 21.2 (2021-12-13)
 =================
