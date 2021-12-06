@@ -387,6 +387,9 @@ module dftbp_dftbplus_initprogram
     !> DFTB+U calculation, if relevant
     type(TDftbU), allocatable :: dftbU
 
+    !> Self-interaction (Perdew-Zunger type)
+    logical, allocatable :: PZSic
+
     !> electron temperature
     real(dp) :: tempElec
 

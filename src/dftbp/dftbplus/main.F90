@@ -49,6 +49,7 @@ module dftbp_dftbplus_main
   use dftbp_dftb_repulsive, only : TRepulsive
   use dftbp_dftb_scc, only : TScc
   use dftbp_dftb_shift, only : addShift
+  use dftbp_dftb_sic, only : gradientMatrix
   use dftbp_dftb_slakocont, only : TSlakoCont
   use dftbp_dftb_sparse2dense, only : unpackHPauli, unpackHS, blockSymmetrizeHS, packHS,&
       & blockSymmetrizeHS, packHS, SymmetrizeHS, unpackHelicalHS, packerho, blockHermitianHS,&
@@ -1130,6 +1131,16 @@ contains
       end do lpSCC
 
     end if REKS_SCC
+
+    if (allocated(this%PZSic)) then
+    #:if not WITH_SCALAPACK
+      if (this%tRealHS .and. this%nSpin == 1 .and. allocated(this%scc)) then
+        call gradientMatrix(this%eigVecsReal(:,:,1), env, this%orb, this%nAtom, this%scc,&
+            & this%ints%overlap, this%SSqrReal, this%neighbourList%iNeighbour, this%nNeighbourSK,&
+            & this%denseDesc%iAtomStart, this%iSparseStart, this%img2CentCell, this%species)
+      end if
+    #:endif
+    end if
 
     if (allocated(this%dispersion) .and. .not.allocated(this%reks)) then
       ! If we get to this point for a dispersion model, if it is charge dependent it may require

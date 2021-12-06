@@ -50,6 +50,7 @@ set(sources-fpp
   ${curdir}/shift.F90
   ${curdir}/shortgamma.F90
   ${curdir}/shortgammafuncs.F90
+  ${curdir}/sic.F90
   ${curdir}/simpledftd3.F90
   ${curdir}/sk.F90
   ${curdir}/slakocont.F90
