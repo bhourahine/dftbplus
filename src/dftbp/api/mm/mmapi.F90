@@ -20,7 +20,8 @@ module dftbp_mmapi
       & setExternalPotential, getTdForces, setTdCoordsAndVelos, setTdElectricField,&
       & initializeTimeProp, updateDataDependentOnSpeciesOrdering, getAtomicMasses,&
       & getGrossCharges, getElStatPotential, getExtChargeGradients, getStressTensor, getGradients,&
-      & getEnergy, setQDepExtPotProxy, setExternalCharges, setGeometry
+      & getEnergy, setQDepExtPotProxy, setExternalCharges, setGeometry, getGeometry, nrOfAllAtoms,&
+      & getAtomMapping, maxNrOfOrbitals
   use dftbp_dftbplus_parser, only : TParserFlags, rootTag, parseHsdTree, readHsdFile
   use dftbp_dftbplus_qdepextpotgen, only : TQDepExtPotGen, TQDepExtPotGenWrapper
   use dftbp_dftbplus_qdepextpotproxy, only : TQDepExtPotProxy, TQDepExtPotProxy_init
@@ -82,6 +83,8 @@ module dftbp_mmapi
     procedure :: setupCalculator => TDftbPlus_setupCalculator
     !> set/replace the geometry of a calculator
     procedure :: setGeometry => TDftbPlus_setGeometry
+    !> get the geometry of a calculator
+    procedure :: getGeometry => TDftbPlus_getGeometry
     !> add an external potential to a calculator
     procedure :: setExternalPotential => TDftbPlus_setExternalPotential
     !> add external charges to a calculator
@@ -102,6 +105,13 @@ module dftbp_mmapi
     procedure :: getElStatPotential => TDftbPlus_getElStatPotential
     !> Return the number of DFTB+ atoms in the system
     procedure :: nrOfAtoms => TDftbPlus_nrOfAtoms
+    !> Return the number of DFTB+ atoms in the extended system (includes images outside central
+    !> cell)
+    procedure :: nrOfAllAtoms => TDftbPlus_nrOfAllAtoms
+    !> Return the maximum number of orbitals any atom in the system has
+    procedure :: maxOrbitals => TDftbPlus_maxOrbitals
+    !> Return the mapping from image atoms to the central cell
+    procedure :: getAtomMapping => TDftbPlus_getAtomMapping
     !> Check that the list of species names has not changed
     procedure :: checkSpeciesNames => TDftbPlus_checkSpeciesNames
     !> Replace species and redefine all quantities that depend on it
@@ -404,6 +414,44 @@ contains
   end subroutine TDftbPlus_setGeometry
 
 
+  !> Gets the geometry from the calculator.
+  subroutine TDftbPlus_getGeometry(this, coords, latVecs, origin)
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> Atomic coordinates in Bohr units. Shape: (3, nAtom).
+    real(dp), intent(out) :: coords(:,:)
+
+    !> Lattice vectors in Bohr units, stored column-wise. Shape: (3, 3).
+    real(dp), intent(out), optional :: latVecs(:,:)
+
+    !> Coordinate origin in Bohr units. Shape: (3).
+    real(dp), intent(out), optional :: origin(:)
+
+    call this%checkInit()
+
+    call getGeometry(this%env, this%main, coords, latVecs, origin)
+
+  end subroutine TDftbPlus_getGeometry
+
+
+  !> Returns aray indexing images of atoms into the central cell
+  subroutine TDftbPlus_getAtomMapping(this, mapping)
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> Mapping of image atoms to central cell
+    real(dp), intent(out) :: mapping(:)
+
+    call this%checkInit()
+
+    call getAtomMapping(this%env, this%main, mapping)
+
+  end subroutine TDftbPlus_getAtomMapping
+
+
   !> Sets an external potential.
   subroutine TDftbPlus_setExternalPotential(this, atomPot, potGrad)
 
@@ -599,6 +647,38 @@ contains
     nAtom = nrOfAtoms(this%main)
 
   end function TDftbPlus_nrOfAtoms
+
+
+  !> Returns the nr. of atoms in the system, including image atoms outside central cell.
+  function TDftbPlus_nrOfAllAtoms(this) result(nAtom)
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> Nr. of atoms
+    integer :: nAtom
+
+    call this%checkInit()
+
+    nAtom = nrOfAllAtoms(this%env, this%main)
+
+  end function TDftbPlus_nrOfAllAtoms
+
+
+  !> Returns the maximum number of atomic orbitals
+  function TDftbPlus_maxOrbitals(this) result(maxOrb)
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> Maximum number of atomic orbitals
+    integer :: maxOrb
+
+    call this%checkInit()
+
+    maxOrb = maxNrOfOrbitals(this%main)
+
+  end function TDftbPlus_maxOrbitals
 
 
   !> Returns the atomic masses for each atom in the system.

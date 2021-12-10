@@ -282,7 +282,6 @@ module dftbp_dftbplus_initprogram
     !> normalized vectors in those directions
     real(dp) :: normOrigLatVec(3,3)
 
-
     !> reciprocal vectors in 2 pi units
     real(dp), allocatable :: invLatVec(:,:)
 
@@ -300,7 +299,6 @@ module dftbp_dftbplus_initprogram
 
     !> index in cellVec for each atom
     integer, allocatable :: iCellVec(:)
-
 
     !> ADT for neighbour parameters
     type(TNeighbourList), allocatable :: neighbourList
@@ -351,7 +349,6 @@ module dftbp_dftbplus_initprogram
     !> Integral container
     type(TIntegral) :: ints
 
-
     !> nr. of K-points
     integer :: nKPoint
 
@@ -360,7 +357,6 @@ module dftbp_dftbplus_initprogram
 
     !> weight of the K-Points
     real(dp), allocatable :: kWeight(:)
-
 
     !> external pressure if periodic
     real(dp) :: extPressure
@@ -371,17 +367,14 @@ module dftbp_dftbplus_initprogram
     !> Barostat coupling strength
     real(dp) :: BarostatStrength
 
-
     !> H and S are real
     logical :: tRealHS
-
 
     !> nr. of electrons
     real(dp), allocatable :: nEl(:)
 
     !> Nr. of all electrons if neutral
     real(dp) :: nEl0
-
 
     !> Spin W values
     real(dp), allocatable :: spinW(:,:,:)
@@ -448,7 +441,6 @@ module dftbp_dftbplus_initprogram
 
     !> Common Fermi level across spin channels
     logical :: tSpinSharedEf
-
 
     !> Geometry optimization needed?
     logical :: isGeoOpt
@@ -713,9 +705,6 @@ module dftbp_dftbplus_initprogram
 
     !> Unique Hubbard U (needed for being able to calculate equivalency relations)
     type(TUniqueHubbard), allocatable :: uniqHubbU
-
-
-    ! External charges
 
     !> If external charges must be considered
     logical :: tExtChrg

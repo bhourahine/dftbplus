@@ -29,12 +29,12 @@ module dftbp_dftbplus_mainapi
   implicit none
   
   private
-  public :: setGeometry, setQDepExtPotProxy, setExternalPotential, setExternalCharges
+  public :: setGeometry, getGeometry, setQDepExtPotProxy, setExternalPotential, setExternalCharges
   public :: getEnergy, getGradients, getExtChargeGradients, getGrossCharges, getElStatPotential
-  public :: getStressTensor, nrOfAtoms, getAtomicMasses
+  public :: getStressTensor, nrOfAtoms, nrOfAllAtoms, getAtomMapping, getAtomicMasses
   public :: updateDataDependentOnSpeciesOrdering, checkSpeciesNames
   public :: initializeTimeProp, doOneTdStep, setTdElectricField, setTdCoordsAndVelos, getTdForces
-
+  public :: maxNrOfOrbitals
 
 contains
 
@@ -90,6 +90,41 @@ contains
     end if
 
   end subroutine setGeometry
+
+
+  !> Gets the atomic geometry
+  subroutine getGeometry(env, main, coords, latVecs, coordOrigin)
+
+    !> Instance
+    type(TEnvironment), intent(inout) :: env
+
+    !> Instance
+    type(TDftbPlusMain), intent(inout) :: main
+
+    !> atom coordinates
+    real(dp), intent(out) :: coords(:,:)
+
+    !> lattice vectors, if periodic
+    real(dp), intent(out), optional :: latVecs(:,:)
+
+    !> coordinate origin, if periodic
+    real(dp), intent(out), optional :: coordOrigin(:)
+
+    @:ASSERT(size(coords,1) == 3)
+
+    call recalcGeometry(env, main)
+
+    coords(:,:) = main%coord
+    if (present(latVecs)) then
+      latVecs(:,:) = main%latVec
+      if (present(coordOrigin)) then
+        coordOrigin(:) = main%origin
+      end if
+    else
+      @:ASSERT(.not.present(coordOrigin))
+    end if
+
+  end subroutine getGeometry
 
 
   !> Returns the free energy of the system at finite temperature
@@ -321,6 +356,54 @@ contains
     nrOfAtoms = main%nAtom
 
   end function nrOfAtoms
+
+
+  !> Obtains number of atoms in the extended system
+  function nrOfAllAtoms(env, main)
+
+    !> dftb+ environment
+    type(TEnvironment), intent(inout) :: env
+
+    !> Instance
+    type(TDftbPlusMain), intent(inout) :: main
+
+    integer :: nrOfAllAtoms
+
+    call recalcGeometry(env, main)
+
+    nrOfAllAtoms = main%nAllAtom
+
+  end function nrOfAllAtoms
+
+
+  !> Obtains maximum number of atomic orbitals
+  function maxNrOfOrbitals(main) result(maxOrbs)
+
+    !> Instance
+    type(TDftbPlusMain), intent(in) :: main
+
+    integer :: maxOrbs
+
+    maxOrbs = main%orb%mOrb
+
+  end function maxNrOfOrbitals
+
+
+  !> Obtains mapping of atom numbers into central cell
+  subroutine getAtomMapping(env, main, atomIndex)
+
+    !> dftb+ environmenta
+    type(TEnvironment), intent(inout) :: env
+
+    !> Instance
+    type(TDftbPlusMain), intent(inout) :: main
+
+    real(dp), intent(out) :: atomIndex(main%nAllAtom)
+
+    call recalcGeometry(env, main)
+    atomIndex = main%img2CentCell
+
+  end subroutine getAtomMapping
 
 
   !> Check that the order of speciesName remains constant Keeping speciesNames constant avoids the
@@ -611,6 +694,50 @@ contains
     outMass = main%mass
 
   end subroutine getAtomicMasses
+
+
+  !> Returns specified diatomic block of the density matrix, only for parts where the overlap is
+  !> non-zero
+  subroutine getDensityMatrixBlock(env, main, iAt1, iAt2, matrixBlock)
+
+    !> dftb+ environment
+    type(TEnvironment), intent(inout) :: env
+
+    !> Instance
+    type(TDftbPlusMain), intent(inout) :: main
+
+    !> Atom in central cell for the block
+    integer, intent(in) :: iAt1
+
+    !> Atom with which to get the block
+    integer, intent(in) :: iAt2
+
+    real(dp), intent(out) :: matrixBlock(main%orb%mOrb, main%orb%mOrb, main%nSpin)
+    integer :: iNeigh, jNeigh, iOrig, iAt2f, nOrb1, nOrb2
+
+    matrixBlock(:,:,:) = 0.0_dp
+    if (iAt1 < 1 .or. iAt1 > main%nAtom) then
+      ! Atom not in central cell
+      return
+    end if
+    call recalcGeometry(env, main)
+    jNeigh = -1
+    do iNeigh = 0, main%nNeighbourSK(iAt1)
+      if (main%neighbourList%iNeighbour(iNeigh,iAt1) == iAt2) then
+        jNeigh = iNeigh
+        exit
+      end if
+    end do
+    if (jNeigh /= -1) then
+      iOrig = main%iSparseStart(jNeigh, iAt1)
+      iAt2f = main%img2CentCell(iAt2)
+      nOrb1 = main%denseDesc%iAtomStart(iAt1 + 1) - main%denseDesc%iAtomStart(iAt1)
+      nOrb2 = main%denseDesc%iAtomStart(iAt2f + 1) - main%denseDesc%iAtomStart(iAt2f)
+      matrixBlock(:nOrb2, :nOrb1, :) =&
+          & reshape(main%rhoPrim(iOrig:iOrig+nOrb2*nOrb1-1,:), [nOrb2,nOrb1,main%nSpin])
+    end if
+
+  end subroutine getDensityMatrixBlock
 
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

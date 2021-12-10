@@ -2366,7 +2366,6 @@ contains
     type(TDftbDeterminants), intent(inout) :: deltaDftb
 
     integer :: nSpin, iKS, iSp, iK, nAtom
-    complex(dp), allocatable :: rhoSqrCplx(:,:)
     logical :: tImHam
 
     nSpin = size(ints%hamiltonian, dim=2)
