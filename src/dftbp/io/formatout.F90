@@ -248,7 +248,7 @@ contains
 
   !> Writes coordinates in the XYZ format
   subroutine writeXYZFormat_fname(fileName, coord, species, speciesName, charges, velocities,&
-      & comment, append)
+      & comment, append, isXmakeMol)
 
     !> File name of a file to be created
     character(len=*), intent(in) :: fileName
@@ -274,6 +274,9 @@ contains
     !> Whether geometry should be appended (default: it is overwritten)
     logical, intent(in), optional :: append
 
+    !> Whether vectors should use xmakemol format
+    logical, intent(in), optional :: isXmakeMol
+
     integer :: fd
     logical :: append0
 
@@ -289,14 +292,15 @@ contains
     else
       open(newunit=fd, file=fileName, action="write", form="formatted", status="replace")
     end if
-    call writeXYZFormat(fd, coord, species, speciesName, charges, velocities, comment)
+    call writeXYZFormat(fd, coord, species, speciesName, charges, velocities, comment, isXmakeMol)
     close(fd)
 
   end subroutine writeXYZFormat_fname
 
 
   !> Writes coordinates in the XYZ format with additional charges and vectors
-  subroutine writeXYZFormat_fid(fd, coords, species, speciesNames, charges, velocities, comment)
+  subroutine writeXYZFormat_fid(fd, coords, species, speciesNames, charges, velocities, comment,&
+      & isXmakeMol)
 
     !> File id of an open file where output should be written
     integer, intent(in) :: fd
@@ -319,13 +323,25 @@ contains
     !> Optional comment for line 2 of the file
     character(len=*), intent(in), optional :: comment
 
+    !> Whether vectors should use xmakemol format
+    logical, intent(in), optional :: isXmakeMol
+
     integer :: nAtom, nSpecies, ii
+    character(mc) :: xtraLabel
 
 200 format(I5)
 201 format(A5,3F16.8)
-202 format(A5,6F16.8)
+202 format(A5,3F16.8,A,3F16.8)
 203 format(A5,4F16.8)
-204 format(A5,7F16.8)
+204 format(A5,4F16.8,A,3F16.8)
+
+    xtraLabel = ""
+    if (present(isXmakeMol)) then
+      if (isXmakeMol) then
+        ! need to account for its non-standard xyz vector format:
+        xtraLabel = ' atom_vector '
+      end if
+    end if
 
     nAtom = size(coords, dim=2)
     nSpecies = maxval(species)
@@ -352,13 +368,14 @@ contains
 
     if (present(charges) .and. present(velocities)) then
       write(fd, 204) (trim(speciesNames(species(ii))), coords(:, ii) * Bohr__AA,&
-          & charges(ii), velocities(:,ii) * Bohr__AA / au__fs * 1000.0_dp, ii = 1, nAtom)
+          & charges(ii), trim(xtraLabel), velocities(:,ii) * Bohr__AA / au__fs * 1000.0_dp,&
+          & ii = 1, nAtom)
     elseif (present(charges) .and. .not. present(velocities)) then
       write(fd, 203) (trim(speciesNames(species(ii))), coords(:, ii) * Bohr__AA,&
           & charges(ii), ii = 1, nAtom)
     elseif (.not. present(charges) .and. present(velocities)) then
       write(fd, 202) (trim(speciesNames(species(ii))), coords(:, ii) * Bohr__AA,&
-          & velocities(:,ii) * Bohr__AA / au__fs * 1000.0_dp, ii = 1, nAtom)
+          & trim(xtraLabel), velocities(:,ii) * Bohr__AA / au__fs * 1000.0_dp, ii = 1, nAtom)
     else
       write(fd, 201) (trim(speciesNames(species(ii))),&
           & coords(:, ii) * Bohr__AA, ii = 1, nAtom)

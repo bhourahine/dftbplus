@@ -158,7 +158,10 @@ contains
       call getSelectedIndices(child, char(buffer2), [1, 3 * nMovedAtom], modesToPlot)
       nModesToPlot = size(modesToPlot)
       call getChildValue(node, "Animate", tAnimateModes, .true.)
-      call getChildValue(node, "XMakeMol", tXmakeMol, .true.)
+      tXmakeMol = .false.
+      if (.not.tAnimateModes) then
+        call getChildValue(node, "XMakeMol", tXmakeMol, .false.)
+      end if
     else
       nModesToPlot = 0
       tPlotModes = .false.

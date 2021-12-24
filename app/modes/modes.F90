@@ -12,6 +12,7 @@ program modes
   use dftbp_common_accuracy, only : dp, lc
   use dftbp_common_constants, only : Hartree__cm, Bohr__AA, pi
   use dftbp_common_globalenv, only : stdOut
+  use dftbp_io_formatout, only : writeXYZFormat, writeXYZFormat
   use dftbp_io_taggedoutput, only : TTaggedWriter, TTaggedWriter_init
   use dftbp_math_eigensolver, only : heev
   use modes_initmodes, only : dynMatrix, modesToPlot, geo, iMovedAtoms, nCycles, nDerivs,&
@@ -34,6 +35,7 @@ program modes
 
   character(lc) :: lcTmp, lcTmp2
   integer :: fdUnit
+  logical :: isAppend
 
 #:if WITH_MPI
   !> MPI environment, if compiled with mpifort
@@ -132,49 +134,31 @@ program modes
     if (tAnimateModes) then
       do ii = 1, nModesToPlot
         iMode = ModesToPlot(ii)
-        write(lcTmp,"('mode_',I0)")iMode
-        write(lcTmp2, "(A,A)") trim(lcTmp), ".xyz"
-        open(newunit=fdUnit, file=trim(lcTmp2), position="rewind", status="replace")
+        write(lcTmp,"('mode_',I0,'.xyz')")iMode
         do kk = 1, nCycles
           do ll = 1, nSteps
-            write(fdUnit,*)nAtom
-            write(fdUnit,*)'Eigenmode',iMode,eigenValues(iMode)*Hartree__cm,'cm-1'
-            do iAt = 1, nAtom
-              write(fdUnit,'(A3,T4,3F10.6)') &
-                  & geo%speciesNames(geo%species(iAt)), &
-                  & (geo%coords(:,iAt)&
-                  & + cos(2.0_dp * pi * real(ll) / real(nSteps))&
-                  & * displ(:,iAt,ii)) * Bohr__AA
-            end do
+            isAppend = (kk > 1 .or. ll > 1)
+            write(lcTmp2,*)'Eigenmode',iMode,eigenValues(iMode)*Hartree__cm,'cm-1'
+            call writeXYZFormat(lcTmp,&
+                & geo%coords+cos(2.0_dp*pi*real(ll)/real(nSteps))*displ(:,:,ii),&
+                & geo%species, geo%speciesNames, comment=trim(lcTmp2), append=isAppend)
           end do
         end do
-        close(fdUnit)
       end do
     else
-      open(newunit=fdUnit, file="modes.xyz", position="rewind", status="replace")
+      lcTmp = "modes.xyz"
       do ii = 1, nModesToPlot
+        isAppend = (ii > 1)
         iMode = ModesToPlot(ii)
-        write(fdUnit,*)nAtom
-        write(fdUnit,*)'Eigenmode',iMode,eigenValues(iMode)*Hartree__cm,'cm-1'
-        if (tXmakeMol) then
-          ! need to account for its non-standard xyz vector format:
-          do iAt = 1, nAtom
-            write(fdUnit,'(A3,T4,3F10.6,A,3F10.6)') &
-                & geo%speciesNames(geo%species(iAt)), &
-                & geo%coords(:,iAt)* Bohr__AA, ' atom_vector ',&
-                & displ(:,iAt,ii)
-          end do
-        else
-          ! genuine xyz format
-          do iAt = 1, nAtom
-            write(fdUnit,'(A3,T4,6F10.6)') &
-                & geo%speciesNames(geo%species(iAt)), &
-                & geo%coords(:,iAt)* Bohr__AA, &
-                & displ(:,iAt,ii)
-          end do
-        end if
+        write(lcTmp2,*)'Eigenmode',iMode,eigenValues(iMode)*Hartree__cm,'cm-1'
+        call writeXYZFormat(lcTmp, geo%coords, geo%species, geo%speciesNames,&
+            & velocities=displ(:,:,ii), comment=trim(lcTmp2), append=isAppend, isXmakeMol=tXmakeMol)
+        !
+        !    write(fdUnit,'(A3,T4,3F10.6,A,3F10.6)') &
+        !        & geo%speciesNames(geo%species(iAt)), &
+        !        & geo%coords(:,iAt)* Bohr__AA, ,&
+        !        & displ(:,iAt,ii)
       end do
-      close(fdUnit)
     end if
 
   end if
