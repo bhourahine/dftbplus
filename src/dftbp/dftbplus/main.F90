@@ -2757,6 +2757,7 @@ contains
 
       call diagDenseMtx(env, electronicSolver, 'V', HSqrReal, SSqrReal, eigen(:,iSpin))
       eigvecsReal(:,:,iKS) = HSqrReal
+
     #:endif
     end do
 
@@ -2865,12 +2866,20 @@ contains
     #:else
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
       if (tHelical) then
+        write(*,*)'Got to this branch'
         call unpackHelicalHS(HSqrCplx, ints%hamiltonian(:,iSpin), kPoint(:,iK),&
             & neighbourList%iNeighbour, nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart,&
             & iSparseStart, img2CentCell, orb, species, coord)
         call unpackHelicalHS(SSqrCplx, ints%overlap, kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell,&
             & orb, species, coord)
+        block
+          integer :: iOrb
+          write(*,*)'A'
+          do iOrb = 1, size(ssqrcplx, dim=2)
+            write(*,*)SSqrCplx(:,iOrb)
+          end do
+        end block
       else
         call unpackHS(HSqrCplx, ints%hamiltonian(:,iSpin), kPoint(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
@@ -2878,8 +2887,35 @@ contains
             & iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
       end if
       call env%globalTimer%stopTimer(globalTimers%sparseToDense)
+      block
+        integer :: iOrb
+        write(*,*)'Aa'
+        do iOrb = 1, size(ssqrcplx, dim=2)
+          write(*,*)SSqrCplx(:,iOrb)
+        end do
+      end block
       call diagDenseMtx(env, electronicSolver, 'V', HSqrCplx, SSqrCplx, eigen(:,iK,iSpin))
       eigvecsCplx(:,:,iKS) = HSqrCplx
+
+      block
+        integer :: iOrb
+        call unpackHelicalHS(SSqrCplx, ints%overlap, kPoint(:,iK), neighbourList%iNeighbour,&
+            & nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell,&
+            & orb, species, coord)
+        write(*,*)'B'
+        do iOrb = 1, size(ssqrcplx, dim=2)
+          write(*,*)SSqrCplx(:,iOrb)
+        end do
+        do iOrb = 1, size(ssqrcplx, dim=2)
+          SSqrCplx(iOrb, iOrb+1:) = conjg(SSqrCplx(iOrb+1:, iOrb))
+        end do
+        write(*,*)'C'
+        do iOrb = 1, size(ssqrcplx, dim=2)
+          write(*,*)SSqrCplx(:,iOrb)
+        end do
+        write(*,*)'HERE',dot_product(eigvecsCplx(:,1,iKS),matmul(ssqrcplx, eigvecsCplx(:,1,iKS)))
+      end block
+
     #:endif
     end do
 

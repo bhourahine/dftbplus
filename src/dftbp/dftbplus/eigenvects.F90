@@ -121,10 +121,20 @@ contains
     real(dp), intent(out) :: eigen(:)
 
 
+    complex(dp), allocatable :: work(:,:)
+
     @:ASSERT(size(HSqrCplx, dim=1) == size(HSqrCplx, dim=2))
     @:ASSERT(all(shape(HSqrCplx) == shape(SSqrCplx)))
     @:ASSERT(size(HSqrCplx, dim=1) == size(eigen))
     @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
+
+    work = sSqrCplx
+    block
+      integer :: ii
+      do ii = 1, size(eigen)
+        work(ii,ii+1:) = conjg(work(ii+1:,ii))
+      end do
+    end block
 
     select case(electronicSolver%iSolver)
     case(electronicSolverTypes%QR)
@@ -142,6 +152,8 @@ contains
     case default
       call error('Unknown eigensolver')
     end select
+
+    write(*,*)'Z',dot_product(HSqrCplx(:,1), matmul(work,HSqrCplx(:,1)))
 
   end subroutine diagDenseComplexMtx
 
