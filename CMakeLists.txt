@@ -219,7 +219,7 @@ if(WITH_TBLITE OR WITH_SDFTD3)
   #list(APPEND PKG_CONFIG_REQUIRES mctc-lib)
 
   set(MSTORE_GIT_REPOSITORY "https://github.com/grimme-lab/mstore.git")
-  set(MSTORE_GIT_TAG "1f690009020fb5f196c1dc359056741738416db6")  # do not change manually!
+  set(MSTORE_GIT_TAG "90fc6fc4d8a6c3d72e5a910347a45edabf65343c")  # do not change manually!
   dftbp_config_hybrid_dependency(mstore mstore::mstore "${HYBRID_CONFIG_METHODS}" "QUIET"
     external/mstore "${exclude}" "${MSTORE_GIT_REPOSITORY}" "${MSTORE_GIT_TAG}")
   #list(APPEND PKG_CONFIG_REQUIRES mstore)

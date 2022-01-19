@@ -16,11 +16,12 @@ module dftbp_mmapi
   use dftbp_dftbplus_hsdhelpers, only : doPostParseJobs
   use dftbp_dftbplus_initprogram, only: TDftbPlusMain
   use dftbp_dftbplus_inputdata, only : TInputData
-  use dftbp_dftbplus_mainapi, only : doOneTdStep, checkSpeciesNames, nrOfAtoms, nrOfKPoints,&
-      & setExternalPotential, getTdForces, setTdCoordsAndVelos, setTdElectricField,&
-      & initializeTimeProp, updateDataDependentOnSpeciesOrdering, getAtomicMasses,&
-      & getGrossCharges, getElStatPotential, getExtChargeGradients, getStressTensor, getGradients,&
-      & getEnergy, setQDepExtPotProxy, setExternalCharges, setGeometry
+  use dftbp_dftbplus_mainapi, only : doOneTdStep, checkSpeciesNames, nrOfAtoms, nrOfSpin,&
+      & nrOfKPoints, nrOfLocalKS, setExternalPotential, getTdForces, setTdCoordsAndVelos,&
+      & setTdElectricField, initializeTimeProp, updateDataDependentOnSpeciesOrdering,&
+      & getAtomicMasses, getGrossCharges, getElStatPotential, getExtChargeGradients,&
+      & getStressTensor, getGradients, getEnergy, setQDepExtPotProxy, setExternalCharges,&
+      & setGeometry, getLocalKS
   use dftbp_dftbplus_parser, only : TParserFlags, rootTag, parseHsdTree, readHsdFile
   use dftbp_dftbplus_qdepextpotgen, only : TQDepExtPotGen, TQDepExtPotGenWrapper
   use dftbp_dftbplus_qdepextpotproxy, only : TQDepExtPotProxy, TQDepExtPotProxy_init
@@ -102,8 +103,32 @@ module dftbp_mmapi
     procedure :: getElStatPotential => TDftbPlus_getElStatPotential
     !> Return the number of DFTB+ atoms in the system
     procedure :: nrOfAtoms => TDftbPlus_nrOfAtoms
+    !> Return the number of spin channels in the system
+    procedure :: nrOfSpin => TDftbPlus_nrOfSpin
     !> Return the number of k-points in the DFTB+ calculation (1 if non-repeating)
     procedure :: nrOfKPoints => TDftbPlus_nrOfKPoints
+    !> Return the number of (k-point,spin chanel) pairs in the process group
+    procedure :: nrOfLocalKS => TDftbPlus_nrOfLocalKS
+    !> get (k-point,spin chanel) pairs in current process group
+    procedure :: getLocalKS => TDftbPlus_getLocalKS
+    !> Queries weights of k-points
+    procedure :: getKWeights => TDftbPlus_getKWeights
+    !> Returns size of the basis set
+    procedure :: getBasisSize => TDftbPlus_getBasisSize
+    !> Whether the system is described with real matrices (complex otherwise)
+    procedure :: isHSReal => TDftbPlus_isHSReal
+    !> Register callback function to be invoked on each evaluation of the desity matrix
+    procedure :: registerDMCallback => TDftbPlus_registerDMCallback
+    !> Register callback function to be invoked on the first evaluation of the overlap matrix
+    procedure :: registerSCallback => TDftbPlus_registerSCallback
+    !> Register callback function to be invoked on the first evaluation of the hamiltonian matrix
+    procedure :: registerHCallback => TDftbPlus_registerHCallback
+  #:if WITH_SCALAPACK
+    !>TODO
+    procedure :: getOverlap => TDftbPlus_getOverlap
+    !>TODO
+    procedure :: getHamiltonian => TDftbPlus_getHamiltonian
+  #:endif
     !> Check that the list of species names has not changed
     procedure :: checkSpeciesNames => TDftbPlus_checkSpeciesNames
     !> Replace species and redefine all quantities that depend on it
@@ -608,22 +633,226 @@ contains
     nAtom = nrOfAtoms(this%main)
 
   end function TDftbPlus_nrOfAtoms
+  
+  !> Get (k-point,spin chanel) pairs in current process group
+  subroutine TDftbPlus_getLocalKS(this, localKS)
+
+    !> Instance
+    class(TDftbPlus), intent(in) :: this
+
+    !> The (K, S) tuples of the local processor group (localKS(1:2,iKS))
+    !> Usage: iK = localKS(1, iKS); iS = localKS(2, iKS)
+    integer, intent(out) :: localKS(:,:)
+    
+    call getLocalKS(this%main, localKS)
+
+  end subroutine TDftbPlus_getLocalKS
+
+  !> Queries weights of k-points
+  subroutine TDftbPlus_getKWeights(this, KWeights)
+
+    !> Instance
+    class(TDftbPlus), intent(in) :: this
+
+    !> Weights of k-points
+    real(dp), intent(out) :: KWeights(:)
+
+    KWeights(:) = this%main%kweight(:)
+
+  end subroutine TDftbPlus_getKWeights
+
+  !> Returns the nr. of spin channels in the system.
+  function TDftbPlus_nrOfSpin(this) result(nSpin)
+
+    !> Instance
+    class(TDftbPlus), intent(in) :: this
+
+    !> Nr. of spins channels
+    integer :: nSpin
+
+    call this%checkInit()
+
+    nSpin = nrOfSpin(this%main)
+
+  end function TDftbPlus_nrOfSpin
 
 
   !> Returns the nr. of k-points describing the system.
-  function TDftbPlus_nrOfKPoints(this) result(nKpts)
+  function TDftbPlus_nrOfKPoints(this) result(nKPoints)
 
     !> Instance
     class(TDftbPlus), intent(in) :: this
 
     !> Nr. of k-points
-    integer :: nKpts
+    integer :: nKPoints
 
     call this%checkInit()
 
-    nKpts = nrOfKPoints(this%main)
+    nKPoints = nrOfKPoints(this%main)
 
   end function TDftbPlus_nrOfKPoints
+
+
+  !> Return the number of (k-point,spin chanel) pairs in the process group.
+  function TDftbPlus_nrOfLocalKS(this) result(nLocalKS)
+
+    !> Instance
+    class(TDftbPlus), intent(in) :: this
+
+    !> Nr. of (k-point,spin chanel) pairs 
+    integer :: nLocalKS
+
+    call this%checkInit()
+
+    nLocalKS = nrOfLocalKS(this%main)
+
+  end function TDftbPlus_nrOfLocalKS
+
+
+  !> Returns size of the basis set
+  function TDftbPlus_getBasisSize(this) result(BasisSize)
+
+    !> Instance
+    class(TDftbPlus), intent(in) :: this
+    
+    integer BasisSize
+
+    call this%checkInit()
+    
+    BasisSize = this%main%denseDesc%fullSize
+
+  end function TDftbPlus_getBasisSize
+
+
+  !> Whether the system is described with real matrices
+  function TDftbPlus_isHSReal(this) result(HSReal)
+
+    !> Instance
+    class(TDftbPlus), intent(in) :: this
+    
+    logical HSReal
+
+    call this%checkInit()
+    
+    HSReal = this%main%tRealHS
+
+  end function TDftbPlus_isHSReal
+
+
+  !> Register callback function to be invoked on each evaluation of the desity matrix
+  subroutine TDftbPlus_registerDMCallback(this, callback, aux_ptr)
+    use dftbp_dftbplus_apicallback, only : TAPICallback, dmhs_callback_t
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> callback function for DM export
+    procedure(dmhs_callback_t), pointer:: callback
+
+    !> pointer to a context object for the DM callback
+    class(*), pointer :: aux_ptr
+
+    call this%checkInit()
+    call this%main%apicallback%registerDM(callback, aux_ptr)
+  end subroutine TDftbPlus_registerDMCallback
+
+
+  !> Register callback function to be invoked on the first evaluation of the overlap matrix
+  subroutine TDftbPlus_registerSCallback(this, callback, aux_ptr)
+    use dftbp_dftbplus_apicallback, only : TAPICallback, dmhs_callback_t
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> callback function for S export
+    procedure(dmhs_callback_t), pointer :: callback
+
+    !> pointer to a context object for the S callback
+    class(*), pointer :: aux_ptr
+
+    call this%checkInit()
+    call this%main%apicallback%registerS(callback, aux_ptr)
+  end subroutine TDftbPlus_registerSCallback
+
+
+  !> Register callback function to be invoked on the first evaluation of the hamiltonian matrix
+  subroutine TDftbPlus_registerHCallback(this, callback, aux_ptr)
+    use dftbp_dftbplus_apicallback, only : TAPICallback, dmhs_callback_t
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> callback function for H export
+    procedure(dmhs_callback_t), pointer :: callback
+
+    !> pointer to a context object for the H callback
+    class(*), pointer :: aux_ptr
+
+    call this%checkInit()
+    call this%main%apicallback%registerH(callback, aux_ptr)
+  end subroutine TDftbPlus_registerHCallback
+
+
+#:if WITH_SCALAPACK
+  !> TODO
+  function TDftbPlus_getOverlap(this, blacs_descr_ptr) result(data_ptr)
+    use iso_c_binding
+    use dftbp_dftbplus_apicallback, only : TAPICallback
+    use dftbp_extlibs_scalapackfx, only : DLEN_
+
+    !> Instance
+    class(TDftbPlus), intent(inout), target :: this
+
+    !> callback function for S export
+    type(c_ptr), value :: blacs_descr_ptr
+    
+    !> Returned pointer to dense overlap matrix
+    type(c_ptr) :: data_ptr
+    
+    integer(c_int), pointer :: blacs_descr(:)
+
+    call this%checkInit()
+    
+    call c_f_pointer(blacs_descr_ptr, blacs_descr, [DLEN_])
+    blacs_descr(:) = this%main%denseDesc%blacsOrbSqr
+    
+    if (this%isHSReal()) then
+      data_ptr = c_loc(this%main%SSqrReal(1,1))
+    else
+      data_ptr = c_loc(this%main%SSqrCplx(1,1))
+    endif
+  end function TDftbPlus_getOverlap
+
+
+  !> TODO
+  function TDftbPlus_getHamiltonian(this, blacs_descr_ptr) result(data_ptr)
+    use iso_c_binding
+    use dftbp_dftbplus_apicallback, only : TAPICallback
+    use dftbp_extlibs_scalapackfx, only : DLEN_
+
+    !> Instance
+    class(TDftbPlus), intent(inout), target :: this
+
+    !> callback function for S export
+    type(c_ptr), value :: blacs_descr_ptr
+    
+    !> Returned pointer to dense overlap matrix
+    type(c_ptr) :: data_ptr
+    
+    integer(c_int), pointer :: blacs_descr(:)
+
+    call this%checkInit()
+    
+    call c_f_pointer(blacs_descr_ptr, blacs_descr, [DLEN_])
+    blacs_descr(:) = this%main%denseDesc%blacsOrbSqr
+    
+    if (this%isHSReal()) then
+      data_ptr = c_loc(this%main%HSqrReal(1,1))
+    else
+      data_ptr = c_loc(this%main%HSqrCplx(1,1))
+    endif
+  end function TDftbPlus_getHamiltonian
+#:endif
 
 
   !> Returns the atomic masses for each atom in the system.
