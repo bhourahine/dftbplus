@@ -2269,9 +2269,6 @@ contains
       this%isEResp = allocated(input%ctrl%dynEFreq)
       if (this%isEResp) then
         call move_alloc(input%ctrl%dynEFreq, this%dynRespEFreq)
-        if (this%isRangeSep .and. any(this%dynRespEFreq /= 0.0_dp)) then
-          call error("Finite frequency range separated calculation not currently supported")
-        end if
       end if
 
       this%isKernelResp = allocated(input%ctrl%dynKernelFreq)

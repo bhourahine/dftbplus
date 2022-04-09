@@ -52,7 +52,7 @@ contains
   !> Calculate the derivative of density matrix from derivative of hamiltonian at q=0, k=0
   subroutine dRhoReal(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
       & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eigVals, Ef, tempElec, orb,&
-      & dRhoSparse, dRhoSqr, rangeSep, over, nNeighbourLC, transform, species,&
+      & dRhoSparse, dRhoSqr, rangeSep, maxFill, over, nNeighbourLC, transform, species,&
     #:if WITH_SCALAPACK
       & desc,&
     #:endif
@@ -114,6 +114,9 @@ contains
 
     !> Data for range-separated calculation
     type(TRangeSepFunc), allocatable, intent(inout) :: rangeSep
+
+    !> Maximum allowed number of electrons in a single particle state
+    real(dp), intent(in) :: maxFill
 
     !> sparse overlap matrix
     real(dp), intent(in) :: over(:)
@@ -369,6 +372,12 @@ contains
       end if
       call unpackHS(workLocal, over, neighbourList%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iSparseStart, img2CentCell)
+      block
+        integer :: ii
+        do ii = 1, size(workLocal, dim=2)
+          workLocal(ii+1:,ii) = workLocal(ii,ii+1:)
+        end do
+      end block
       call rangeSep%addLRHamiltonian(env, dRhoSqr(:,:,iS), over, neighbourList%iNeighbour,&
           & nNeighbourLC, denseDesc%iAtomStart, iSparseStart, orb, dRho, workLocal)
     end if
@@ -467,7 +476,7 @@ contains
     end if
 
     if (associated(dRhoSqr)) then
-      dRhoSqr(:,:,iS) = dRho
+      dRhoSqr(:,:,iS) = maxFill * dRho
     end if
 
   #:endif

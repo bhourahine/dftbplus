@@ -1190,7 +1190,7 @@ contains
 
           call dRhoReal(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
               & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eigVals, Ef, tempElec,&
-              & orb, drho(:,iS), dRhoOutSqr, rangeSep, over, nNeighbourLC, transform(iKS),&
+              & orb, drho(:,iS), dRhoOutSqr, rangeSep, maxFill, over, nNeighbourLC, transform(iKS),&
               & species,&
             #:if WITH_SCALAPACK
               & desc,&
@@ -1661,6 +1661,12 @@ contains
     #:if not WITH_SCALAPACK
       call unpackHS(sSqrReal, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
           & iSparseStart, img2CentCell)
+      block
+        integer :: ii
+        do ii = 1, size(sSqrReal, dim=2)
+          sSqrReal(ii+1:,ii) = sSqrReal(ii,ii+1:)
+        end do
+      end block
     #:endif
       allocate(dRhoOut(nOrbs * nOrbs * nSpin))
       dRhoOutSqr(1:nOrbs, 1:nOrbs, 1:nSpin) => dRhoOut(:nOrbs*nOrbs*nSpin)
