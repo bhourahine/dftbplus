@@ -17,7 +17,7 @@ module dftbp_dftb_spin
 
   private
   public :: getEnergySpin, getSpinShift
-  public :: Spin_getOrbitalEquiv, ud2qm, qm2ud
+  public :: Spin_getOrbitalEquiv, ud2qm, qm2ud, qm2Local
 
 
   !> Get the spin contribution to the energy
@@ -42,6 +42,7 @@ module dftbp_dftb_spin
     module procedure qm2ud3
     module procedure qm2ud4
   end interface qm2ud
+
 
 contains
 
@@ -343,5 +344,34 @@ contains
     end select
 
   end subroutine ud2qm4
+
+
+  !> Local up and down for non-collinear spin
+  subroutine qm2Local(qm, qmLocal, axis)
+
+    real(dp), intent(in) :: qm(:)
+
+    real(dp), intent(out) :: qmLocal(:)
+
+    real(dp), optional, intent(out) :: axis(:)
+
+    real(dp) :: mag
+
+    @:ASSERT(size(qm) == 4)
+    @:ASSERT(size(qmLocal) == 2)
+
+    mag = sqrt(sum(qm(2:)**2))
+    qmLocal(1) = qm(1)
+    qmLocal(2) = mag
+
+    if (present(axis)) then
+      @:ASSERT(size(axis) == 3)
+      axis(:) = 0.0_dp
+      if (mag > epsilon(0.0_dp)) then
+         axis(:) = qm(2:) / mag
+      end if
+    end if
+
+  end subroutine qm2Local
 
 end module dftbp_dftb_spin

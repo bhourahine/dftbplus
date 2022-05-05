@@ -27,7 +27,7 @@ module dftbp_dftbplus_mainio
   use dftbp_dftb_periodic, only : TNeighbourList
   use dftbp_dftb_sccinit, only : writeQToFile
   use dftbp_dftb_sparse2dense, only : unpackHS, unpackSPauli
-  use dftbp_dftb_spin, only : qm2ud
+  use dftbp_dftb_spin, only : qm2ud, qm2Local
   use dftbp_elecsolvers_elecsolvers, only : TElectronicSolver, electronicSolverTypes
   use dftbp_extlibs_xmlf90, only : xmlf_t, xml_OpenFile, xml_ADDXMLDeclaration, xml_NewElement,&
       & xml_EndElement, xml_Close
@@ -2755,10 +2755,8 @@ contains
     real(dp), intent(in), optional :: qNetAtom(:)
 
     real(dp), allocatable :: qOutputUpDown(:,:,:), qBlockOutUpDown(:,:,:,:)
-    real(dp) :: angularMomentum(3)
-    integer :: ang
-    integer :: nAtom
-    integer :: iAt, iSpin, iK, iSp, iSh, iOrb, ii, kk
+    real(dp) :: angularMomentum(3), qmLocal(2), axis(3)
+    integer :: ang, nAtom, iAt, iSpin, iK, iSp, iSh, iOrb, ii, kk
     character(sc), allocatable :: shellNamesTmp(:)
     character(lc) :: strTmp
 
@@ -2808,6 +2806,31 @@ contains
 
     if (nSpin == 4) then
       if (tPrintMulliken) then
+
+        call qm2Local(sum(sum(qOutput(:, iAtInCentralRegion, :), dim=1), dim=1), qmLocal, axis)
+        write(fd,"(A, F12.6, A, F12.6, A)", advance='NO')'Electrons',  qmLocal(1), '(nr)',&
+            & qmLocal(2), '(m)'
+        if (qmLocal(2) > epsilon(0.0_dp)) then
+          write(fd,"(2X,A,3F10.6)")'axis:', axis
+        else
+          write(fd,*)
+        end if
+        write(fd,*)
+        write(fd, "(/, A)") 'Atom populations'
+        write(fd, "(A5, T13,A,T29,A,T43,A)") " Atom", "Nr. electrons", "spin",&
+            & "axis of projection (x y z)"
+        do ii = 1, size(iAtInCentralRegion)
+          iAt = iAtInCentralRegion(ii)
+          call qm2Local(sum(qOutput(:, iAt, :),dim=1), qmLocal, axis)
+          write(fd,"(1X,I5,2F16.8)", advance='NO')iAt, qmLocal
+          if (qmLocal(2) >= 1.0E-8_dp) then
+            write(fd,"(2X, 3F10.6)")axis
+          else
+            write(fd,*)
+          end if
+        end do
+        write(fd,*)
+
         do iSpin = 1, 4
 
           write(fd,"(3A, F16.8)") 'Nr. of electrons (', quaternionName(iSpin), '):',&
