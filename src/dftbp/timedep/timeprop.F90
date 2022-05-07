@@ -21,6 +21,7 @@ module dftbp_timedep_timeprop
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
   use dftbp_common_status, only : TStatus
   use dftbp_common_timer, only : TTimer
+  use dftbp_derivs_conjgrad, only : conjgrad
   use dftbp_dftb_bondpopulations, only : addPairWiseBondInfo
   use dftbp_dftb_boundarycond, only : TBoundaryConditions
   use dftbp_dftb_densitymatrix, only : makeDensityMatrix
@@ -56,6 +57,7 @@ module dftbp_timedep_timeprop
   use dftbp_math_lapackroutines, only : matinv, gesv
   use dftbp_math_ranlux, only : TRanlux
   use dftbp_math_simplealgebra, only : determinant33
+  use dftbp_math_sparseblas, only : symm
   use dftbp_md_dummytherm, only : TDummyThermostat
   use dftbp_md_mdcommon, only : TMDCommon
   use dftbp_md_mdintegrator, only : TMDIntegrator, reset, init, state, next
@@ -354,6 +356,9 @@ module dftbp_timedep_timeprop
 
   !> Prefix for dump files for restart
   character(*), parameter :: restartFileName = 'tddump'
+
+  !> Temporary sparse operation flag
+  logical, parameter :: isTimePropSparse = .true.
 
 contains
 
@@ -1812,7 +1817,7 @@ contains
     ham0(:) = H0
 
     if (this%tRealHS) then
-      allocate(T2(this%nOrbs,this%nOrbs))
+      allocate(T2(this%nOrbs, this%nOrbs))
       allocate(T3(this%nOrbs, this%nOrbs))
     else
       allocate(T4(this%nOrbs,this%nOrbs))
@@ -1823,15 +1828,21 @@ contains
       Sinv(:,:,:) = 0.0_dp
       do iKS = 1, this%parallelKS%nLocalKS
         if (this%tRealHS) then
-          call unpackHS(T2, ints%overlap, iNeighbour, nNeighbourSK, iSquare, iSparseStart,&
-              & img2CentCell)
-          call blockSymmetrizeHS(T2, iSquare)
-          Ssqr(:,:,iKS) = cmplx(T2, 0, dp)
           T3(:,:) = 0.0_dp
           do iOrb = 1, this%nOrbs
             T3(iOrb, iOrb) = 1.0_dp
           end do
-          call gesv(T2, T3)
+          call unpackHS(T2, ints%overlap, iNeighbour, nNeighbourSK, iSquare, iSparseStart,&
+              & img2CentCell)
+          call blockSymmetrizeHS(T2, iSquare)
+          Ssqr(:,:,iKS) = cmplx(T2, 0, dp)
+          if (isTimePropSparse) then
+            T2(:,:) = T3
+            call conjgrad(ints%overlap, T2, T3, iNeighbour, nNeighbourSK, img2CentCell,&
+                & iSparseStart, iSquare, orb)
+          else
+            call gesv(T2, T3)
+          end if
           Sinv(:,:,iKS) = cmplx(T3, 0, dp)
         else
           iK = this%parallelKS%localKS(1, iKS)
@@ -2880,7 +2891,7 @@ contains
     if (this%tRealHS) then
       allocate(Sreal(this%nOrbs,this%nOrbs))
       allocate(SinvReal(this%nOrbs,this%nOrbs))
-      Sreal = 0.0_dp
+      Sreal(:,:) = 0.0_dp
       call unpackHS(Sreal, ints%overlap, neighbourList%iNeighbour, nNeighbourSK, iSquare,&
           & iSparseStart, img2CentCell)
       call blockSymmetrizeHS(Sreal, iSquare)
@@ -2888,12 +2899,18 @@ contains
         Ssqr(:,:,iKS) = cmplx(Sreal, 0, dp)
       end do
 
-      SinvReal = 0.0_dp
+      SinvReal(:,:) = 0.0_dp
       do iOrb = 1, this%nOrbs
         SinvReal(iOrb, iOrb) = 1.0_dp
       end do
-      call gesv(Sreal, SinvReal)
 
+      if (isTimePropSparse) then
+        sReal(:,:) = SinvReal
+        call conjgrad(ints%overlap, sReal, sInvReal, neighbourList%iNeighbour, nNeighbourSK,&
+            & img2CentCell, iSparseStart, iSquare, orb)
+      else
+        call gesv(Sreal, SinvReal)
+      end if
       do iKS = 1, this%parallelKS%nLocalKS
         Sinv(:,:,iKS) = cmplx(SinvReal, 0, dp)
       end do
@@ -3794,7 +3811,7 @@ contains
       call initIonDynamics(this, this%coordNew, coord, this%movedAccel)
     end if
 
-    ! Apply kick to rho if necessary (in restart case, check it starttime is 0 or not)
+    ! Apply kick to rho if necessary (in restart case, check it's start time is 0 or not)
     if (this%tKick .and. this%startTime < this%dt / 10.0_dp) then
       call kickDM(this, this%trho, this%Ssqr, this%Sinv, iSquare, coord)
     end if
