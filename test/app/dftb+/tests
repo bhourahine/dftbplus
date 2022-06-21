@@ -99,11 +99,11 @@ rangesep/Thymine-T1-force              #? not WITH_MPI
 rangesep/cyclopropene_nb_restart       #? not WITH_MPI
 rangesep/C240_tn                       #? not WITH_MPI and LONG_TEST
 rangesep/Thymine-T1_onsite             #? not WITH_MPI
-rangesep/C4H6-Casida-S1-Force          #? WITH_ARPACK and (not WITH_MPI)
-rangesep/Benzene-Casida-S5-Force       #? WITH_ARPACK and (not WITH_MPI)
-rangesep/C4H6-TD-LC-Triplet            #? WITH_ARPACK and (not WITH_MPI)
-rangesep/Benzene-TD-LC-Spinpol         #? WITH_ARPACK and (not WITH_MPI)
-rangesep/Benzene-TD-LC-Spinpol-Iter    #? WITH_ARPACK and (not WITH_MPI)
+rangesep/C4H6-Casida-S1-Force          #? not WITH_MPI
+rangesep/Benzene-Casida-S5-Force       #? not WITH_MPI
+rangesep/C4H6-TD-LC-Triplet            #? not WITH_MPI
+rangesep/Benzene-TD-LC-Spinpol         #? not WITH_MPI
+rangesep/Benzene-TD-LC-Spinpol-Iter    #? not WITH_MPI
 
 reks/C2H4_3SSR_rangesep                #? not WITH_MPI
 reks/C2H4_direct                       #? not WITH_MPI
@@ -317,13 +317,13 @@ timedep/C4H6-T1-Force                  #? WITH_ARPACK and MPI_PROCS <= 1
 timedep/C4H6-Triplet                   #? WITH_ARPACK and MPI_PROCS <= 1
 timedep/C4H6-S1-Force_uncache          #? WITH_ARPACK and MPI_PROCS <= 1
 timedep/NH-Force-spinpol               #? WITH_ARPACK and MPI_PROCS <= 1
-timedep/2CH3-Temp-Stratmann            #? WITH_ARPACK and MPI_PROCS <= 1
-timedep/C4H6-S1-Force_uncache-Stratmann #? WITH_ARPACK and MPI_PROCS <= 1
-timedep/C4H6-Singlet-Stratmann         #? WITH_ARPACK and MPI_PROCS <= 1
-timedep/C4H6-Triplet-Stratmann         #? WITH_ARPACK and MPI_PROCS <= 1
-timedep/NH-Force-spinpol-Stratmann     #? WITH_ARPACK and MPI_PROCS <= 1
-timedep/NO-Stratmann                   #? WITH_ARPACK and MPI_PROCS <= 1
-timedep/propadiene_OscWindow-Stratmann #? WITH_ARPACK and MPI_PROCS <= 1
+timedep/2CH3-Temp-Stratmann            #? MPI_PROCS <= 1
+timedep/C4H6-S1-Force_uncache-Stratmann #? MPI_PROCS <= 1
+timedep/C4H6-Singlet-Stratmann         #? MPI_PROCS <= 1
+timedep/C4H6-Triplet-Stratmann         #? MPI_PROCS <= 1
+timedep/NH-Force-spinpol-Stratmann     #? MPI_PROCS <= 1
+timedep/NO-Stratmann                   #? MPI_PROCS <= 1
+timedep/propadiene_OscWindow-Stratmann #? MPI_PROCS <= 1
 
 dftb+u/Fe4                             #? MPI_PROCS <= 2
 dftb+u/Fe4_read                        #? MPI_PROCS <= 2

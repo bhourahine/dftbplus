@@ -11,7 +11,7 @@
 !>
 !> The functionality of the module has some limitation:
 !> * Third order does not work.
-!> * Periodic system do not work yet apart from Gamma point.
+!> * Periodic system do not work yet apart from Gamma point (energies only).
 !> * Orbital potentials or spin-orbit does not work yet.
 !> * Only for closed shell or colinear spin polarization (excitation energies only in that
 !>   case).
@@ -22,10 +22,11 @@ module dftbp_timedep_linresp
   use dftbp_dftb_scc, only : TScc
   use dftbp_dftb_slakocont, only : TSlakoCont
   use dftbp_extlibs_arpack, only : withArpack
+  use dftbp_extlibs_elsirciiface, only : withElsiRci
   use dftbp_io_message, only : error
   use dftbp_io_taggedoutput, only : TTaggedWriter
   use dftbp_timedep_linrespgrad, only : LinRespGrad_old
-  use dftbp_timedep_linresptypes, only : TLinResp
+  use dftbp_timedep_linresptypes, only : TLinResp, linRespSolverTypes
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_dftb_rangeseparated, only : TRangeSepFunc
@@ -99,8 +100,8 @@ module dftbp_timedep_linresp
     !> dipole strengths to excited states
     logical :: tTradip
 
-    !> RPA solver is Arpack (or Stratmann if .false.)
-    logical :: tUseArpack
+    !> RPA solver choice
+    integer :: iLinRespSolver
 
     !> subspace dimension factor Stratmann diagonaliser
     integer :: subSpaceFactorStratmann
@@ -136,65 +137,64 @@ contains
     real(dp), allocatable :: onSiteMatrixElements(:,:,:,:)
 
     this%tinit = .false.
-    this%tUseArpack = ini%tUseArpack
-    this%subSpaceFactorStratmann = ini%subSpaceFactorStratmann
-    if (withArpack) then
+    this%iLinRespSolver = ini%iLinRespSolver
 
-      this%nExc = ini%nExc
-      this%tEnergyWindow = ini%tEnergyWindow
-      this%energyWindow = ini%energyWindow
-      this%tOscillatorWindow = ini%tOscillatorWindow
-      this%oscillatorWindow = ini%oscillatorWindow
-      ! Final decision on value of tCacheChargesSame is made in linRespGrad
-      this%tCacheChargesOccVir = ini%tCacheCharges
-      this%tCacheChargesSame = ini%tCacheCharges
-      this%nStat = ini%nStat
-      this%symmetry = ini%sym
-
-      this%tWriteDensityMatrix = ini%tWriteDensityMatrix
-
-      if (this%tOscillatorWindow .and. this%OscillatorWindow <= 0.0_dp) then
-        call error("Excited Oscillator window should be non-zero if used")
-      end if
-      if (this%tEnergyWindow .and. this%energyWindow <= 0.0_dp) then
-        call error("Excited energy window should be non-zero if used")
-      end if
-
-      this%writeMulliken = ini%tMulliken
-      this%writeCoeffs = ini%tCoeffs
-      this%tGrndState = ini%tGrndState
-      this%writeTrans = ini%tTrans
-      this%writeTransQ = ini%tTransQ
-      this%writeSPTrans = ini%tSPTrans
-      this%writeXplusY = ini%tXplusY
-      this%writeTransDip = ini%tTradip
-
-      this%nAtom = nAtom
-      this%nEl = nEl
-
-      call move_alloc(ini%spinW, this%spinW)
-      call move_alloc(ini%hubbardU, this%HubbardU)
-      if (allocated(onSiteMatrixElements)) then
-        allocate(this%onSiteMatrixElements(size(onSiteMatrixElements,dim=1),&
-            & size(onSiteMatrixElements,dim=2), size(onSiteMatrixElements,dim=3),&
-            & size(onSiteMatrixElements,dim=4)))
-        this%onSiteMatrixElements(:,:,:,:) = onSiteMatrixElements
-      end if
-
+    if (any([linrespSolverTypes%Arpack,linrespSolverTypes%ElsiRci,linrespSolverTypes%Stratmann] ==&
+        & this%iLinRespSolver)) then
       this%tinit = .true.
+    else
+      call error('Internal error: Illegal routine call to LinResp_init.')
     end if
 
-    if (withArpack) then
+    this%nExc = ini%nExc
+    this%tEnergyWindow = ini%tEnergyWindow
+    this%energyWindow = ini%energyWindow
+    this%tOscillatorWindow = ini%tOscillatorWindow
+    this%oscillatorWindow = ini%oscillatorWindow
+    ! Final decision on value of tCacheChargesSame is made in linRespGrad
+    this%tCacheChargesOccVir = ini%tCacheCharges
+    this%tCacheChargesSame = ini%tCacheCharges
+    this%nStat = ini%nStat
+    this%symmetry = ini%sym
 
+    this%tWriteDensityMatrix = ini%tWriteDensityMatrix
+
+    if (this%tOscillatorWindow .and. this%OscillatorWindow <= 0.0_dp) then
+      call error("Excited Oscillator window should be non-zero if used")
+    end if
+    if (this%tEnergyWindow .and. this%energyWindow <= 0.0_dp) then
+      call error("Excited energy window should be non-zero if used")
+    end if
+
+    this%writeMulliken = ini%tMulliken
+    this%writeCoeffs = ini%tCoeffs
+    this%tGrndState = ini%tGrndState
+    this%writeTrans = ini%tTrans
+    this%writeTransQ = ini%tTransQ
+    this%writeSPTrans = ini%tSPTrans
+    this%writeXplusY = ini%tXplusY
+    this%writeTransDip = ini%tTradip
+
+    this%nAtom = nAtom
+    this%nEl = nEl
+
+    call move_alloc(ini%spinW, this%spinW)
+    call move_alloc(ini%hubbardU, this%HubbardU)
+    if (allocated(onSiteMatrixElements)) then
+      allocate(this%onSiteMatrixElements(size(onSiteMatrixElements,dim=1),&
+          & size(onSiteMatrixElements,dim=2), size(onSiteMatrixElements,dim=3),&
+          & size(onSiteMatrixElements,dim=4)))
+      this%onSiteMatrixElements(:,:,:,:) = onSiteMatrixElements
+    end if
+
+    select case(this%iLinRespSolver)
+    case(linrespSolverTypes%Arpack)
       this%testArnoldi = ini%tDiagnoseArnoldi
       this%tArnoldi = ini%tArnoldi
-      this%tinit = .true.
-
-    else
-
-      call error('Internal error: Illegal routine call to LinResp_init.')
-
-    endif
+    case(linrespSolverTypes%ElsiRci)
+    case (linrespSolverTypes%Stratmann)
+      this%subSpaceFactorStratmann = ini%subSpaceFactorStratmann
+    end select
 
   end subroutine LinResp_init
 
@@ -228,7 +228,7 @@ contains
     !> central cell atomic coordinates
     real(dp), intent(in) :: coords0(:,:)
 
-    !> This-consistent charge module settings
+    !> Self-consistent charge module settings
     type(TScc), intent(in) :: sccCalc
 
     !> Gross Mulliken atomic charges for ground state
@@ -266,14 +266,13 @@ contains
 
     real(dp), pointer :: dummyPtr(:,:,:) => null()
 
-    if (withArpack) then
-      @:ASSERT(this%tInit)
+    if (this%tInit) then
       @:ASSERT(size(orb%nOrbAtom) == this%nAtom)
       call LinRespGrad_old(tSpin, this, denseDesc%iAtomStart, eigVec, eigVal, sccCalc, dqAt,&
           & coords0, SSqrReal, filling, species0, iNeighbour, img2CentCell, orb, tWriteTagged,&
           & fdTagged, taggedWriter, rangeSep, excEnergy, allExcEnergies, dummyPtr)
     else
-      call error('Internal error: Illegal routine call to LinResp_calcExcitations')
+      call error('Internal error: Illegal routine call to LinResp_calcExcitations.')
     end if
 
   end subroutine linResp_calcExcitations
@@ -372,8 +371,8 @@ contains
 
     real(dp), allocatable :: shiftPerAtom(:), shiftPerL(:,:)
 
-    if (withArpack) then
-      @:ASSERT(this%tInit)
+    if (this%tInit) then
+
       @:ASSERT(this%nAtom == size(orb%nOrbAtom))
       @:ASSERT(allocated(occNatural) .eqv. allocated(naturalOrbs))
 
@@ -396,7 +395,9 @@ contains
       end if
 
     else
+
       call error('Internal error: Illegal routine call to LinResp_addGradients.')
+
     endif
 
   end subroutine LinResp_addGradients

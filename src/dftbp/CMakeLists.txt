@@ -118,6 +118,11 @@ if(WITH_ELSI)
   endif()
 endif()
 
+if(WITH_ELSI_RCI)
+  # Some compilers need all mod files (also indirect ones)
+  target_link_libraries(dftbplus PUBLIC elsi_rci::elsi_rci)
+endif()
+
 if(WITH_PLUMED)
   target_link_libraries(dftbplus PRIVATE Plumed::Plumed)
 endif()

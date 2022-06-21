@@ -12,7 +12,19 @@ module dftbp_timedep_linresptypes
   use dftbp_common_accuracy, only : dp
   implicit none
 
-  public
+  private
+  public :: TLinResp, linRespSolverTypes
+
+  !> Enumeration over possible solvers for RPA eqns.
+  type :: TLinRespSolverEnum
+    integer :: None = 0
+    integer :: Arpack = 1
+    integer :: Stratmann = 2
+    integer :: ElsiRci = 3
+  end type TLinRespSolverEnum
+
+  !> Solver choices
+  type(TLinRespSolverEnum), parameter :: linRespSolverTypes = TLinRespSolverEnum()
 
   !> Data type for linear response internal settings
   type :: TLinResp
@@ -94,10 +106,12 @@ module dftbp_timedep_linresptypes
     !> Should the density matrix be stored to disc?
     logical :: tWriteDensityMatrix
 
-    ! ARPACK/Stratmann related
+    ! Solver related
 
-    !> Should we use the Arpack solver for the RPA equations? (or the Stratman one)
-    logical :: tUseArpack = .true.
+    !> Which solver should be used for the RPA equations?
+    integer :: iLinRespSolver = linrespSolverTypes%None
+
+    ! ARPACK related
 
     !> write state of Arnoldi solver to disc
     logical :: tArnoldi
@@ -105,8 +119,16 @@ module dftbp_timedep_linresptypes
     !> whether Arnoldi solver tests should be made (with results written to file)
     logical :: testArnoldi = .false.
 
+    ! Stratmann related
+
     !> subspace dimension factor Stratmann diagonaliser
     integer :: subSpaceFactorStratmann
+
+    ! ELSI reverse communication related
+
+
+
+    ! Data structure related
 
     !> Is the data structure initialised?
     logical :: tInit = .false.

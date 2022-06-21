@@ -33,7 +33,7 @@ module dftbp_timedep_linrespgrad
       & getSPExcitations, calcTransitionDipoles, dipselect, transitionDipole, writeSPExcitations,&
       & getExcSpin, writeExcMulliken, actionAplusB, actionAminusB, intialSubSpaceMatrixApmB,&
       & calcMatrixSqrt, incMemStratmann, orthonormalizeVectors, getSqrOcc
-  use dftbp_timedep_linresptypes, only : TLinResp
+  use dftbp_timedep_linresptypes, only : TLinResp, linRespSolverTypes
   use dftbp_timedep_transcharges, only : TTransCharges, transq, TTransCharges_init
   use dftbp_type_commontypes, only : TOrbitals
 
@@ -546,26 +546,28 @@ contains
     ALLOCATE(iatrans(norb, norb, nSpin))
     call rindxov_array(win, nxov, nxoo, nxvv, getIA, getIJ, getAB, iatrans)
 
-    if (this%tUseArpack .and. tRangeSep) then
+    if (this%iLinRespSolver /= linrespSolverTypes%Stratmann .and. tRangeSep) then
       call error("Range separation requires the Stratmann solver for excitations")
     end if
 
     do isym = 1, size(symmetries)
 
       sym = symmetries(isym)
-      if (withArpack .and. this%tUseArpack .and. (.not. tRangeSep)) then
+      select case(this%iLinRespSolver)
+      case(linrespSolverTypes%Arpack)
         call buildAndDiagExcMatrixArpack(tSpin, wij(:nxov_rd), sym, win, nocc_ud, nvir_ud,&
             & nxoo_ud, nxvv_ud, nxov_ud, nxov_rd, iaTrans, getIA, getIJ, getAB, iAtomStart,&
             & ovrXev, grndEigVecs, filling, sqrOccIA(:nxov_rd), gammaMat, species0, this%spinW,&
             & transChrg, this%testArnoldi, eval, xpy, xmy, this%onSiteMatrixElements, orb,&
             & tRangeSep, tZVector)
-      else
+      case (linrespSolverTypes%Stratmann)
         call buildAndDiagExcMatrixStratmann(tSpin, this%subSpaceFactorStratmann, wij(:nxov_rd),&
             & sym, win, nocc_ud, nvir_ud, nxoo_ud, nxvv_ud, nxov_ud, nxov_rd, iaTrans, getIA,&
             & getIJ, getAB, iAtomStart, ovrXev, grndEigVecs, filling, sqrOccIA(:nxov_rd), gammaMat,&
             & species0, this%spinW, transChrg, eval, xpy, xmy, this%onSiteMatrixElements, orb,&
             & tRangeSep, lrGamma, tZVector)
-      end if
+      case (linrespSolverTypes%ElsiRci)
+      end select
 
       ! Excitation oscillator strengths for resulting states
       call getOscillatorStrengths(sym, tSpin, snglPartTransDip(1:nxov_rd,:), eval, xpy, &
