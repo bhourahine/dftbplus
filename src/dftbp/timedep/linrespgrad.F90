@@ -25,7 +25,7 @@ module dftbp_timedep_linrespgrad
   use dftbp_io_taggedoutput, only : TTaggedWriter, tagLabels
   use dftbp_math_blasroutines, only : gemm, hemv, symm, herk
   use dftbp_math_degeneracy, only : TDegeneracyFind
-  use dftbp_math_eigensolver, only : heev
+  use dftbp_math_eigensolver, only : heev, syevd, syevr
   use dftbp_math_qm, only : makeSimilarityTrans
   use dftbp_math_sorting, only : index_heap_sort, merge_sort
   use dftbp_timedep_linrespcommon, only : excitedDipoleOut, excitedQOut, twothird,&
@@ -33,7 +33,7 @@ module dftbp_timedep_linrespgrad
       & getSPExcitations, calcTransitionDipoles, dipselect, transitionDipole, writeSPExcitations,&
       & getExcSpin, writeExcMulliken, actionAplusB, actionAminusB, intialSubSpaceMatrixApmB,&
       & calcMatrixSqrt, incMemStratmann, orthonormalizeVectors, getSqrOcc
-  use dftbp_timedep_linresptypes, only : TLinResp, linRespSolverTypes
+  use dftbp_timedep_linresptypes, only : TLinResp, linRespSolverTypes, linRespDiagTypes
   use dftbp_timedep_transcharges, only : TTransCharges, transq, TTransCharges_init
   use dftbp_type_commontypes, only : TOrbitals
 
@@ -49,14 +49,10 @@ module dftbp_timedep_linrespgrad
   character(*), parameter :: excitationsOut = "EXC.DAT"
   character(*), parameter :: transDipOut = "TDP.DAT"
 
-
   ! Solver related variables
 
   !> Tolerance for ARPACK solver.
   real(dp), parameter :: ARTOL = epsilon(1.0_rsp)
-
-  !> Threshold for Stratmann solver
-  real(dp), parameter :: CONV_THRESH_STRAT = epsilon(1.0_rsp)
 
   !> Maximal allowed iteration in the ARPACK solver.
   integer, parameter :: MAX_AR_ITER = 300
@@ -65,6 +61,8 @@ module dftbp_timedep_linrespgrad
   character(*), parameter :: arpackOut = "ARPACK.DAT"
   character(*), parameter :: testArpackOut = "TEST_ARPACK.DAT"
 
+  !> Threshold for Stratmann solver
+  real(dp), parameter :: CONV_THRESH_STRAT = epsilon(1.0_rsp)
 
 contains
 
@@ -565,7 +563,7 @@ contains
             & sym, win, nocc_ud, nvir_ud, nxoo_ud, nxvv_ud, nxov_ud, nxov_rd, iaTrans, getIA,&
             & getIJ, getAB, iAtomStart, ovrXev, grndEigVecs, filling, sqrOccIA(:nxov_rd), gammaMat,&
             & species0, this%spinW, transChrg, eval, xpy, xmy, this%onSiteMatrixElements, orb,&
-            & tRangeSep, lrGamma, tZVector)
+            & tRangeSep, lrGamma, tZVector, this%iDiagSolver)
       case (linrespSolverTypes%ElsiRci)
       end select
 
@@ -980,7 +978,7 @@ contains
   subroutine buildAndDiagExcMatrixStratmann(tSpin, subSpaceFactor, wij, sym, win, nocc_ud, nvir_ud,&
       & nxoo_ud, nxvv_ud, nxov_ud, nxov_rd, iaTrans, getIA, getIJ, getAB, iAtomStart, ovrXev,&
       & grndEigVecs, filling, sqrOccIA, gammaMat, species0, spinW, transChrg, eval, xpy, xmy,&
-      & onsMEs, orb, tRangeSep, lrGamma, tZVector)
+      & onsMEs, orb, tRangeSep, lrGamma, tZVector, iDiag)
 
     !> spin polarisation?
     logical, intent(in) :: tSpin
@@ -1077,6 +1075,9 @@ contains
 
     !> is the Z-vector equation to be solved later?
     logical, intent(in) :: tZVector
+
+    !> Choice of diagonaliser for the sub-space problem
+    integer, intent(in) :: iDiag
 
     real(dp), allocatable :: vecB(:,:) ! basis of subspace
     real(dp), allocatable :: evecL(:,:), evecR(:,:) ! left and right eigenvectors of Mnh
@@ -1181,17 +1182,26 @@ contains
             & iaTrans, gammaMat, lrGamma, species0, spinW, tSpin, tRangeSep, vP, vM, mP, mM)
       end if
 
-      call calcMatrixSqrt(mM, subSpaceDim, memDim, workArray, workDim, mMsqrt, mMsqrtInv)
+      call calcMatrixSqrt(mM, subSpaceDim, memDim, mMsqrt, mMsqrtInv, iDiag)
       call dsymm('L', 'U', subSpaceDim, subSpaceDim, 1.0_dp, mP, memDim, mMsqrt, memDim,&
           & 0.0_dp, dummyM, memDim)
       call dsymm('L', 'U', subSpaceDim, subSpaceDim, 1.0_dp, mMsqrt, memDim, dummyM, memDim,&
           & 0.0_dp, mH, memDim)
 
       ! Diagonalise in subspace
-      call dsyev('V', 'U', subSpaceDim, mH, memDim, evalInt, workArray, workDim, info)
+      !call dsyev('V', 'U', subSpaceDim, mH, memDim, evalInt, workArray, workDim, info)
+      select case (iDiag)
+      case (linRespDiagTypes%QR)
+        call heev(mH(:, :subSpaceDim), evalInt(:subSpaceDim), 'U', 'V', info=info)
+      case (linRespDiagTypes%DC)
+        call syevd(mH(:, :subSpaceDim), evalInt(:subSpaceDim), 'U', 'V', info=info)
+      case (linRespDiagTypes%RR)
+        call syevr(mH(:, :subSpaceDim), evalInt(:subSpaceDim), 'U', 'V', info=info)
+      case default
+        call error('TDDFT internal error')
+      end select
       if (info /= 0) then
-        write(tmpStr,'(A)') 'TDDFT diagonalisation. Increase SubSpaceStratmann.'
-        call error(tmpStr)
+        call error('TDDFT diagonalisation. Increase SubSpaceStratmann.')
       endif
 
       ! This yields T=(A-B)^(-1/2)|X+Y>.

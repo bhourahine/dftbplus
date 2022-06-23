@@ -14,7 +14,9 @@ module dftbp_timedep_linrespcommon
   use dftbp_dftb_onsitecorrection, only : getOnsME
   use dftbp_io_message, only : error
   use dftbp_math_blasroutines, only : hemv
+  use dftbp_math_eigensolver, only : heev, syevd, syevr
   use dftbp_math_sorting, only : index_heap_sort
+  use dftbp_timedep_linresptypes, only : linRespDiagTypes
   use dftbp_timedep_transcharges, only : TTransCharges, transq
   use dftbp_type_commontypes, only : TOrbitals
   implicit none
@@ -1728,26 +1730,47 @@ contains
 
   end subroutine incSizeMatBothDim
 
-  !> Same routine exists in rs_linresp and will be removed
+
   !> Calculate square root and inverse of sqrt of a real, symmetric positive definite matrix
-  subroutine calcMatrixSqrt(matIn, spaceDim, memDim, workArray, workDim, matOut, matInvOut)
+  subroutine calcMatrixSqrt(matIn, spaceDim, memDim, matOut, matInvOut, iDiag)
 
+    !> Matrix to process
     real(dp), intent(in) :: matIn(:,:)
-    integer, intent(in) :: spaceDim, memDim
-    real(dp), intent(out) :: matOut(:,:), matInvOut(:,:)
-    real(dp) :: workArray(:)
-    integer :: workDim
 
-    real(dp) :: dummyEV(spaceDim)
-    real(dp) :: dummyM(spaceDim, spaceDim), dummyM2(spaceDim, spaceDim)
-    integer :: info
-    integer :: ii
+    !> Order of the matrix
+    integer, intent(in) :: spaceDim
 
-    dummyM(:,:) = matIn(1:spaceDim,1:spaceDim)
+    !> leading dimension of the matrix
+    integer, intent(in) :: memDim
 
-    call dsyev('V', 'U', spaceDim, dummyM, spaceDim, dummyEV, workArray, workDim, info)
+    !> Matrix square root
+    real(dp), intent(out) :: matOut(:,:)
 
-    !calc. sqrt
+    !> Inverse of square root matrix
+    real(dp), intent(out) :: matInvOut(:,:)
+
+    !> Choice of diagonaliser to decompose matrix
+    integer, intent(in) :: iDiag
+
+    real(dp) :: dummyEV(spaceDim), dummyM(spaceDim, spaceDim), dummyM2(spaceDim, spaceDim)
+    integer :: info, ii
+
+    dummyM(:,:) = matIn(:spaceDim,:spaceDim)
+
+    !call dsyev('V', 'U', spaceDim, dummyM, spaceDim, dummyEV, workArray, workDim, info)
+    select case (iDiag)
+    case (linRespDiagTypes%QR)
+      call heev(dummyM, dummyEV, 'U', 'V', info)
+    case (linRespDiagTypes%DC)
+      call syevd(dummyM, dummyEV, 'U', 'V', info)
+    case (linRespDiagTypes%RR)
+      call syevr(dummyM, dummyEV, 'U', 'V', info)
+    end select
+    if (info /= 0) then
+      call error("Stratmann solver internal error")
+    end if
+
+    ! calc. sqrt
     do ii = 1, spaceDim
       dummyM2(:,ii) = sqrt(dummyEV(ii)) * dummyM(:,ii)
     end do
@@ -1755,7 +1778,7 @@ contains
     call dgemm('N', 'T', spaceDim, spaceDim, spaceDim, 1.0_dp, dummyM2, spaceDim, dummyM,&
         & spaceDim, 0.0_dp, matOut, memDim)
 
-    !calc. inv. of sqrt
+    ! calc. inv. of sqrt
     do ii = 1, spaceDim
       dummyM2(:,ii) = dummyM(:,ii) / sqrt(dummyEV(ii))
     end do

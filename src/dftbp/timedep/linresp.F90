@@ -106,6 +106,9 @@ module dftbp_timedep_linresp
     !> subspace dimension factor Stratmann diagonaliser
     integer :: subSpaceFactorStratmann
 
+    !> Matrix diagonalizer used inside the Stratmann solver
+    integer :: iStratmannInternalDiag
+
     !> print state of Arnoldi solver
     logical :: tArnoldi
 
@@ -194,6 +197,7 @@ contains
     case(linrespSolverTypes%ElsiRci)
     case (linrespSolverTypes%Stratmann)
       this%subSpaceFactorStratmann = ini%subSpaceFactorStratmann
+      this%iDiagSolver = ini%iStratmannInternalDiag
     end select
 
   end subroutine LinResp_init

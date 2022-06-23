@@ -167,6 +167,93 @@ module dftbp_extlibs_lapack
   end interface zheev
 
 
+  !> Real symmetric eigensolver
+  interface ssyevd
+
+    !> Real symmetric eigensolver
+    subroutine ssyevd(jobz, uplo, nn, aa, lda, ww, work, lwork, iwork, liwork, info)
+      import rsp
+
+      !> job type
+      character, intent(in) :: jobz
+
+      !> Upper 'U' or lower 'L' triangle
+      character, intent(in) :: uplo
+
+      !> matrix dimension
+      integer, intent(in) :: nn
+
+      !> Leading dimension of A
+      integer, intent(in) :: lda
+
+      !> matrix A
+      real(rsp), intent(inout) :: aa(lda, *)
+
+      !> Eigenvalues
+      real(rsp), intent(out) :: ww(*)
+
+      !> workspace
+      real(rsp), intent(inout) :: work(*)
+
+      !> workspace sizing
+      integer, intent(in) :: lwork
+
+      !> integer workspace
+      integer, intent(inout) :: iwork(*)
+
+      !> workspace sizing
+      integer, intent(in) :: liwork
+
+      !> state of routine on return
+      integer, intent(out) :: info
+    end subroutine ssyevd
+  end interface ssyevd
+
+
+  !> Double precision symmetric eigensolver
+  interface dsyevd
+
+    !> Double precision symmetric eigensolver
+    subroutine dsyevd(jobz, uplo, nn, aa, lda, ww, work, lwork, iwork, liwork, info)
+      import rdp
+
+      !> job type
+      character, intent(in) :: jobz
+
+      !> Upper 'U' or lower 'L' triangle
+      character, intent(in) :: uplo
+
+      !> matrix dimension
+      integer, intent(in) :: nn
+
+      !> Leading dimension of A
+      integer, intent(in) :: lda
+
+      !> matrix A
+      real(rdp), intent(inout) :: aa(lda, *)
+
+      !> eigenvalues
+      real(rdp), intent(out) :: ww(*)
+
+      !> workspace
+      real(rdp), intent(inout) :: work(*)
+
+      !> workspace sizing
+      integer, intent(in) :: lwork
+
+      !> integer workspace
+      integer, intent(inout) :: iwork(*)
+
+      !> workspace sizing
+      integer, intent(in) :: liwork
+
+      !> state of routine on return
+      integer, intent(out) :: info
+
+    end subroutine dsyevd
+  end interface dsyevd
+
+
   !> Real symmetric generalised eigensolver
   interface ssygv
 

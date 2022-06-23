@@ -64,7 +64,7 @@ module dftbp_dftbplus_parser
   use dftbp_mixer_mixer, only : mixerTypes
   use dftbp_reks_reks, only : reksTypes
   use dftbp_solvation_solvparser, only : readSolvation, readCM5
-  use dftbp_timedep_linresptypes, only : linRespSolverTypes
+  use dftbp_timedep_linresptypes, only : linRespSolverTypes, linRespDiagTypes
   use dftbp_timedep_timeprop, only : TElecDynamicsInp, pertTypes, tdSpinTypes, envTypes
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_type_linkedlist, only : TListCharLc, TListInt, TListIntR1, TListReal, TListRealR1,&
@@ -4713,9 +4713,7 @@ contains
     !> Control structure to fill
     type(TControl), intent(inout) :: ctrl
 
-    type(fnode), pointer :: child
-    type(fnode), pointer :: child2
-    type(fnode), pointer :: value
+    type(fnode), pointer :: child, child2, child3, value
     type(string) :: buffer, modifier
 
     ! Linear response stuff
@@ -4804,9 +4802,25 @@ contains
         call getChildValue(child2, "WriteStatusArnoldi", ctrl%lrespini%tArnoldi, default=.false.)
         call getChildValue(child2, "TestArnoldi", ctrl%lrespini%tDiagnoseArnoldi, default=.false.)
         ctrl%lrespini%iLinRespSolver = linRespSolverTypes%Arpack
+
       case ("stratmann")
+
         ctrl%lrespini%iLinRespSolver = linRespSolverTypes%Stratmann
         call getChildValue(child2, "SubSpaceFactor", ctrl%lrespini%subSpaceFactorStratmann, 20)
+        ctrl%lrespini%iStratmannInternalDiag = linRespDiagTypes%None
+        call getChildValue(child2, "MatrixSolver", child3, "DivideAndConquer")
+        call getNodeName(child3, buffer)
+        select case(char(buffer))
+        case ("qr")
+          ctrl%lrespini%iStratmannInternalDiag = linRespDiagTypes%QR
+        case ("divideandconquer")
+          ctrl%lrespini%iStratmannInternalDiag = linRespDiagTypes%DC
+        case ("relativelyrobust")
+          ctrl%lrespini%iStratmannInternalDiag = linRespDiagTypes%RR
+        case default
+          call detailedError(child3, "Unknown method '"//char(buffer))
+        end select
+
       case ("elsi-rci")
         if (.not. withElsiRCI) then
           call detailedError(child2, 'This DFTB+ binary has been compiled without support for&

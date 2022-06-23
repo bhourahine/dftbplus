@@ -13,7 +13,7 @@ module dftbp_timedep_linresptypes
   implicit none
 
   private
-  public :: TLinResp, linRespSolverTypes
+  public :: TLinResp, linRespSolverTypes, linRespDiagTypes
 
   !> Enumeration over possible solvers for RPA eqns.
   type :: TLinRespSolverEnum
@@ -23,8 +23,23 @@ module dftbp_timedep_linresptypes
     integer :: ElsiRci = 3
   end type TLinRespSolverEnum
 
+
   !> Solver choices
   type(TLinRespSolverEnum), parameter :: linRespSolverTypes = TLinRespSolverEnum()
+
+
+  !> Enumeration over possible diagonaliser choices for matrix
+  type :: TLinRespDiagEnum
+    integer :: None = 0
+    integer :: QR = 1
+    integer :: DC = 2
+    integer :: RR = 3
+  end type TLinRespDiagEnum
+
+
+  !> diagonalizer choices
+  type(TLinRespDiagEnum), parameter :: linRespDiagTypes = TLinRespDiagEnum()
+
 
   !> Data type for linear response internal settings
   type :: TLinResp
@@ -124,8 +139,9 @@ module dftbp_timedep_linresptypes
     !> subspace dimension factor Stratmann diagonaliser
     integer :: subSpaceFactorStratmann
 
-    ! ELSI reverse communication related
+    integer :: iDiagSolver = linRespDiagTypes%None
 
+    ! ELSI reverse communication related
 
 
     ! Data structure related

@@ -22,7 +22,7 @@ module dftbp_math_eigensolver
   implicit none
 
   private
-  public :: heev, hegv, hegvd, gvr, bgv, geev
+  public :: heev, hegv, hegvd, gvr, bgv, geev, syevd, syevr
 #:if WITH_MAGMA
   public :: gpu_gvd
 #:endif
@@ -36,6 +36,22 @@ module dftbp_math_eigensolver
     module procedure cmplx_cheev
     module procedure dblecmplx_zheev
   end interface heev
+
+
+  !> Divide and conquer eigensolver for symmetric matrix
+  !> Caveat: the matrix a is overwritten
+  interface syevd
+    module procedure real_ssyevd
+    module procedure dble_dsyevd
+  end interface syevd
+
+
+  !> Relatively robust eigensolver for symmetric matrix
+  !> Caveat: the matrix a is overwritten
+  interface syevr
+    module procedure real_ssyevr
+    module procedure dble_dsyevr
+  end interface syevr
 
 
   !> Simple eigensolver for a symmetric/Hermitian generalized matrix problem
@@ -101,15 +117,17 @@ module dftbp_math_eigensolver
 
 contains
 
-  !> Real eigensolver for a symmetric matrix
-  subroutine real_ssyev(a,w,uplo,jobz)
+
+#:for NAME, VTYPE, RP in [("Double", "d", "dble"),("Real", "s", "real")]
+  !> ${NAME}$ precision eigensolver for symmetric matrix problem
+  subroutine ${RP}$_${VTYPE}$syev(a, w, uplo, jobz, info)
 
     !> contains the matrix for the solver, returns as eigenvectors if requested (matrix always
     !> overwritten on return anyway)
-    real(rsp), intent(inout) :: a(:,:)
+    real(r${VTYPE}$p), intent(inout) :: a(:,:)
 
     !> eigenvalues
-    real(rsp), intent(out) :: w(:)
+    real(r${VTYPE}$p), intent(out) :: w(:)
 
     !> upper or lower triangle of the matrix
     character, intent(in) :: uplo
@@ -117,90 +135,53 @@ contains
     !> compute eigenvalues 'N' or eigenvalues and eigenvectors 'V'
     character, intent(in) :: jobz
 
-    real(rsp), allocatable :: work(:)
-    integer n, info
-    integer :: int_idealwork
-    real(rsp) :: idealwork(1)
+    !> Error state, if handled externally
+    integer, intent(out), optional :: info
+
+    real(r${VTYPE}$p), allocatable :: work(:)
+    integer n, int_idealwork, info_
+    real(r${VTYPE}$p) :: idealwork(1)
     character(len=100) :: error_string
 
     @:ASSERT(uplo == 'u' .or. uplo == 'U' .or. uplo == 'l' .or. uplo == 'L')
     @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
     @:ASSERT(all(shape(a)==size(w,dim=1)))
-    n=size(a,dim=1)
+    n = size(a, dim=2)
     @:ASSERT(n>0)
-    call ssyev(jobz, uplo, n, a, n, w, idealwork, -1, info)
-    if (info/=0) then
-      call error("Failure in SSYEV to determine optimum workspace")
+    if (present(info)) then
+      info = 0
+    end if
+    call ${VTYPE}$syev(jobz, uplo, n, a, size(a,dim=1), w, idealwork, -1, info_)
+    if (info_ /= 0) then
+      if (present(info)) then
+        info = info_
+        return
+      else
+        write(error_string, "('Failure in ${VTYPE}$syev to determine optimum workspace: ',i0)")info_
+        call error(error_string)
+      end if
     endif
     int_idealwork=floor(idealwork(1))
     allocate(work(int_idealwork))
-    call ssyev(jobz, uplo, n, a, n, w, work, int_idealwork, info)
-    if (info/=0) then
-      if (info<0) then
-99000 format ('Failure in diagonalisation routine ssyev,', &
-          & ' illegal argument at position ',i6)
-        write(error_string, 99000) info
-        call error(error_string)
+    call ${VTYPE}$syev(jobz, uplo, n, a, size(a,dim=1), w, work, int_idealwork, info_)
+    if (info_ /=0 ) then
+      if (present(info)) then
+        info = info_
+        return
+      end if
+      if (info_ < 0) then
+        write(error_string, "('Failure in diagonalisation routine ${VTYPE}$syev, illegal argument&
+            & at position ',i0)") info_
       else
-99010 format ('Failure in diagonalisation routine ssyev,', &
-          & ' diagonal element ',i6,' did not converge to zero.')
-        write(error_string, 99010) info
-        call error(error_string)
+        write(error_string, "('Failure in diagonalisation routine ssyev, diagonal element ', i0,&
+            & ' did not converge to zero.')") info_
       endif
+      call error(error_string)
     endif
 
-  end subroutine real_ssyev
+  end subroutine ${RP}$_${VTYPE}$syev
 
-
-  !> Double precision eigensolver for a symmetric matrix
-  subroutine dble_dsyev(a,w,uplo,jobz)
-
-    !> contains the matrix for the solver, returns as eigenvectors if requested (matrix always
-    !> overwritten on return anyway)
-    real(rdp), intent(inout) :: a(:,:)
-
-    !> eigenvalues
-    real(rdp), intent(out) :: w(:)
-
-    !> upper or lower triangle of the matrix
-    character, intent(in) :: uplo
-
-    !> compute eigenvalues 'N' or eigenvalues and eigenvectors 'V'
-    character, intent(in) :: jobz
-
-    real(rdp), allocatable :: work(:)
-    integer n, info
-    integer :: int_idealwork
-    real(rdp) :: idealwork(1)
-    character(len=100) :: error_string
-
-    @:ASSERT(uplo == 'u' .or. uplo == 'U' .or. uplo == 'l' .or. uplo == 'L')
-    @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
-    @:ASSERT(all(shape(a)==size(w,dim=1)))
-    n=size(a,dim=1)
-    @:ASSERT(n>0)
-    call dsyev(jobz, uplo, n, a, n, w, idealwork, -1, info)
-    if (info/=0) then
-      call error("Failure in DSYEV to determine optimum workspace")
-    endif
-    int_idealwork=floor(idealwork(1))
-    allocate(work(int_idealwork))
-    call dsyev(jobz, uplo, n, a, n, w, work, int_idealwork, info)
-    if (info/=0) then
-      if (info<0) then
-99020 format ('Failure in diagonalisation routine dsyev,', &
-          & ' illegal argument at position ',i6)
-        write(error_string, 99020) info
-        call error(error_string)
-      else
-99030 format ('Failure in diagonalisation routine dsyev,', &
-          & ' diagonal element ',i6,' did not converge to zero.')
-        write(error_string, 99030) info
-        call error(error_string)
-      endif
-    endif
-
-  end subroutine dble_dsyev
+#:endfor
 
 
   !> Complex eigensolver for a Hermitian matrix
@@ -229,16 +210,16 @@ contains
     @:ASSERT(uplo == 'u' .or. uplo == 'U' .or. uplo == 'l' .or. uplo == 'L')
     @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
     @:ASSERT(all(shape(a)==size(w,dim=1)))
-    n=size(a,dim=1)
+    n=size(a,dim=2)
     @:ASSERT(n>0)
     allocate(rwork(3*n-2))
-    call cheev(jobz, uplo, n, a, n, w, idealwork, -1, rwork, info)
+    call cheev(jobz, uplo, n, a, size(a,dim=1), w, idealwork, -1, rwork, info)
     if (info/=0) then
       call error("Failure in CHEEV to determine optimum workspace")
     endif
     int_idealwork=floor(real(idealwork(1)))
     allocate(work(int_idealwork))
-    call cheev(jobz, uplo, n, a, n, w, work, int_idealwork, rwork, info)
+    call cheev(jobz, uplo, n, a, size(a,dim=1), w, work, int_idealwork, rwork, info)
     if (info/=0) then
       if (info<0) then
 99040 format ('Failure in diagonalisation routine cheev,', &
@@ -282,16 +263,16 @@ contains
     @:ASSERT(uplo == 'u' .or. uplo == 'U' .or. uplo == 'l' .or. uplo == 'L')
     @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
     @:ASSERT(all(shape(a)==size(w,dim=1)))
-    n=size(a,dim=1)
+    n=size(a,dim=2)
     @:ASSERT(n>0)
     allocate(rwork(3*n-2))
-    call zheev(jobz, uplo, n, a, n, w, idealwork, -1, rwork, info)
+    call zheev(jobz, uplo, n, a, size(a,dim=1), w, idealwork, -1, rwork, info)
     if (info/=0) then
       call error("Failure in ZHEEV to determine optimum workspace")
     endif
     int_idealwork=floor(real(idealwork(1)))
     allocate(work(int_idealwork))
-    call zheev(jobz, uplo, n, a, n, w, work, int_idealwork, rwork, info)
+    call zheev(jobz, uplo, n, a, size(a,dim=1), w, work, int_idealwork, rwork, info)
     if (info/=0) then
       if (info<0) then
 99060 format ('Failure in diagonalisation routine zheev,', &
@@ -310,6 +291,186 @@ contains
 
 
 #:for NAME, VTYPE, RP in [("Double", "d", "dble"),("Single", "s", "real")]
+  !> ${NAME}$ precision divide and conquer eigensolver for symmetric matrix problem
+  subroutine ${RP}$_${VTYPE}$syevd(a, w, uplo, jobz, info)
+
+    !> Contains the matrix to be diagonalised, returns eigenvectors if requested (matrix always
+    !> overwritten on return anyway)
+    real(r${VTYPE}$p), intent(inout) :: a(:,:)
+
+    !> eigenvalues
+    real(r${VTYPE}$p), intent(out) :: w(:)
+
+    !> upper or lower triangle of matrix
+    character, intent(in) :: uplo
+
+    !> compute eigenvalues 'N' or eigenvalues and eigenvectors 'V'
+    character, intent(in) :: jobz
+
+    !> Optional error flag
+    integer, optional, intent(out) :: info
+
+    real(r${VTYPE}$p), allocatable :: work(:)
+    real(r${VTYPE}$p) :: tmpWork(1)
+    integer :: lwork, tmpIWork(1), liwork, n, info_
+    integer, allocatable :: iwork(:)
+    character(len=100) :: error_string
+
+    n = size(a, dim=2)
+    w(:) = 0.0_r${VTYPE}$p
+    @:ASSERT(n > 0)
+    @:ASSERT(uplo == 'u' .or. uplo == 'U' .or. uplo == 'l' .or. uplo == 'L')
+    @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
+    if (present(info)) then
+      info = 0
+    end if
+    info_ = 0
+    call ${VTYPE}$syevd(jobz, uplo, n, a, size(a,dim=1), w, tmpWork, -1, tmpIWork, -1, info_)
+    if (info_ /= 0) then
+      if (present(info)) then
+        info = info_
+        return
+      else
+        write(error_string, "('Failure in ${VTYPE}$syevd to determine optimum workspace: ',I0)")&
+            & info_
+        call error(error_string)
+      end if
+    endif
+    lwork = floor(tmpWork(1))
+    liwork = tmpIWork(1)
+    allocate(work(lwork))
+    allocate(iwork(liwork))
+    call ${VTYPE}$syevd(jobz, uplo, n, a, size(a,dim=1), w, work, lwork, iwork, liwork, info_)
+    if (info_ /= 0) then
+      if (present(info)) then
+        info = info_
+        return
+      else
+        if (info_ < 0) then
+          write(error_string, "('Failure in ${VTYPE}$syevd: error with argument ',I0)") info_
+        else
+          write(error_string, "('Failure in ${VTYPE}$syevd, ',I0,' off diagonal elements not&
+              & converged')") info_
+        end if
+        call error(error_string)
+      end if
+    end if
+
+  end subroutine ${RP}$_${VTYPE}$syevd
+
+
+  !> ${NAME}$ precision relatively robust eigensolver for symmetric matrix problem
+  subroutine ${RP}$_${VTYPE}$syevr(a, w, uplo, jobz, ilIn, iuIn, info)
+
+    !> contains the matrix for the solver, returns eigenvectors if requested (matrix always
+    !> overwritten on return anyway)
+    real(r${VTYPE}$p), intent(inout) :: a(:,:)
+
+    !> eigenvalues
+    real(r${VTYPE}$p), intent(out) :: w(:)
+
+    !> upper or lower triangle of matrix
+    character, intent(in) :: uplo
+
+    !> compute eigenvalues 'N' or eigenvalues and eigenvectors 'V'
+    character, intent(in) :: jobz
+
+    !> lower range of eigenstates
+    integer, optional, intent(in) :: ilIn
+
+    !> upper range of eigenstates
+    integer, optional, intent(in) :: iuIn
+
+    !> Optional error flag
+    integer, optional, intent(out) :: info
+
+    real(r${VTYPE}$p), allocatable :: work(:), z(:,:)
+    real(r${VTYPE}$p) :: tmpWork(1), abstol, vl, vu
+    integer :: lwork, tmpIWork(1), liwork, n, info_, m, il, iu
+    integer, allocatable :: iwork(:), isuppz(:)
+    logical :: subspace
+    character(len=100) :: error_string
+
+    n = size(a, dim=2)
+    @:ASSERT(n > 0)
+    @:ASSERT(uplo == 'u' .or. uplo == 'U' .or. uplo == 'l' .or. uplo == 'L')
+    @:ASSERT(jobz == 'n' .or. jobz == 'N' .or. jobz == 'v' .or. jobz == 'V')
+    @:ASSERT(present(ilIn) .eqv. present(iuIn))
+    if (present(info)) then
+      info = 0
+    end if
+    subspace = size(w) < n
+    if (subspace) then
+      if (present(ilIn)) then
+        @:ASSERT(ilIn <= iuIn)
+        @:ASSERT(ilIn > 0)
+        @:ASSERT(n >= iuIn)
+        @:ASSERT(size(w,dim=1) == (iuIn - ilIn + 1))
+        il = ilIn
+        iu = iuIn
+      else
+        il = 1
+        iu = size(w,dim=1)
+      end if
+    else
+      if (present(ilIn)) then
+        @:ASSERT(ilIn == 1 .and. iuIn == n)
+      end if
+      il = 1
+      iu = n
+    end if
+    allocate(isuppz(2*n))
+    abstol = ${VTYPE}$lamch('Safe minimum')
+    info_ = 0
+    if (jobz == 'n' .or. jobz == 'N') then
+      allocate(z(1, 0))
+    else
+      allocate(z(n, size(w)))
+    end if
+    if (subspace) then
+      call ${VTYPE}$syevr(jobz, 'I', uplo, n, a, size(a,dim=1), vl, vu, il, iu, abstol, m,&
+          & w, z, size(z,dim=1), isuppz, tmpWork, -1, tmpIWork, -1, info_)
+    else
+      call ${VTYPE}$syevr(jobz, 'A', uplo, n, a, size(a,dim=1), vl, vu, il, iu, abstol, m,&
+          & w, z, size(z,dim=1), isuppz, tmpWork, -1, tmpIWork, -1, info_)
+    end if
+    if (info_ /= 0) then
+      if (present(info)) then
+        info = info_
+        return
+      else
+        write(error_string, "('Failure in ${VTYPE}$syevr to determine optimum workspace: ',I0)")&
+            & info_
+        call error(error_string)
+      end if
+    endif
+    lwork = floor(tmpWork(1))
+    liwork = tmpIWork(1)
+    allocate(work(lwork))
+    allocate(iwork(liwork))
+    if (subspace) then
+      call ${VTYPE}$syevr(jobz, 'I', uplo, n, a, size(a,dim=1), vl, vu, il, iu, abstol, m, w, z,&
+          & size(z,dim=1), isuppz, work, lwork, iwork, liwork, info_)
+    else
+      call ${VTYPE}$syevr(jobz, 'A', uplo, n, a, size(a,dim=1), vl, vu, il, iu, abstol, m, w, z,&
+          & size(z,dim=1), isuppz, work, lwork, iwork, liwork, info_)
+    end if
+    if (info_ /= 0) then
+      if (present(info)) then
+        info = info_
+        return
+      else
+        write(error_string, "('Failure in ${VTYPE}$syevr: ',I0)") info_
+        call error(error_string)
+      end if
+    end if
+    a(:, :) = 0.0d0
+    a(:n, :m) = z(:n, :m)
+    w(m+1:) = 0.0_r${VTYPE}$p
+
+  end subroutine ${RP}$_${VTYPE}$syevr
+
+
   !> ${NAME}$ precision eigensolver for generalized symmetric matrix problem
   subroutine ${RP}$_${VTYPE}$sygv(a, b, w, uplo, jobz, itype)
 
@@ -2168,7 +2329,6 @@ contains
     integer :: n, lda, info, int_idealwork, ldvl, ldvr
     real(r${VPREC}$p) :: idealwork(1)
     character :: jobvl, jobvr
-    character(len=100) :: error_string
 
     ! If no eigenvectors requested, need a dummy array for lapack call
     real(r${VPREC}$p) :: dummyvl(1,1), dummyvr(1,1)
