@@ -750,8 +750,16 @@ contains
     !> Root tag of the HSD-tree
     type(fnode), pointer :: root
 
-    type(fnode), pointer :: ch1, ch2
+    type(fnode), pointer :: ch1, ch2, par
     type(string) :: buffer
+
+    call getDescendant(root, "Hamiltonian", ch1, parent=par)
+    if (.not.associated(ch1)) then
+      call detailedError(ch2, "Input file missing Hamiltonian{} block.")
+    else
+      call setNodeName(ch1, "Model")
+      call detailedWarning(ch1, "Hamiltonian{} environment renamed to Model{} block.")
+    end if
 
     call getDescendant(root, "Driver/GeometryOptimization", ch1)
     if (associated(ch1)) then

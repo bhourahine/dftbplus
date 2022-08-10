@@ -13,6 +13,11 @@ Added
 
 - Born charges from finite difference dipole derivatives
 
+- External models (electronic or energy based) from linked (static or
+  dynamic) library outside the code base.
+
+- Rename "Hamiltonian" to "Model" in input, as more descriptive
+
 
 Fixed
 -----

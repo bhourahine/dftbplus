@@ -144,6 +144,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_transport_negfint, only : TNegfInt, TNegfInt_init
   use dftbp_transport_negfvars, only : TTransPar
 #:endif
+  use dftbp_externalmodel, only : externalModel_init, TExtModel
   implicit none
 
   private
@@ -294,6 +295,9 @@ module dftbp_dftbplus_initprogram
 
     !> Hamiltonian type
     integer :: hamiltonianType
+
+    !> External model
+    type(TExtModel), allocatable :: extModel
 
     !> Raw H^0 hamiltonian data
     type(TSlakoCont) :: skHamCont
@@ -1341,13 +1345,27 @@ contains
       end do
     end do
 
+
+  #:if WITH_SOCKETS
+    this%tSocket = allocated(input%ctrl%socketInput)
+    if (this%tSocket) then
+      this%tForces = .true.
+    end if
+  #:endif
+    this%tPrintForces = input%ctrl%tPrintForces
+    this%tForces = input%ctrl%tForces .or. this%tPrintForces
+
     select case(this%hamiltonianType)
     case default
-      call error("Invalid Hamiltonian")
+
+      call error("Invalid Model choice")
+
     case(hamiltonianTypes%dftb)
+
       this%orb = input%slako%orb
+
     case(hamiltonianTypes%xtb)
-      ! TODO
+
       if (.not.allocated(input%ctrl%tbliteInp)) then
         call error("xTB calculation supported only with tblite library")
       end if
@@ -1367,7 +1385,42 @@ contains
 
       allocate(input%slako%skOcc(input%slako%orb%mShell, input%geom%nSpecies))
       call this%tblite%getReferenceN0(this%species0, input%slako%skOcc)
+
+    case(hamiltonianTypes%api)
+
+      allocate(this%extModel)
+
+      if (.not.(input%ctrl%extModel%gives_dc_energy .and. input%ctrl%extModel%gives_ham)) then
+        if (this%tForces) then
+          call error("Force expressions are not available for this calculation")
+        end if
+      end if
+
+      write(*,*)'Pre-init test'
+      call externalModel_init(this%extModel, this%speciesName, errStatus)
+      if (errStatus%hasError()) then
+        call error(errStatus%message)
+      end if
+
+      if (input%ctrl%extModel%gives_ham) then
+
+        this%cutOff%skCutOff = this%extModel%cutoff
+        this%cutOff%mCutOff = this%extModel%cutoff
+
+      elseif (input%ctrl%extModel%gives_dc_energy) then
+
+        this%cutOff%mCutOff = this%extModel%cutoff
+
+      else
+
+        call error("????")
+
+      end if
+
+      call error("Got here so far on API development for external model")
+
     end select
+
     this%nOrb = this%orb%nOrb
 
     ! start by assuming stress can be calculated if periodic
@@ -1764,11 +1817,9 @@ contains
     this%BarostatStrength = input%ctrl%BarostatStrength
 
   #:if WITH_SOCKETS
-    this%tSocket = allocated(input%ctrl%socketInput)
     if (this%tSocket) then
       input%ctrl%socketInput%nAtom = this%nAtom
       call this%initSocket(env, input%ctrl%socketInput)
-      this%tForces = .true.
       this%isGeoOpt = .false.
       this%tMD = .false.
     end if
@@ -1809,8 +1860,6 @@ contains
     this%tPrintEigVecs = input%ctrl%tPrintEigVecs
     this%tPrintEigVecsTxt = input%ctrl%tPrintEigVecsTxt
 
-    this%tPrintForces = input%ctrl%tPrintForces
-    this%tForces = input%ctrl%tForces .or. this%tPrintForces
     this%isLinResp = allocated(input%ctrl%lrespini)
     if (this%isLinResp) then
       allocate(this%linearResponse)

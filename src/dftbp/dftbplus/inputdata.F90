@@ -44,6 +44,7 @@ module dftbp_dftbplus_inputdata
 #:if WITH_TRANSPORT
   use dftbp_transport_negfvars, only : TNEGFTunDos, TNEGFGreenDensInfo, TTransPar
 #:endif
+  use dftbp_externalmodel, only : TExtModelProvides
   implicit none
 
   private
@@ -119,6 +120,9 @@ module dftbp_dftbplus_inputdata
 
     !> Choice of electronic hamiltonian
     integer :: hamiltonian = hamiltonianTypes%none
+
+    !> External model to the main code (if used)
+    type(TExtModelProvides), allocatable :: extModel
 
     !> random number generator seed
     integer :: iSeed       = 0
