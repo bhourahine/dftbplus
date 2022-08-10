@@ -78,6 +78,9 @@ contains
       case (11)
         call convert_11_12(root)
         version = 12
+      case (12)
+        call convert_12_13(root)
+        version = 13
       end select
     end do
 
@@ -746,8 +749,33 @@ contains
     !> Root tag of the HSD-tree
     type(fnode), pointer :: root
 
-    type(fnode), pointer :: ch1, ch2
+    type(fnode), pointer :: ch1, ch2, par
     type(string) :: buffer
+
+    call getDescendant(root, "Driver/GeometryOptimization", ch1)
+    if (associated(ch1)) then
+      call detailedWarning(ch1, "Keyword renamed to 'GeometryOptimisation'.")
+      call setNodeName(ch1, "GeometryOptimisation")
+      call getDescendant(root, "Driver/GeometryOptimisation/Optimizer", ch2)
+      if (associated(ch2)) then
+        call detailedWarning(ch2, "Keyword renamed to 'Optimiser'.")
+        call setNodeName(ch2, "Optimiser")
+      end if
+    end if
+
+  #:for LABEL in [("Kick"), ("Laser")]
+    call getDescendant(root, "ElectronDynamics/Perturbation/${LABEL}$/PolarizationDirection", ch1)
+    if (associated(ch1)) then
+      call detailedWarning(ch1, "Keyword renamed to 'PolarisationDirection'.")
+      call setNodeName(ch1, "PolarisationDirection")
+    end if
+    call getDescendant(root, "ElectronDynamics/Perturbation/${LABEL}$/ImagPolarizationDirection",&
+        & ch1)
+    if (associated(ch1)) then
+      call detailedWarning(ch1, "Keyword renamed to 'ImagPolarisationDirection'.")
+      call setNodeName(ch1, "ImagPolarisationDirection")
+    end if
+  #:endfor
 
     call getDescendant(root, "Transport", ch1)
     if (associated(ch1)) then
@@ -766,6 +794,26 @@ contains
     end if
 
   end subroutine convert_11_12
+
+
+  !> Converts input from version 12 to 13. (Version 13 introduced in Jan 2023)
+  subroutine convert_12_13(root)
+
+    !> Root tag of the HSD-tree
+    type(fnode), pointer :: root
+
+    type(fnode), pointer :: ch1, ch2, par
+    type(string) :: buffer
+
+    call getDescendant(root, "Hamiltonian", ch1, parent=par)
+    if (.not.associated(ch1)) then
+      call detailedError(root, "Input file missing Hamiltonian{} block.")
+    else
+      call setNodeName(ch1, "Model")
+      call detailedWarning(ch1, "Hamiltonian{} environment renamed to Model{} block.")
+    end if
+
+  end subroutine convert_12_13
 
 
   !> Update values in the DftD3 block to match behaviour of v6 parser
