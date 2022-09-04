@@ -11,9 +11,7 @@
 !> Connects to an external energy/hamiltonian model or provides a dummy external model if no
 !> external library is linked
 module dftbp_externalmodel
-#:if WITH_EXTERNALMODEL
   use iso_c_binding, only : c_int, c_char, c_bool, c_null_char, c_ptr, c_double, c_loc, c_f_pointer
-#:endif
   use dftbp_io_clang, only : fortranChar
   use dftbp_common_accuracy, only : dp, mc
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
@@ -65,16 +63,10 @@ module dftbp_externalmodel
     real(dp) :: cutoff
     integer, allocatable :: nshells(:)
 
-#:if WITH_EXTERNALMODEL
-
     !> C pointer to internal state of the model (assume that model manages this)
     type(c_ptr) :: modelState
 
-#:endif
-
   end type TExtModel
-
-#:if WITH_EXTERNALMODEL
 
   !> ctype for receiving external capabilities
   type, bind(C) :: extModelAbilities
@@ -140,8 +132,6 @@ module dftbp_externalmodel
 
   end interface
 
-#:endif
-
   !> Buffer size on the Fortran side
   integer, parameter :: nBufChar = 256
 
@@ -155,8 +145,6 @@ contains
 
     !> Capabilities of externally provided hamiltonian/energy model
     type(TExtModelProvides), intent(out) :: modelProvides
-
-  #:if WITH_EXTERNALMODEL
 
     !> Structure for returned model capabilities
     type(extModelAbilities) :: capabilities
@@ -178,14 +166,6 @@ contains
     modelProvides%gives_atomic_subset = capabilities%gives_atom_subset
     modelProvides%is_mpi = capabilities%requires_mpi
 
-  #:else
-
-    modelProvides%modelName = "Dummy Model"
-
-    @:RAISE_ERROR(status, -1, "Dummy external model present, non-functioning calculation")
-
-  #:endif
-
   end subroutine getExtModelCapabilities
 
 
@@ -200,8 +180,6 @@ contains
 
     !> Status of operation
     type(TStatus), intent(out) :: status
-
-  #:if WITH_EXTERNALMODEL
 
     integer :: iStatus, ii
     character(nBufChar) :: errString = " "
@@ -251,16 +229,10 @@ contains
       @:RAISE_ERROR(status, iStatus, trim(errString))
     end if
 
-  #:else
-
-    @:RAISE_ERROR(status, -1, "Dummy model, should have stopped before geting to here")
-
-  #:endif
-
   end subroutine externalModel_init
 
-#:if WITH_EXTERNALMODEL
-  !> Checks if string has a null termination withing the expected length
+
+  !> Checks if string has a null termination within the expected length
   function isCStringOK(string, nBufferChar)
 
     !> String to check
@@ -283,6 +255,5 @@ contains
     end do lpBufCheck
 
   end function isCStringOK
-#:endif
 
 end module dftbp_externalmodel

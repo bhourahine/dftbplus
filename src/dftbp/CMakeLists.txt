@@ -57,6 +57,12 @@ if(WITH_SOCKETS)
   target_sources(dftbplus PRIVATE $<TARGET_OBJECTS:fsockets_objlib>)
 endif()
 
+if(EXTERNAL_MODEL_INTERNAL)
+  target_sources(dftbplus PRIVATE $<TARGET_OBJECTS:externalmodel_objlib>)
+else()
+
+endif()
+
 set(includedir ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 set_target_properties(dftbplus PROPERTIES Fortran_MODULE_DIRECTORY ${includedir})
@@ -84,6 +90,11 @@ target_include_directories(dftbplus PRIVATE ${projectdir}/external/dftd4refs)
 if(WITH_SOCKETS)
   target_include_directories(dftbplus PUBLIC
     $<BUILD_INTERFACE:$<TARGET_PROPERTY:fsockets_objlib,INTERFACE_INCLUDE_DIRECTORIES>>)
+endif()
+
+if(EXTERNAL_MODEL_INTERNAL)
+  target_include_directories(dftbplus PUBLIC
+    $<BUILD_INTERFACE:$<TARGET_PROPERTY:externalmodel_objlib,INTERFACE_INCLUDE_DIRECTORIES>>)
 endif()
 
 if(WITH_MBD)
@@ -185,6 +196,11 @@ if(INSTALL_INCLUDE_FILES)
       install(DIRECTORY "${moddir}/" DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${INSTALL_MODULEDIR}")
     endforeach()
   endif()
+
+  if (EXTERNAL_MODEL_INTERNAL)
+    get_target_property(moddirs externalmodel_objlib INTERFACE_INCLUDE_DIRECTORIES)
+  endif()
+
 endif()
 
 list(APPEND PKG_CONFIG_LIBS dftbplus)
