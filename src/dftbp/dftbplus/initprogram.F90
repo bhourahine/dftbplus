@@ -267,7 +267,6 @@ module dftbp_dftbplus_initprogram
     !> index in cellVec for each atom
     integer, allocatable :: iCellVec(:)
 
-
     !> ADT for neighbour parameters
     type(TNeighbourList), allocatable :: neighbourList
 
@@ -305,6 +304,9 @@ module dftbp_dftbplus_initprogram
     !> Raw overlap hamiltonian data
     type(TSlakoCont) :: skOverCont
 
+    !> Is this an orthogonal basis used
+    logical :: isNonOrthogonal
+
     !> Repulsive (force-field like) interactions
     class(TRepulsive), allocatable :: repulsive
 
@@ -338,17 +340,14 @@ module dftbp_dftbplus_initprogram
     !> Barostat coupling strength
     real(dp) :: BarostatStrength
 
-
     !> H and S are real
     logical :: tRealHS
-
 
     !> nr. of electrons
     real(dp), allocatable :: nEl(:)
 
     !> Nr. of all electrons if neutral
     real(dp) :: nEl0
-
 
     !> Spin W values
     real(dp), allocatable :: spinW(:,:,:)
@@ -1355,6 +1354,8 @@ contains
     this%tPrintForces = input%ctrl%tPrintForces
     this%tForces = input%ctrl%tForces .or. this%tPrintForces
 
+    this%isNonOrthogonal = .true.
+
     select case(this%hamiltonianType)
     case default
 
@@ -1396,7 +1397,6 @@ contains
         end if
       end if
 
-      write(*,*)'Pre-init test'
       call externalModel_init(this%extModel, this%speciesName, errStatus)
       if (errStatus%hasError()) then
         call error(errStatus%message)
@@ -1407,17 +1407,58 @@ contains
         this%cutOff%skCutOff = this%extModel%cutoff
         this%cutOff%mCutOff = this%extModel%cutoff
 
+        this%orb%nshell = this%extModel%nShells
+        allocate(this%orb%nOrbSpecies(input%geom%nSpecies))
+        this%orb%nOrbSpecies(:) = 0
+        do iSp = 1, input%geom%nSpecies
+          do iSh = 1, this%orb%nshell(iSp)
+            this%orb%nOrbSpecies(iSp) = this%orb%nOrbSpecies(iSp)&
+                & + 2 * this%extModel%shells(iSh,iSp) + 1
+          end do
+        end do
+        allocate(this%orb%nOrbAtom(this%nAtom))
+        this%orb%nOrbAtom(:) = this%orb%nOrbSpecies(this%species0)
+        allocate(this%orb%angShell(maxval(this%orb%nShell), input%geom%nSpecies))
+        this%orb%angShell(:,:) = 0
+        do iSp = 1, input%geom%nSpecies
+          do iSh = 1, this%orb%nshell(iSp)
+            this%orb%angShell(iSh,iSp) = this%extModel%shells(iSh,iSp)
+          end do
+        end do
+
+        allocate(this%orb%iShellOrb(maxval(this%orb%nOrbSpecies), input%geom%nSpecies))
+        this%orb%iShellOrb(:,:) = 0
+        allocate(this%orb%posShell(maxval(this%orb%nshell) + 1, input%geom%nSpecies))
+        this%orb%posShell(:,:) = 0
+        do iSp = 1, input%geom%nSpecies
+          ii = 1
+          do iSh = 1, this%orb%nshell(iSp)
+            this%orb%posShell(iSh, iSp) = ii
+            this%orb%iShellOrb(ii:ii+2*this%extModel%shells(iSh,iSp), iSp) = iSh
+            ii = ii + 2*this%extModel%shells(iSh,iSp) + 1
+          end do
+          this%orb%posShell(this%orb%nshell(iSp) + 1, iSp) = ii
+        end do
+
+        this%orb%mShell = maxval(this%orb%nshell)
+        this%orb%mOrb = maxval(this%orb%nOrbSpecies)
+        this%orb%nOrb = sum(this%orb%nOrbAtom)
+
+        allocate(input%slako%skOcc(this%orb%mShell, input%geom%nSpecies))
+        input%slako%skOcc(:,:) = this%extModel%shellOccs
+
+        this%isNonOrthogonal = input%ctrl%extModel%gives_overlap
+
+
       elseif (input%ctrl%extModel%gives_dc_energy) then
 
         this%cutOff%mCutOff = this%extModel%cutoff
 
       else
 
-        call error("????")
+        call error("Model provides neither energy nor hamiltonian components")
 
       end if
-
-      call error("Got here so far on API development for external model")
 
     end select
 
@@ -1535,9 +1576,7 @@ contains
       @:ASSERT(size(input%slako%mass) == this%nType)
       allocate(this%speciesMass(this%nType))
       this%speciesMass(:) = input%slako%mass(:)
-    case(hamiltonianTypes%xtb)
-      ! TODO
-      ! call error("xTB calculation currently not supported")
+    case(hamiltonianTypes%xtb, hamiltonianTypes%api)
       allocate(this%speciesMass(this%nType))
       this%speciesMass(:) = getAtomicMass(this%speciesName)
     end select
@@ -1584,10 +1623,10 @@ contains
         this%cutOff%mCutOff = max(this%cutOff%mCutOff, this%repulsive%getRCutOff())
       end if
     case(hamiltonianTypes%xtb)
-      ! TODO
-      ! call error("xTB calculation currently not supported")
       this%cutOff%skCutoff = this%tblite%getRCutoff()
       this%cutOff%mCutoff = this%cutOff%skCutoff
+    case(hamiltonianTypes%api)
+      ! Cuttoffs already set above
     end select
 
     call initHubbardUs_(input, this%orb, this%hamiltonianType, hubbU)
@@ -4258,6 +4297,8 @@ contains
     case(hamiltonianTypes%xtb)
       ! It's an xTB Hamiltonian masquerading as a DFTB one (for now)
       referenceN0(:,:) = input%slako%skOcc(1:orb%mShell, :)
+    case(hamiltonianTypes%api)
+      referenceN0(:,:) = input%slako%skOcc(1:orb%mShell, :)
     end select
 
   end subroutine initReferencePopulation_
@@ -4317,6 +4358,7 @@ contains
     case(hamiltonianTypes%xtb)
       ! TODO
       ! call error("xTB calculation currently not supported")
+    case(hamiltonianTypes%api)
     end select
 
     if (allocated(input%ctrl%hubbU)) then

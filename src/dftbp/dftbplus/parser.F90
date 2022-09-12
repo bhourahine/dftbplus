@@ -2091,52 +2091,53 @@ contains
       #:endif
       end if
 
-      ! External fields and potentials
-      call readExternal(node, ctrl, geo)
-
-      ! Electronic solver
-#:if WITH_TRANSPORT
-      call readSolver(node, ctrl, geo, tp, greendens, poisson)
-#:else
-      call readSolver(node, ctrl, geo, poisson)
-#:endif
-
-      ! Charge
-      call getChildValue(node, "Charge", ctrl%nrChrg, 0.0_dp)
-
-      ! K-Points
-      call readKPoints(node, ctrl, geo, tBadIntegratingKPoints)
-
-      ! Dispersion
-      call getChildValue(node, "Dispersion", value1, "", child=child, allowEmptyValue=.true.,&
-          & dummyValue=.true.)
-      if (associated(value1)) then
-        allocate(ctrl%dispInp)
-        call readDispersion(child, geo, ctrl%dispInp, ctrl%nrChrg, ctrl%tSCC)
-      end if
-
-      ! Solvation
-      call getChildValue(node, "Solvation", value1, "", child=child, allowEmptyValue=.true.,&
-          & dummyValue=.true.)
-      if (associated(value1)) then
-        allocate(ctrl%solvInp)
-        call readSolvation(child, geo, ctrl%solvInp)
-        call getChildValue(value1, "RescaleSolvatedFields", ctrl%isSolvatedFieldRescaled, .true.)
-      end if
-
-      if (ctrl%tLatOpt .and. .not. geo%tPeriodic) then
-        call error("Lattice optimisation only applies for periodic structures.")
-      end if
-
-#:if WITH_TRANSPORT
-      call readElectrostatics(node, ctrl, geo, tp, poisson)
-#:else
-      call readElectrostatics(node, ctrl, geo, poisson)
-#:endif
-
-      ctrl%forceType = forceTypes%orig
-
     end if
+
+    ! External fields and potentials
+    call readExternal(node, ctrl, geo)
+
+    ! Electronic solver
+  #:if WITH_TRANSPORT
+    call readSolver(node, ctrl, geo, tp, greendens, poisson)
+  #:else
+    call readSolver(node, ctrl, geo, poisson)
+  #:endif
+
+    ! Charge
+    call getChildValue(node, "Charge", ctrl%nrChrg, 0.0_dp)
+
+    ! K-Points
+    call readKPoints(node, ctrl, geo, tBadIntegratingKPoints)
+
+    ! Dispersion
+    call getChildValue(node, "Dispersion", value1, "", child=child, allowEmptyValue=.true.,&
+        & dummyValue=.true.)
+    if (associated(value1)) then
+      allocate(ctrl%dispInp)
+      call readDispersion(child, geo, ctrl%dispInp, ctrl%nrChrg, ctrl%tSCC)
+    end if
+
+    ! Solvation
+    call getChildValue(node, "Solvation", value1, "", child=child, allowEmptyValue=.true.,&
+        & dummyValue=.true.)
+    if (associated(value1)) then
+      allocate(ctrl%solvInp)
+      call readSolvation(child, geo, ctrl%solvInp)
+      call getChildValue(value1, "RescaleSolvatedFields", ctrl%isSolvatedFieldRescaled, .true.)
+    end if
+
+    if (ctrl%tLatOpt .and. .not. geo%tPeriodic) then
+      call error("Lattice optimisation only applies for periodic structures.")
+    end if
+
+  #:if WITH_TRANSPORT
+    call readElectrostatics(node, ctrl, geo, tp, poisson)
+  #:else
+    call readElectrostatics(node, ctrl, geo, poisson)
+  #:endif
+
+    ctrl%forceType = forceTypes%orig
+
 
     ctrl%hamiltonian = hamiltonianTypes%api
 
