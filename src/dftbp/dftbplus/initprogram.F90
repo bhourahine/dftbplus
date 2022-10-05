@@ -142,8 +142,8 @@ module dftbp_dftbplus_initprogram
 #:if WITH_TRANSPORT
   use dftbp_dftbplus_inputdata, only : TNEGFInfo
   use dftbp_transport_negfint, only : TNegfInt, TNegfInt_init
-  use dftbp_transport_negfvars, only : TTransPar
 #:endif
+  use dftbp_transport_negfvars, only : TTransPar
   implicit none
 
   private
@@ -1018,9 +1018,9 @@ module dftbp_dftbplus_initprogram
 
   #:if WITH_TRANSPORT
     !> Transport variables
-    type(TTransPar) :: transpar
     type(TNEGFInfo) :: ginfo
   #:endif
+    type(TTransPar) :: transpar
 
     !> Transport interface (may be dummy placeholder, if built without transport)
     type(TNegfInt) :: negfInt
@@ -2113,7 +2113,7 @@ contains
       end if
       if (allocated(input%ctrl%dispInp%slakirk)) then
         allocate(slaKirk)
-        if (this%tPeriodic) then
+        if (this%tPeriodic .and. this%transpar%nCont == 0) then
           call DispSlaKirk_init(slaKirk, input%ctrl%dispInp%slakirk, this%latVec)
         else if (this%tHelical) then
           call error("Slater-Kirkwood incompatible with helical boundary conditions")
@@ -2124,7 +2124,7 @@ contains
 
       elseif (allocated(input%ctrl%dispInp%uff)) then
         allocate(uff)
-        if (this%tPeriodic) then
+        if (this%tPeriodic .and. this%transpar%nCont == 0) then
           call DispUff_init(uff, input%ctrl%dispInp%uff, this%nAtom, this%species0, this%latVec)
         else
           call DispUff_init(uff, input%ctrl%dispInp%uff, this%nAtom)
@@ -2135,7 +2135,7 @@ contains
         block
           type(TSDFTD3), allocatable :: dftd3
           allocate(dftd3)
-          if (this%tPeriodic) then
+          if (this%tPeriodic .and. this%transpar%nCont == 0) then
             call TSDFTD3_init(dftd3, input%ctrl%dispInp%dftd3, this%nAtom, this%species0, &
                 & this%speciesName, this%coord0, this%latVec)
           else
@@ -2147,7 +2147,7 @@ contains
 
       else if (allocated(input%ctrl%dispInp%sdftd3)) then
         allocate(sdftd3)
-        if (this%tPeriodic) then
+        if (this%tPeriodic .and. this%transpar%nCont == 0) then
           call init(sdftd3, input%ctrl%dispInp%sdftd3, this%nAtom, this%species0, this%speciesName,&
               & this%latVec)
         else
@@ -2161,6 +2161,9 @@ contains
             call error("Calculation of self-consistent dftd4 is not currently compatible with&
                 & force calculation in REKS")
           end if
+        end if
+        if (this%transpar%nCont /= 0) then
+          call error("DFTD4 model not currently supported for transport calculations")
         end if
         if (this%tPeriodic) then
           call init(dftd4, input%ctrl%dispInp%dftd4, this%nAtom, this%speciesName, this%latVec)
@@ -2178,6 +2181,8 @@ contains
             call error("Calculation of self-consistent MBD/TS is not currently compatible with&
                 & force calculation in REKS")
           end if
+        else if (this%transpar%nCont /= 0) then
+          call error("MBD model not currently supported for transport calculations")
         end if
         allocate (mbd)
         associate (inp => input%ctrl%dispInp%mbd)
@@ -2710,9 +2715,6 @@ contains
   #:endif
 
     if (this%tNegf) then
-      if (allocated(this%dispersion)) then
-        call error("Dispersion not currently available with transport calculations")
-      end if
       if (this%isLinResp) then
         call error("Linear response is not compatible with transport calculations")
       end if
