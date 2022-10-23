@@ -12,7 +12,7 @@ module dftbp_common_memman
   implicit none
 
   private
-  public :: incrmntOfArray
+  public :: incrmntOfArray, resizeMat
 
 
 contains
@@ -29,5 +29,27 @@ contains
     incrmntOfArray = currentSize + currentSize  / 2 + 1
 
   end function incrmntOfArray
+
+
+  !> Resize matrix
+  subroutine resizeMat(mat, newSize)
+
+    !> Matrix to resize
+    integer, intent(inout), allocatable :: mat(:)
+
+    !> Lower limit for new size of the matrix
+    integer, intent(in) :: newSize
+
+    integer :: oldSize
+    integer, allocatable :: work(:)
+
+    oldSize = size(mat)
+    if (newSize > oldSize) then
+      call move_alloc(mat, work)
+      allocate(mat(incrmntOfArray(newSize)), source=0)
+      mat(:oldSize) = work
+    end if
+
+  end subroutine resizeMat
 
 end module dftbp_common_memman

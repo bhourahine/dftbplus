@@ -24,6 +24,7 @@ set(sources-fpp
 if(WITH_MPI)
   list(APPEND sources-fpp
     ${curdir}/blacsenv.F90
+    ${curdir}/blacshelper.F90
     ${curdir}/mpienv.F90)
 endif()
 

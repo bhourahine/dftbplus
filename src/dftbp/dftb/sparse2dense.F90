@@ -19,6 +19,7 @@ module dftbp_dftb_sparse2dense
   use dftbp_type_densedescr, only : TDenseDescr
 #:if WITH_SCALAPACK
   use dftbp_common_blacsenv, only : TBlacsEnv
+  use dftbp_common_blacshelper, only : localAtomsOrbGrid
   use dftbp_extlibs_scalapackfx, only : scalafx_cpg2l, scalafx_addl2g
 #:endif
   implicit none
@@ -2058,10 +2059,8 @@ contains
     !> dense matrix part of distributed whole
     real(dp), intent(out) :: square(:, :)
 
-    integer :: nAtom
-    integer :: iOrig, ii, jj, nOrb1, nOrb2
-    integer :: iNeigh
-    integer :: iAtom1, iAtom2, iAtom2f
+    integer :: nAtom, iOrig, ii, jj, nOrb1, nOrb2, iNeigh, iAtom1, iAtom2, iAtom2f, iAt
+    real(dp), allocatable :: localAts(:)
 
     nAtom = size(iNeighbour, dim=2)
 
@@ -2070,8 +2069,9 @@ contains
     @:ASSERT(size(desc%iAtomStart) == nAtom + 1)
 
     square(:, :) = 0.0_dp
-
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2135,12 +2135,10 @@ contains
     complex(dp), intent(out) :: square(:, :)
 
     complex(dp) :: phase
-    integer :: nAtom
-    integer :: iOrig, nOrb1, nOrb2, ii, jj
-    integer :: iNeigh
-    integer :: iOldVec, iVec
-    integer :: iAtom1, iAtom2, iAtom2f
+    integer :: nAtom, iOrig, nOrb1, nOrb2, ii, jj, iNeigh, iOldVec, iVec, iAtom1, iAtom2, iAtom2f
+    integer :: iAt
     real(dp) :: kPoint2p(3)
+    real(dp), allocatable :: localAts(:)
 
     nAtom = size(iNeighbour, dim=2)
 
@@ -2153,7 +2151,9 @@ contains
     kPoint2p(:) = 2.0_dp * pi * kPoint
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2289,19 +2289,22 @@ contains
     !> local part of distributed whole dense matrix to add to
     complex(dp), intent(inout) :: square(:, :)
 
-    integer :: iAtom1, iAtom2, iAtom2f, nAtom, nOrb1, nOrb2, nOrb
-    integer :: iNeigh, iOrig, ii, jj, kk, iOldVec, iVec
+    integer :: iAtom1, iAtom2, iAtom2f, nAtom, nOrb1, nOrb2, nOrb, iNeigh, iOrig, ii, jj, kk
+    integer :: iOldVec, iVec, iAt
     complex(dp), target :: tmpSqr(mOrb, mOrb, 4)
     complex(dp), pointer :: ptmp(:, :, :)
     real(dp) :: kPoint2p(3)
     complex(dp) :: phase
+    real(dp), allocatable :: localAts(:)
 
     nAtom = size(nNeighbourSK)
     nOrb = desc%iAtomStart(nAtom + 1) - 1
     kPoint2p(:) = 2.0_dp * pi * kPoint
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2409,12 +2412,13 @@ contains
     !> Local part of of distributed whole dense matrix
     complex(dp), intent(out) :: square(:, :)
 
-    integer :: iAtom1, iAtom2, iAtom2f, nAtom, nOrb1, nOrb2, nOrb
-    integer :: iNeigh, iOrig, ii, jj, iOldVec, iVec
+    integer :: iAtom1, iAtom2, iAtom2f, nAtom, nOrb1, nOrb2, nOrb, iNeigh, iOrig, ii, jj, iOldVec
+    integer :: iVec, iAt
     complex(dp), target :: tmpSqr(mOrb, mOrb)
     complex(dp), pointer :: ptmp(:, :)
     real(dp) :: kPoint2p(3)
     complex(dp) :: phase
+    real(dp), allocatable :: localAts(:)
 
     square(:, :) = (0.0_dp, 0.0_dp)
     nAtom = size(nNeighbourSK)
@@ -2422,7 +2426,9 @@ contains
     kPoint2p(:) = 2.0_dp * pi * kPoint
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2486,12 +2492,9 @@ contains
     !> sparse matrix to add this contribution into
     real(dp), intent(inout) :: primitive(:)
 
-    integer :: nAtom
-    integer :: iOrig, ii, jj, kk
-    integer :: iNeigh
-    integer :: iAtom1, iAtom2, iAtom2f
-    integer :: nOrb1, nOrb2
+    integer :: nAtom, iOrig, ii, jj, kk, iNeigh, iAtom1, iAtom2, iAtom2f, nOrb1, nOrb2, iAt
     real(dp) :: tmpSqr(mOrb, mOrb)
+    real(dp), allocatable :: localAts(:)
   #:block DEBUG_CODE
     integer :: sizePrim
   #:endblock DEBUG_CODE
@@ -2502,8 +2505,9 @@ contains
   #:endblock DEBUG_CODE
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(nNeighbourSK) == nAtom)
-
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2575,14 +2579,11 @@ contains
     real(dp), intent(inout) :: primitive(:)
 
     complex(dp) :: phase
-    integer :: nAtom
-    integer :: iOrig, ii, jj, kk
-    integer :: iNeigh
-    integer :: iOldVec, iVec
-    integer :: iAtom1, iAtom2, iAtom2f
-    integer :: nOrb1, nOrb2
+    integer :: nAtom, iOrig, ii, jj, kk, iNeigh, iOldVec, iVec, iAtom1, iAtom2, iAtom2f
+    integer :: nOrb1, nOrb2, iAt
     real(dp) :: kPoint2p(3)
     complex(dp) :: tmpSqr(mOrb, mOrb)
+    real(dp), allocatable :: localAts(:)
   #:block DEBUG_CODE
     integer :: sizePrim
   #:endblock DEBUG_CODE
@@ -2597,11 +2598,12 @@ contains
     @:ASSERT(size(nNeighbourSK) == nAtom)
     @:ASSERT(kWeight > 0.0_dp)
     @:ASSERT(size(desc%iAtomStart) == nAtom + 1)
-
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
     kPoint2p(:) = 2.0_dp * pi * kPoint
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2743,16 +2745,12 @@ contains
 
     complex(dp) :: phase
     real(dp) :: zprefac
-    integer :: nAtom
-    integer :: iOrig, ii, jj, kk
-    integer :: iNeigh, iBlock
-    integer :: iOldVec, iVec
-    integer :: iAtom1, iAtom2, iAtom2f
-    integer :: nOrb1, nOrb2, nOrb
+    integer :: nAtom, iOrig, ii, jj, kk, iNeigh, iBlock, iOldVec, iVec, iAtom1, iAtom2, iAtom2f
+    integer :: nOrb1, nOrb2, nOrb, iAt
     real(dp) :: kPoint2p(3)
-    complex(dp), target :: tmpSqr(mOrb, mOrb)
-    complex(dp), target :: tmpSqr1(mOrb, mOrb), tmpSqr2(mOrb, mOrb)
+    complex(dp), target :: tmpSqr(mOrb, mOrb), tmpSqr1(mOrb, mOrb), tmpSqr2(mOrb, mOrb)
     complex(dp), pointer :: ptmp(:, :), ptmp1(:, :), ptmp2(:, :)
+    real(dp), allocatable :: localAts(:)
   #:block DEBUG_CODE
     integer :: sizePrim
   #:endblock DEBUG_CODE
@@ -2773,13 +2771,15 @@ contains
     @:ASSERT(size(primitive, dim=2) == 4)
 
     kPoint2p(:) = 2.0_dp * pi * kPoint
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
 
     ! sigma_I and sigma_z blocks
     do iBlock = 0, 1
       zprefac = real(1 - 2 * iBlock, dp)
       iOldVec = 0
       phase = 1.0_dp
-      do iAtom1 = 1, nAtom
+      do iAt = 1, size(localAts)
+        iAtom1 = localAts(iAt)
         ii = desc%iAtomStart(iAtom1)
         nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
         do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2817,7 +2817,8 @@ contains
     ! sigma_x and sigma_y blocks
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -2907,12 +2908,11 @@ contains
     real(dp), intent(inout) :: primitive(:)
 
     complex(dp) :: phase
-    integer :: nAtom, iAtom1, iAtom2, iAtom2f, iNeigh, iBlock
-    integer :: iOrig, ii, jj, kk
-    integer :: iOldVec, iVec
-    integer :: nOrb1, nOrb2, nOrb
+    integer :: nAtom, iAtom1, iAtom2, iAtom2f, iNeigh, iBlock, iOrig, ii, jj, kk, iOldVec, iVec
+    integer :: nOrb1, nOrb2, nOrb, iAt
     real(dp) :: kPoint2p(3)
     complex(dp) :: tmpSqr(mOrb, mOrb)
+    real(dp), allocatable :: localAts(:)
   #:block DEBUG_CODE
     integer :: sizePrim
   #:endblock DEBUG_CODE
@@ -2932,11 +2932,13 @@ contains
     @:ASSERT(kWeight > 0.0_dp)
 
     kPoint2p(:) = 2.0_dp * pi * kPoint
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
 
     do iBlock = 0, 1
       iOldVec = 0
       phase = 1.0_dp
-      do iAtom1 = 1, nAtom
+      do iAt = 1, size(localAts)
+        iAtom1 = localAts(iAt)
         ii = desc%iAtomStart(iAtom1)
         nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
         do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -3009,13 +3011,17 @@ contains
     !> dense matrix part of distributed whole
     real(dp), intent(out) :: square(:, :)
 
-    integer :: nAtom, iOrig, ii, jj, nOrb1, nOrb2, iNeigh, iAtom1, iAtom2, iAtom2f
+    integer :: nAtom, iOrig, ii, jj, nOrb1, nOrb2, iNeigh, iAtom1, iAtom2, iAtom2f, iAt
     real(dp) :: rotZ(orb%mOrb,orb%mOrb), theta, tmpSqr(orb%mOrb,orb%mOrb)
     integer :: lShellVals(orb%mShell), iSh, iSp
+    real(dp), allocatable :: localAts(:)
+
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
 
     nAtom = size(iNeighbour, dim=2)
     square(:, :) = 0.0_dp
-    do iAtom1 = 1, nAtom
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -3096,8 +3102,10 @@ contains
 
     complex(dp) :: phase, tmpSqr(orb%mOrb,orb%mOrb)
     integer :: nAtom, iOrig, nOrb1, nOrb2, ii, jj, iNeigh, iOldVec, iVec, iAtom1, iAtom2, iAtom2f
+    integer :: iAt
     real(dp) :: kPoint2p(2), rotZ(orb%mOrb,orb%mOrb), theta
     integer :: iSh, iSp, lShellVals(orb%mShell)
+    real(dp), allocatable :: localAts(:)
 
     nAtom = size(iNeighbour, dim=2)
     square(:, :) = cmplx(0, 0, dp)
@@ -3106,7 +3114,9 @@ contains
     phase = 1.0_dp
     lShellVals(:) = 0
     rotZ(:,:) = 0.0_dp
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -3186,12 +3196,15 @@ contains
     real(dp), intent(inout) :: primitive(:)
 
     integer :: nAtom, iOrig, ii, jj, kk, iNeigh, iAtom1, iAtom2, iAtom2f, nOrb1, nOrb2
-    integer :: iSp, iSh, lShellVals(orb%mShell)
+    integer :: iSp, iSh, lShellVals(orb%mShell), iAt
     real(dp) :: tmpSqr(orb%mOrb, orb%mOrb), rotZ(orb%mOrb,orb%mOrb), theta
+    real(dp), allocatable :: localAts(:)
 
     nAtom = size(iNeighbour, dim=2)
     lShellVals(:) = 0
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
@@ -3277,16 +3290,19 @@ contains
 
     complex(dp) :: phase
     integer :: nAtom, iOrig, ii, jj, kk, iNeigh, iOldVec, iVec, iAtom1, iAtom2, iAtom2f
-    integer :: nOrb1, nOrb2, iSp, iSh, lShellVals(orb%mShell)
+    integer :: nOrb1, nOrb2, iSp, iSh, lShellVals(orb%mShell), iAt
     real(dp) :: kPoint2p(2), rotZ(orb%mOrb,orb%mOrb), theta
     complex(dp) :: tmpSqr(orb%mOrb, orb%mOrb)
+    real(dp), allocatable :: localAts(:)
 
     nAtom = size(iNeighbour, dim=2)
     kPoint2p(:) = 2.0_dp * pi * kPoint
     lShellVals(:) = 0
     iOldVec = 0
     phase = 1.0_dp
-    do iAtom1 = 1, nAtom
+    localAts = localAtomsOrbGrid(myBlacs, desc, square)
+    do iAt = 1, size(localAts)
+      iAtom1 = localAts(iAt)
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)

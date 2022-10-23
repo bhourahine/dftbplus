@@ -16,6 +16,7 @@ module dftbp_dftb_spinorbit
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_type_densedescr, only : TDenseDescr
 #:if WITH_SCALAPACK
+  use dftbp_common_blacshelper, only : localAtomsOrbGrid
   use dftbp_extlibs_scalapackfx, only : scalafx_addl2g, scalafx_cpg2l
 #:endif
   implicit none
@@ -52,11 +53,14 @@ contains
     !> Species of the atoms
     integer, intent(in) :: species(:)
 
-    integer :: nAtom, nSpecies, nOrb, nOrbSp
-    integer :: iSp, iAt, iOrb, iOrbStart, iOrbEnd
+    integer :: nAtom, nSpecies, nOrb, nOrbSp, iSp, iAt, iOrb, iOrbStart, iOrbEnd
     complex(dp), allocatable :: speciesZ(:,:,:)
     complex(dp), allocatable :: speciesPlus(:,:,:)
     complex(dp), allocatable :: tmpBlock(:,:)
+  #:if WITH_SCALAPACK
+    integer :: ii
+    real(dp), allocatable :: localAts(:)
+  #:endif
 
     nAtom = size(Eatom, dim=1)
     nSpecies = maxval(species(1:nAtom))
@@ -76,7 +80,13 @@ contains
     Eatom(:) = 0.0_dp
 
     allocate(tmpBlock(orb%mOrb, orb%mOrb))
+  #:if WITH_SCALAPACK
+    localAts = localAtomsOrbGrid(env%blacs, denseDesc, rho)
+    do ii = 1, size(localAts)
+      iAt = localAts(ii)
+  #:else
     do iAt = 1, nAtom
+  #:endif
       iSp = species(iAt)
       nOrbSp = orb%nOrbSpecies(iSp)
       iOrbStart = denseDesc%iAtomStart(iAt)
@@ -152,6 +162,10 @@ contains
     complex(dp), allocatable :: speciesZ(:,:,:), speciesPlus(:,:,:)
     integer :: nAtom, nSpecies, nOrb, nOrbSp, iOrbStart, iOrbEnd
     integer :: iSp, iAt
+  #:if WITH_SCALAPACK
+    integer :: ii
+    real(dp), allocatable :: localAts(:)
+  #:endif
 
     nAtom = size(orb%nOrbAtom)
     nSpecies = maxval(species(1:nAtom))
@@ -163,7 +177,13 @@ contains
       call getLSOperatorsForSpecies(orb, xi, iSp, speciesZ(:,:,iSp), speciesPlus(:,:,iSp))
     end do
 
+  #:if WITH_SCALAPACK
+    localAts = localAtomsOrbGrid(env%blacs, denseDesc, hSqrCplx)
+    do ii = 1, size(localAts)
+      iAt = localAts(ii)
+  #:else
     do iAt = 1, nAtom
+  #:endif
       iSp = species(iAt)
       nOrbSp = orb%nOrbSpecies(iSp)
       iOrbStart = denseDesc%iAtomStart(iAt)
