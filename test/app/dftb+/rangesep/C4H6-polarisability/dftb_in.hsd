@@ -1,0 +1,52 @@
+Geometry = GenFormat {
+    <<< "butadiene.gen"
+}
+
+Driver = {}
+
+Hamiltonian = DFTB {
+    SCC = Yes
+    #SCCTolerance = 1e-10  # Very tight for test purposes only
+    MaxAngularMomentum = {
+        C = "p"
+        H = "s"
+    }
+    SlaterKosterFiles = Type2FileNames {
+        Prefix = "slakos/origin/ob2-1-1/shift/"
+        Separator = "-"
+        Suffix = ".skf"
+    }
+    RangeSeparated = LC {Screening = MatrixBased {}}
+}
+
+ExcitedState {
+    Casida {
+        NrOfExcitations = 20
+        StateOfInterest = 0
+        Symmetry = Singlet
+	Diagonaliser = Stratmann {}
+    }
+}
+
+Analysis{
+    Polarisability = {
+        #Static = No
+        Frequencies [eV] = 6.190 6.290 6.390
+	#FrequencyRange [eV] = 6 12 0.01
+    }
+}
+
+
+Options {
+    WriteAutotestTag = Yes
+}
+
+ParserOptions {
+    ParserVersion = 12
+}
+
+Parallel {
+  # Allow OMP threads explicitely to test for hybrid parallelisation with
+  # MPI-binary. (Check the manual before using this in production runs!)
+  UseOmpThreads = Yes
+}
