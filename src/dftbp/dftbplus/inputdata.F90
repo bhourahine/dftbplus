@@ -234,6 +234,9 @@ module dftbp_dftbplus_inputdata
     !> Localise electronic states
     logical :: tLocalise = .false.
 
+    !> Optical matrix elements
+    logical :: evaluateMatrixElements = .false.
+
     !> Input data for Pipek-Mezey localisation
     type(TPipekMezeyInp), allocatable :: pipekMezeyInp
 

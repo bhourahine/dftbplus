@@ -17,6 +17,7 @@ module dftbp_dftbplus_main
   use dftbp_common_globalenv, only : stdOut, withMpi
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
   use dftbp_common_status, only : TStatus
+  use dftbp_derivs_matrixelements, only : momentumMatrix
   use dftbp_derivs_numderivs2, only : TNumderivs, next, getHessianMatrix, dipoleAdd, polAdd
   use dftbp_derivs_perturb, only : TResponse
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
@@ -1407,7 +1408,8 @@ contains
               & this%hybridXc, this%eigen, this%filling, this%rhoPrim, this%xi, this%orbitalL,&
               & this%HSqrReal, this%SSqrReal, this%eigvecsReal, this%iRhoPrim, this%HSqrCplx,&
               & this%SSqrCplx, this%eigvecsCplx, this%rhoSqrReal, this%densityMatrix,&
-              & this%nNeighbourCam, this%nNeighbourCamSym, this%deltaDftb, errStatus)
+              & this%nNeighbourCam, this%nNeighbourCamSym, this%deltaDftb,&
+              & this%evaluateMatrixElements, errStatus)
           if (errStatus%hasError()) call error(errStatus%message)
 
           if (this%tWriteBandDat) then
@@ -2669,7 +2671,8 @@ contains
       & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
       & iDistribFn, tempElec, nEl, parallelKS, Ef, mu, energy, hybridXc, eigen, filling, rhoPrim,&
       & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
-      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, errStatus)
+      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb,&
+      & evaluateMatrixElements, errStatus)
     use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
 
     !> Environment settings
@@ -2837,6 +2840,9 @@ contains
     !> Determinant derived type
     type(TDftbDeterminants), intent(inout) :: deltaDftb
 
+    !> Whether momentum matrix elements are evaluated
+    logical, intent(in) :: evaluateMatrixElements
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
@@ -2859,7 +2865,7 @@ contains
           & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim,&
           & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
           & eigvecsCplx, rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb,&
-          & errStatus)
+          & evaluateMatrixElements, errStatus)
       @:PROPAGATE_ERROR(errStatus)
 
     case(densityMatrixTypes%elecSolverProvided)
@@ -2900,7 +2906,8 @@ contains
       & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
       & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim, xi,&
       & orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
-      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, errStatus)
+      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb,&
+      & evaluateMatrixElements, errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3058,12 +3065,26 @@ contains
     !> Determinant derived type
     type(TDftbDeterminants), intent(inout) :: deltaDftb
 
+    !> Whether momentum matrix elements are evaluated
+    logical, intent(in) :: evaluateMatrixElements
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
     integer :: nSpin
 
     nSpin = size(ints%hamiltonian, dim=2)
+
+    if (evaluateMatrixElements) then
+    #:if WITH_SCALAPACK
+      @:RAISE_ERROR(errStatus, -1, "Not implemented")
+    #:else
+      if (nSpin == 4 .or. tRealHS .or. tHelical) then
+        @:RAISE_ERROR(errStatus, -1, "Not implemented")
+      end if
+    #:endif
+    end if
+
     call env%globalTimer%startTimer(globalTimers%diagonalization)
     if (nSpin /= 4) then
       if (tRealHS) then
@@ -3100,6 +3121,13 @@ contains
             & parallelKS, densityMatrix, rhoPrim, SSqrReal, rhoSqrReal, hybridXc, errStatus)
         @:PROPAGATE_ERROR(errStatus)
       else
+      #:if not WITH_SCALAPACK
+        if (evaluateMatrixElements .and. .not.tHelical) then
+          call momentumMatrix(env, parallelKS, eigen, filling, eigvecsCplx, ints%hamiltonian,&
+              & ints%overlap, neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell,&
+              & kPoint, kWeight, cellVec, iCellVec)
+        end if
+      #:endif
         call getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighbourList,&
             & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb,&
             & parallelKS, tHelical, species, coord, eigvecsCplx, densityMatrix, rhoPrim, SSqrCplx,&

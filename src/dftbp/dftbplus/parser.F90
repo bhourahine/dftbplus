@@ -5178,6 +5178,8 @@ contains
       end if
       call destroyNodeList(children)
 
+      call getChildValue(node, "OpticalMatrixElements", ctrl%evaluateMatrixElements, .false.)
+
       call renameChildren(node, "Localize", "Localise")
       call getChild(node, "Localise", child=val, requested=.false.)
       if (associated(val)) then

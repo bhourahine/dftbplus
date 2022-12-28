@@ -525,6 +525,9 @@ module dftbp_dftbplus_initprogram
     !> Are forces being returned
     logical :: tPrintForces
 
+    !> Should optical matrix elements be evaluated?
+    logical :: evaluateMatrixElements
+
     !> Number of moved atoms
     integer :: nMovedAtom
 
@@ -2468,6 +2471,8 @@ contains
       call error("Localisation of electronic states currently unsupported for non-collinear and&
           & spin orbit calculations")
     end if
+
+    this%evaluateMatrixElements = input%ctrl%evaluateMatrixElements
 
     this%doPerturbation = allocated(input%ctrl%perturbInp)
     this%doPerturbEachGeom = this%tDerivs .and. this%doPerturbation ! needs work
