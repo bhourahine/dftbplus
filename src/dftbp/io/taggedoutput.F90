@@ -98,6 +98,9 @@ module dftbp_io_taggedoutput
     !> filling of the eigenstates
     character(lenLabel) :: eigFill = 'filling'
 
+    !> Derivatives of ground state single particle eigenvalues wrt. k
+    character(lenLabel) :: dEigenDk = 'dEidk'
+
     !> Gibbs free energy for finite pressure periodic systems
     character(lenLabel) :: gibbsFree = 'gibbs_energy'
 
