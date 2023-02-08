@@ -21,7 +21,7 @@ module dftbp_extlibs_externalmodel
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_modelindependent_localclusters, only : TLocalClusters
   use iso_c_binding, only : c_int, c_char, c_bool, c_null_char, c_ptr, c_double, c_intptr_t, c_loc,&
-      & c_f_pointer
+      & c_f_pointer, c_associated
   implicit none
 
   private
@@ -136,13 +136,15 @@ module dftbp_extlibs_externalmodel
     end subroutine APBI
 
     !> External model declared capabilities
-    subroutine model_provides(modelname, capabilities) bind(C, name='dftbp_provided_with')
+    function model_provides(capabilities, nChars, modelname) bind(C, name='dftbp_provided_with')
       import :: extModelAbilities
-      import :: c_char
+      import :: c_ptr, c_int
       implicit none
-      character(c_char), intent(out) :: modelname
-      type(extModelAbilities), intent(out) :: capabilities
-    end subroutine model_provides
+      integer(c_int) :: model_provides
+      type(c_ptr) :: modelname
+      integer(c_int) :: nChars
+      type(extModelAbilities) :: capabilities
+    end function model_provides
 
     !> Initialise external model for calculation
     function model_init(nspecies, speciesnames, interactionCutoff, environmentCutoff,&
@@ -259,9 +261,11 @@ contains
 
     !> Buffer on Fortran side, expecting a null termination somewhere inside of this, or throws an
     !> error
-    character(nBufChar) :: modelname = " "
+    type(c_ptr) :: modelname
 
     integer :: major, minor, patch
+    integer :: iErr, nChars
+
 
     call apbi(major, minor, patch)
 
@@ -272,11 +276,14 @@ contains
       @:RAISE_ERROR(status, -1, "External model API/ABI non compliant (expecting 0.1.X)")
     end if
 
-    call model_provides(modelname, capabilities)
-    if (.not.isCStringOK(modelname, nBufChar)) then
-      @:RAISE_ERROR(status, -1, "External model name string does not fit in buffer")
+    iErr = model_provides(capabilities, nChars, modelname)
+    if (iErr /= 0) then
+      @:RAISE_ERROR(status, iErr, "External model error")
     end if
-    modelProvides%modelName = trim(modelname)
+
+    call returnedString(modelname, modelProvides%modelName, abs(nChars), status)
+    @:PROPAGATE_ERROR(status)
+
     write(stdOut,'(1X,A,A,A)')'External model used : "', modelProvides%modelName,'"'
     modelProvides%gives_ham = capabilities%gives_ham
     modelProvides%gives_overlap = capabilities%gives_overlap
@@ -313,6 +320,7 @@ contains
     type(c_ptr) :: cptr_nshells, cptr_shells, cptr_shellOccs
     integer, pointer :: fptr_nShells(:), fptr_shells(:)
     real(dp), pointer :: fptr_shellOccs(:)
+    character(:), allocatable :: msg
 
     allocate(this)
 
@@ -331,7 +339,10 @@ contains
         & cptr_shells, cptr_shellOccs, this%modelState, msgString)
 
     if (iStatus /= 0) then
-      @:RAISE_ERROR(status, iStatus, "To do : from initialise_model_for_dftbp")
+      call returnedString(msgString, msg, iStatus, status)
+      @:PROPAGATE_ERROR(status)
+      ! Otherwise, this is a message, not an error:
+      write(stdOut, "(A)") msg
     end if
 
     this%interactionCutoff = interactionCutoff
@@ -401,6 +412,7 @@ contains
     integer :: iStatus
     type(c_ptr) :: msgString
     integer :: iClust, iAt, iNeigh, nAtoms
+    character(:), allocatable :: msg
 
     if (allocated(clusters)) then
 
@@ -439,12 +451,16 @@ contains
           & clusters%iBondCluster(1), this%atomClusterIndex(1), this%bondClusterIndex(1), msgString)
 
       if (iStatus /= 0) then
-        @:RAISE_ERROR(status, iStatus, "To do : from update_model_for_dftbp")
+        call returnedString(msgString, msg, iStatus, status)
+        @:PROPAGATE_ERROR(status)
+        ! Otherwise, this is a message, not an error:
+        write(stdOut, "(A)") msg
       end if
 
     else
 
-      @:RAISE_ERROR(status, iStatus, "Internal error, local cluster geometries not allocated")
+      @:RAISE_ERROR(status, -1, "Model interface internal error, local cluster geometries not&
+          & allocated")
 
     end if
 
@@ -483,6 +499,7 @@ contains
 
     integer :: iStatus
     type(c_ptr) :: msgString
+    character(:), allocatable :: msg
 
     H0(:) = 0.0_dp
     over(:) = 0.0_dp
@@ -491,7 +508,10 @@ contains
         & size(iSparseStart,dim=1), msgString)
 
     if (iStatus /= 0) then
-      @:RAISE_ERROR(status, iStatus, "To do : from predict_model_for_dftbp")
+      call returnedString(msgString, msg, iStatus, status)
+      @:PROPAGATE_ERROR(status)
+      ! Otherwise, this is a message, not an error:
+      write(stdOut, "(A)") msg
     end if
 
     if (.not.this%capabilities%gives_overlap) then
@@ -499,31 +519,6 @@ contains
     end if
 
   end subroutine buildSH0
-
-
-  !> Checks if string has a null termination within the expected length
-  function isCStringOK(string, nBufferChar)
-
-    !> String to check
-    character(c_char), intent(in) :: string(*)
-
-    !> Expected max length of string
-    integer, intent(in) :: nBufferChar
-
-    !> Is the string within the length and null terminated
-    logical isCStringOK
-
-    integer :: ii
-
-    isCStringOK = .false.
-    lpBufCheck: do ii = 1, nBufferChar
-      if (string(ii) == c_null_char) then
-        isCStringOK = .true.
-        exit lpBufCheck
-      end if
-    end do lpBufCheck
-
-  end function isCStringOK
 
 
   !> Cleans up the external model when this type goes out of scope
@@ -537,5 +532,47 @@ contains
     call cleanup(this%modelState)
 
   end subroutine cleanup_model
+
+
+  !> Process returned null terminated string from C into Fortran string
+  subroutine returnedString(cstr, fstr, strlen, status)
+
+    !> Double pointer to string in C
+    type(c_ptr), intent(inout) :: cstr
+
+    !> Resulting string in Fortran
+    character(:), allocatable, intent(out) :: fstr
+
+    !> Length of expected string, before null termination
+    integer, intent(in) :: strlen
+
+    !> Status of operation
+    type(TStatus), intent(out) :: status
+
+    character, pointer :: fstring(:)
+    integer :: length
+
+    if (.not.c_associated(cstr)) then
+      @:RAISE_ERROR(status, -1, "External model error, returned string not associated")
+    end if
+    if (strlen == 0) then
+      @:RAISE_ERROR(status, -1, "External model error, returned string is length 0")
+    end if
+    length = abs(strlen)
+    call c_f_pointer(cstr, fstring, [length+1])
+    if (fstring(length+1) /= c_null_char) then
+      @:RAISE_ERROR(status, -1, "External model error, returned string is not null terminated")
+    end if
+    allocate(character(length) :: fstr)
+    fstr = transfer(fstring(1:length), fstr)
+    fstring => null()
+    call c_free(cstr)
+    if (strlen < 0) then
+      write(*,*)'length',strlen
+      ! assume this is an error message, not a communication string
+      @:RAISE_FORMATTED_ERROR(status, -1, "('External model raises error: ''',A,'''')", fstr)
+    end if
+
+  end subroutine returnedString
 
 end module dftbp_extlibs_externalmodel
