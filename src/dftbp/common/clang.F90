@@ -5,15 +5,18 @@
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
 
+#:include 'error.fypp'
+
 !> Inter-operation with C routines
 module dftbp_common_clang
+  use dftbp_common_status, only : TStatus
   use, intrinsic :: iso_c_binding, only : c_char, c_ptr, c_null_char, c_f_pointer, c_associated,&
       & c_size_t
   use, intrinsic :: iso_fortran_env, only : output_unit
   implicit none
 
   private
-  public :: fortranChar, handleOutputFileName, c_free, c_strlen
+  public :: c_free, c_strlen, c2fStr, fortranChar, handleOutputFileName
 
   !> Various C routines which need a Fortran binding
   interface
@@ -36,6 +39,46 @@ module dftbp_common_clang
   end interface
 
 contains
+
+
+  !> Process a null terminated C string into a Fortran string, freeing the C string and allocating
+  !> the Fortran one. If the string is not associated (NULL) or does not match the (optional)
+  !> expected length, throw an error
+  subroutine c2fStr(cstr, fstr, status, expectedLen)
+
+    !> Double pointer to string in C
+    type(c_ptr), intent(inout) :: cstr
+
+    !> Resulting string in Fortran
+    character(:), allocatable, intent(out) :: fstr
+
+    !> Status of operation
+    type(TStatus), intent(out) :: status
+
+    !> Expected string length, if available
+    integer, intent(in), optional :: expectedLen
+
+    character, pointer :: fstring(:)
+    integer(c_size_t) :: strlen
+
+    if (.not.c_associated(cstr)) then
+      @:RAISE_ERROR(status, -1, "C string is not associated")
+    end if
+    strlen = c_strlen(cstr)
+    if (present(expectedLen)) then
+      if (expectedLen /= strlen) then
+        @:RAISE_FORMATTED_ERROR(status, -1, "('C string is ', I0,&
+            & ' characters long, not the expected ', I0, 'characters')", strlen, expectedLen)
+      end if
+    end if
+    call c_f_pointer(cstr, fstring, [strlen+1])
+    allocate(character(strlen) :: fstr)
+    fstr = transfer(fstring(:strlen), fstr)
+    fstring => null()
+    call c_free(cstr)
+
+  end subroutine c2fStr
+
 
   !> Converts a 0-char terminated C-type string into a Fortran string.
   function fortranChar(cstring, maxlen)
@@ -68,17 +111,10 @@ contains
   end function fortranChar
 
 
-  !> Handles the optional output file name (which should be a NULL-ptr if not present), or use
-  !> stdout instead
+  !> Handles the optional output file name (which should be a NULL-ptr if not present)
   subroutine handleOutputFileName(outputFileName, outputUnit, tOutputOpened)
-
-    !> Name of file from C (or NULL)
     type(c_ptr), intent(in) :: outputFileName
-
-    !> Resulting fortran unit
     integer, intent(out) :: outputUnit
-
-    !> Was the file opened
     logical, intent(out) :: tOutputOpened
 
     character(c_char), pointer :: pOutputFileName

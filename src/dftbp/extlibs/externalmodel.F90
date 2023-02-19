@@ -11,7 +11,7 @@
 !> Connects to an external energy/hamiltonian model or provides a dummy external model if no
 !> external library is linked
 module dftbp_extlibs_externalmodel
-  use dftbp_common_clang, only : c_free, c_strlen
+  use dftbp_common_clang, only : c_free, c_strlen, c2fStr
   use dftbp_common_accuracy, only : dp, mc
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
@@ -20,7 +20,7 @@ module dftbp_extlibs_externalmodel
   use dftbp_dftb_nonscc, only : buildOrthogonalS
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_modelindependent_localclusters, only : TLocalClusters
-  use iso_c_binding, only : c_int, c_char, c_bool, c_null_char, c_ptr, c_double, c_intptr_t, c_loc,&
+  use iso_c_binding, only : c_int, c_bool, c_null_char, c_ptr, c_double, c_intptr_t, c_loc,&
       & c_f_pointer, c_associated
   implicit none
 
@@ -111,11 +111,17 @@ module dftbp_extlibs_externalmodel
   !> ctype for receiving external capabilities
   type, bind(C) :: extModelAbilities
 
+    !> Is the external model providing a hamiltonian
     logical(c_bool) :: gives_ham
+    !> Is the external model providing an overlap matrix
     logical(c_bool) :: gives_overlap
+    !> Is the external model providing non-band-structure energy
     logical(c_bool) :: gives_dc_energy
+    !> Order of derivatives of provided contributions
     integer(c_int) :: model_derivative_order
+    !> Does the model require self-consistency
     logical(c_bool) :: requires_self_consistency
+    !> Number of spin channels processed by the external model
     integer(c_int) :: spinchannels
 
   end type extModelAbilities
@@ -138,20 +144,26 @@ module dftbp_extlibs_externalmodel
     !> External model declared capabilities
     function model_provides(capabilities, nChars, modelname) bind(C, name='dftbp_provided_with')
       import :: extModelAbilities
-      import :: c_ptr, c_int
+      import :: c_int, c_ptr
       implicit none
+      !> 0 return if normal, > 0 if a message is also returned and < 0 for an error return
       integer(c_int) :: model_provides
-      type(c_ptr) :: modelname
-      integer(c_int) :: nChars
+      !> Model capabilities type
       type(extModelAbilities) :: capabilities
+      !> String length, 0 if no message
+      integer(c_int) :: nChars
+      !> Null terminated message string
+      type(c_ptr) :: modelname
     end function model_provides
 
     !> Initialise external model for calculation
     function model_init(nspecies, speciesnames, interactionCutoff, environmentCutoff,&
-        & nShellsOnSpecies, shellLValues, shellOccs, modelstate, msgString)&
+        & nShellsOnSpecies, shellLValues, shellOccs, modelstate, nChars, msgString)&
         & bind(C, name='initialise_model_for_dftbp')
-      import :: c_int, c_ptr, c_char, c_double, c_intptr_t
+      import :: c_int, c_ptr, c_double, c_intptr_t
       implicit none
+      !> 0 return if normal, > 0 if a message is also returned and < 0 for an error return
+      integer(c_int) :: model_init
       !> Number of distinct atomic species
       integer(c_int), intent(in) :: nspecies
       !> Labels for the atomic species
@@ -168,19 +180,21 @@ module dftbp_extlibs_externalmodel
       type(c_ptr), target, intent(out) :: shellOccs
       !> Internal state of the model, including any stored data passed in from DFTB+
       integer(c_intptr_t) :: modelstate
-      !> Error return string
+      !> String length, 0 if no message
+      integer(c_int) :: nChars
+      !> Null terminated message string
       type(c_ptr), intent(out) :: msgString
-      !> Is the model initialised?
-      integer(c_int) :: model_init
     end function model_init
 
     !> Update external model for calculation state (geometric changes)
     function model_update(modelstate, speciesOfAtoms, nAtomClusters, indexAtomClusters,&
         & atomClusters, atClustersGlobalNos, nBondClusters, indexBondClusters, bondClusters,&
-        & bndClustersGlobalNos, atomClusterIndex, bondClusterIndex, msgString)&
+        & bndClustersGlobalNos, atomClusterIndex, bondClusterIndex, nChars, msgString)&
         & bind(C, name='update_model_for_dftbp')
-      import :: c_int, c_ptr, c_char, c_intptr_t, c_double
+      import :: c_int, c_intptr_t, c_double, c_ptr
       implicit none
+      !> 0 return if normal, > 0 if a message is also returned and < 0 for an error return
+      integer(c_int) :: model_update
       !> Internal state of model, opaque to us
       integer(c_intptr_t) :: modelstate
       !> Species of atoms in original structure
@@ -205,17 +219,19 @@ module dftbp_extlibs_externalmodel
       integer(c_int) :: bndClustersGlobalNos
       !> Indexing for sparse matrices holding overlap/hamiltonian dimer elements
       integer(c_int) :: bondClusterIndex
-      !> Any returned error string
+      !> String length, 0 if no message
+      integer(c_int) :: nChars
+      !> Null terminated message string
       type(c_ptr), intent(out) :: msgString
-      !> Model state after operation
-      integer(c_int) :: model_update
     end function model_update
 
     !> Retrieve predictions from external model
-    function model_predictions(modelstate, h0, over, iSparseStart, nMaxStart, msgString)&
+    function model_predictions(modelstate, h0, over, iSparseStart, nMaxStart, nChars, msgString)&
         & bind(C, name='predict_model_for_dftbp')
-      import :: c_int, c_double, c_ptr, c_intptr_t
+      import :: c_int, c_intptr_t, c_double, c_ptr
       implicit none
+      !> 0 return if normal, > 0 if a message is also returned and < 0 for an error return
+      integer(c_int) :: model_predictions
       !> Internal state of model, opaque to us
       integer(c_intptr_t) :: modelstate
       !> Hamiltonian
@@ -226,24 +242,27 @@ module dftbp_extlibs_externalmodel
       integer(c_int), intent(in) :: iSparseStart
       !> Indexing for sparse structures
       integer(c_int), intent(in) :: nMaxStart
-      !> Any returned error string
+      !> String length, 0 if no message
+      integer(c_int) :: nChars
+      !> Null terminated message string
       type(c_ptr), intent(out) :: msgString
-      !> Model state after operation
-      integer(c_int) :: model_predictions
     end function model_predictions
 
     !> Clean up the C external model
-    subroutine cleanup(modelstate) bind(C, name='cleanup_model_for_dftbp')
-      import :: c_int, c_double, c_ptr, c_intptr_t
+    function model_cleanup(modelstate, nChars, msgString) bind(C, name='cleanup_model_for_dftbp')
+      import :: c_int, c_intptr_t, c_ptr
       implicit none
+      !> 0 return if normal, > 0 if a message is also returned and < 0 for an error return
+      integer(c_int) :: model_cleanup
       !> Internal state of model, opaque to us
       integer(c_intptr_t) :: modelstate
-    end subroutine cleanup
+      !> Number of characters in returned string, 0 if no message
+      integer(c_int) :: nChars
+      !> Null terminated message string
+      type(c_ptr), intent(out) :: msgString
+    end function model_cleanup
 
   end interface
-
-  !> Buffer size on the Fortran side
-  integer, parameter :: nBufChar = 256
 
 contains
 
@@ -261,11 +280,10 @@ contains
 
     !> Buffer on Fortran side, expecting a null termination somewhere inside of this, or throws an
     !> error
-    type(c_ptr) :: modelname
+    type(c_ptr) :: modelName
 
     integer :: major, minor, patch
     integer :: iErr, nChars
-
 
     call apbi(major, minor, patch)
 
@@ -276,15 +294,20 @@ contains
       @:RAISE_ERROR(status, -1, "External model API/ABI non compliant (expecting 0.1.X)")
     end if
 
-    iErr = model_provides(capabilities, nChars, modelname)
+    iErr = model_provides(capabilities, nChars, modelName)
     if (iErr /= 0) then
-      @:RAISE_ERROR(status, iErr, "External model error")
+      ! message has been returned in modelName
+      call c2fStr(modelName, modelProvides%modelName, status, nChars)
+      @:PROPAGATE_ERROR(status)
+      if (iErr < 0) then
+        ! Error string is being returned from the external model
+        @:RAISE_ERROR(status, iErr, modelProvides%modelName)
+      else
+        ! Otherwise, this is a message, not an error:
+        write(stdOut,'(1X,A,A,A)')'External model used : "', modelProvides%modelName,'"'
+      end if
     end if
 
-    call returnedString(modelname, modelProvides%modelName, abs(nChars), status)
-    @:PROPAGATE_ERROR(status)
-
-    write(stdOut,'(1X,A,A,A)')'External model used : "', modelProvides%modelName,'"'
     modelProvides%gives_ham = capabilities%gives_ham
     modelProvides%gives_overlap = capabilities%gives_overlap
     modelProvides%gives_dc_energy = capabilities%gives_dc_energy
@@ -310,7 +333,7 @@ contains
     !> Status of operation
     type(TStatus), intent(out) :: status
 
-    integer :: iStatus, ii, iSp, iSh
+    integer :: iStatus, ii, iSp, iSh, nChars
     type(c_ptr) :: msgString
     integer(c_int) :: nspecies
     type(c_ptr), dimension(size(speciesnames)) :: speciesPtrs
@@ -336,13 +359,19 @@ contains
     end do
 
     iStatus = model_init(nspecies, speciesPtrs, interactionCutoff, environmentCutoff, cptr_nShells,&
-        & cptr_shells, cptr_shellOccs, this%modelState, msgString)
+        & cptr_shells, cptr_shellOccs, this%modelState, nChars, msgString)
 
     if (iStatus /= 0) then
-      call returnedString(msgString, msg, iStatus, status)
+      ! message has been returned in msgString
+      call c2fStr(msgString, msg, status, nChars)
       @:PROPAGATE_ERROR(status)
-      ! Otherwise, this is a message, not an error:
-      write(stdOut, "(A)") msg
+      if (iStatus < 0) then
+        ! Error string is being returned from the external model
+        @:RAISE_ERROR(status, iStatus, msg)
+      else
+        ! Otherwise, this is a message, not an error:
+        write(stdOut,'(1X,A)')msg
+      end if
     end if
 
     this%interactionCutoff = interactionCutoff
@@ -409,7 +438,7 @@ contains
     !> Status of operation
     type(TStatus), intent(out) :: status
 
-    integer :: iStatus
+    integer :: iStatus, nChars
     type(c_ptr) :: msgString
     integer :: iClust, iAt, iNeigh, nAtoms
     character(:), allocatable :: msg
@@ -448,13 +477,20 @@ contains
       iStatus = model_update(this%modelState, species(1), size(clusters%iStartAtCluster)-1,&
           & clusters%iStartAtCluster(1), clusters%atomClusters(1,1), clusters%iAtCluster(1),&
           & clusters%nBondClusters, clusters%iStartBondCluster(1), clusters%bondClusters(1,1),&
-          & clusters%iBondCluster(1), this%atomClusterIndex(1), this%bondClusterIndex(1), msgString)
+          & clusters%iBondCluster(1), this%atomClusterIndex(1), this%bondClusterIndex(1), nChars,&
+          & msgString)
 
       if (iStatus /= 0) then
-        call returnedString(msgString, msg, iStatus, status)
+        ! message has been returned in msgString
+        call c2fStr(msgString, msg, status, nChars)
         @:PROPAGATE_ERROR(status)
-        ! Otherwise, this is a message, not an error:
-        write(stdOut, "(A)") msg
+        if (iStatus < 0) then
+          ! Error string is being returned from the external model
+          @:RAISE_ERROR(status, iStatus, msg)
+        else
+          ! Otherwise, this is a message, not an error:
+          write(stdOut,'(1X,A)')msg
+        end if
       end if
 
     else
@@ -497,7 +533,7 @@ contains
     !> Status of operation
     type(TStatus), intent(out) :: status
 
-    integer :: iStatus
+    integer :: iStatus, nChars
     type(c_ptr) :: msgString
     character(:), allocatable :: msg
 
@@ -505,13 +541,19 @@ contains
     over(:) = 0.0_dp
 
     iStatus = model_predictions(this%modelState, h0(1), over(1), iSparseStart(1,1),&
-        & size(iSparseStart,dim=1), msgString)
+        & size(iSparseStart,dim=1), nChars, msgString)
 
     if (iStatus /= 0) then
-      call returnedString(msgString, msg, iStatus, status)
+      ! message has been returned in msgString
+      call c2fStr(msgString, msg, status, nChars)
       @:PROPAGATE_ERROR(status)
-      ! Otherwise, this is a message, not an error:
-      write(stdOut, "(A)") msg
+      if (iStatus < 0) then
+        ! Error string is being returned from the external model
+        @:RAISE_ERROR(status, iStatus, msg)
+      else
+        ! Otherwise, this is a message, not an error:
+        write(stdOut,'(1X,A)')msg
+      end if
     end if
 
     if (.not.this%capabilities%gives_overlap) then
@@ -527,52 +569,28 @@ contains
     !> Instance
     type(TExtModel), intent(inout) :: this
 
+    integer :: iStatus
+    type(c_ptr) :: msgString
+    character(:), allocatable :: msg
+    type(TStatus) :: status
+
+    integer :: nChars
+
     write(stdOut,"(A)")'Cleaning up external model'
 
-    call cleanup(this%modelState)
+    iStatus = model_cleanup(this%modelState, nChars, msgString)
+
+    if (iStatus /= 0) then
+      ! message has been returned in msgString
+      call c2fStr(msgString, msg, status, nChars)
+      if (status%hasError()) then
+        write(stdOut, *)status%message
+      end if
+      if (iStatus /= 0) then
+        write(stdOut,'(1X,A)')msg
+      end if
+    end if
 
   end subroutine cleanup_model
-
-
-  !> Process returned null terminated string from C into Fortran string
-  subroutine returnedString(cstr, fstr, strlen, status)
-
-    !> Double pointer to string in C
-    type(c_ptr), intent(inout) :: cstr
-
-    !> Resulting string in Fortran
-    character(:), allocatable, intent(out) :: fstr
-
-    !> Length of expected string, before null termination
-    integer, intent(in) :: strlen
-
-    !> Status of operation
-    type(TStatus), intent(out) :: status
-
-    character, pointer :: fstring(:)
-    integer :: length
-
-    if (.not.c_associated(cstr)) then
-      @:RAISE_ERROR(status, -1, "External model error, returned string not associated")
-    end if
-    if (strlen == 0) then
-      @:RAISE_ERROR(status, -1, "External model error, returned string is length 0")
-    end if
-    length = abs(strlen)
-    call c_f_pointer(cstr, fstring, [length+1])
-    if (fstring(length+1) /= c_null_char) then
-      @:RAISE_ERROR(status, -1, "External model error, returned string is not null terminated")
-    end if
-    allocate(character(length) :: fstr)
-    fstr = transfer(fstring(1:length), fstr)
-    fstring => null()
-    call c_free(cstr)
-    if (strlen < 0) then
-      write(*,*)'length',strlen
-      ! assume this is an error message, not a communication string
-      @:RAISE_FORMATTED_ERROR(status, -1, "('External model raises error: ''',A,'''')", fstr)
-    end if
-
-  end subroutine returnedString
 
 end module dftbp_extlibs_externalmodel
