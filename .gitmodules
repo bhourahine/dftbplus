@@ -39,4 +39,4 @@
 	url = https://github.com/rk-lindsey/chimes_calculator
 [submodule "external/dftbp-extmodel/origin"]
 	path = external/dftbp-extmodel/origin
-	url = git@github.com:bhourahine/dftbp-extmodel.git
+	url = https://github.com/bhourahine/dftbp-extmodel
