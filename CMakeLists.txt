@@ -184,10 +184,10 @@ string(REGEX MATCH "(^|;)[Ss]ubmodule(^|;)" INCLUDE_INDIRECT_DEPS "${HYBRID_CONF
 # Add external energy model from a library
 set(EXTERNALMODEL_GIT_REPOSITORY "https://github.com/bhourahine/dftbp-extmodel.git")
 set(MPIFX_GIT_TAG "173603767b4cc89ee0197e25ad60b9d998e78cc0")  # do not change manually!
-option(EXTERNALDFTBMODEL "Where to search for external DFTB-like model")
+option(EXTERNALMODEL_LIBRARY "Where to search for external DFTB-like model")
 dftbp_config_hybrid_dependency(ExternalModel
-  ExternalModel::ExternalModel "find;submodule;fetch;pkgconf"
-  "QUIET" external/dftbp-extmodel "${EXTERNALDFTBMODEL}"
+  ExternalModel::ExternalModel "find;submodule;fetch;pkgconf" "QUIET"
+  external/dftbp-extmodel "${EXTERNALMODEL_LIBRARY}"
   "${EXTERNALMODEL_GIT_REPOSITORY}" "${EXTERNALMODEL_GIT_TAG}")
 
 list(APPEND PKG_CONFIG_REQUIRES dftbp-extmodel)

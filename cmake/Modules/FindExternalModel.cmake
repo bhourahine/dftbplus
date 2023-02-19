@@ -4,7 +4,7 @@
 #
 
 #[=======================================================================[.rst:
-FindCustomExternalModel
+FindExternalModel
 -----------------------
 
 Finds library with an external model
@@ -53,8 +53,6 @@ include(CustomLibraryFinder)
 
 if(TARGET ExternalModel::ExternalModel)
 
-  set(CUSTOMEXTERNALMODEL_FOUND True)
-  set(CustomExternalModel_FOUND True)
   set(EXTERNALMODEL_FOUND True)
   set(ExternalModel_FOUND True)
 
@@ -74,7 +72,7 @@ else()
     endif()
 
     find_custom_libraries("${_externalmodel_LIBRARIES}" "${_externalmodel_LIBRARY_DIRS}"
-      "${CustomExternalModel_FIND_QUIETLY}" _libs)
+      "${ExternalModel_FIND_QUIETLY}" _libs)
     set(EXTERNALMODEL_LIBRARY "${_libs}" CACHE STRING "List of EXTERNALMODEL libraries to link" FORCE)
     unset(_libs)
     unset(_externalmodel_LIBRARIES)
@@ -84,10 +82,10 @@ else()
 
   endif()
 
-  find_package_handle_standard_args(CustomExternalModel REQUIRED_VARS EXTERNALMODEL_LIBRARY)
+  find_package_handle_standard_args(ExternalModel REQUIRED_VARS EXTERNALMODEL_LIBRARY)
 
-  set(EXTERNALMODEL_FOUND ${CUSTOMEXTERNALMODEL_FOUND})
-  set(ExternalModel_FOUND ${CUSTOMEXTERNALMODEL_FOUND})
+  set(EXTERNALMODEL_FOUND ${EXTERNALMODEL_FOUND})
+  set(ExternalModel_FOUND ${EXTERNALMODEL_FOUND})
 
   if(EXTERNALMODEL_FOUND AND NOT TARGET ExternalModel::ExternalModel)
     add_library(ExternalModel::ExternalModel INTERFACE IMPORTED)
