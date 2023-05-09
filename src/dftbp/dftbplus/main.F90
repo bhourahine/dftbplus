@@ -1098,7 +1098,7 @@ contains
 
     ! Auxiliary dipole storage
     real(dp), allocatable :: dipoleTmp(:)
-    
+
 
     ! Whether constraints are converged
     logical :: constrConverged
@@ -1285,9 +1285,9 @@ contains
         ! Creates (delta) density matrix for averaged state from real eigenvectors.
         call getDensityFromRealEigvecs(env, this%denseDesc, this%filling(:,1,:),&
             & this%neighbourList, this%nNeighbourSK, this%iSparseStart, this%img2CentCell,&
-            & this%orb, this%species, this%coord, this%tPeriodic, this%tHelical, this%eigVecsReal,&
-            & this%parallelKS, this%rhoPrim, this%SSqrReal, this%rhoSqrReal,&
-            & this%densityMatrix%deltaRhoOut, this%hybridXc)
+            & this%orb, this%species, this%coord, this%tHelical, this%eigVecsReal, this%parallelKS,&
+            & this%rhoPrim, this%SSqrReal, this%rhoSqrReal, this%densityMatrix%deltaRhoOut,&
+            & this%hybridXc)
         ! For hybrid xc-functional calculations deduct atomic charges from deltaRho
         if (this%isHybridXc) then
           call denseSubtractDensityOfAtoms_nospin_real_nonperiodic_reks(this%q0,&
@@ -2805,9 +2805,9 @@ contains
 
     !> Determinant derived type
     type(TDftbDeterminants), intent(inout) :: deltaDftb
-    
-    !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
-    type(TAPICallback), intent(inout) :: apicallback
+
+    !> Object for invocation of the density, overlap, and hamiltonian matrices exported by callbacks
+    type(TAPICallback), intent(inout), optional :: apiCallBack
 
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
@@ -2844,7 +2844,7 @@ contains
           & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim,&
           & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
           & eigvecsCplx, rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb,&
-          & apicallback, iSCC, errStatus)
+          & iSCC, errStatus, apicallback)
       @:PROPAGATE_ERROR(errStatus)
 
     case(electronicSolverTypes%omm, electronicSolverTypes%pexsi, electronicSolverTypes%ntpoly,&
@@ -2871,8 +2871,8 @@ contains
       & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
       & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim, xi,&
       & orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
-      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, apicallback, iSCC,&
-      & errStatus)
+      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, iSCC, errStatus,&
+      & apicallback)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3030,15 +3030,15 @@ contains
     !> Determinant derived type
     type(TDftbDeterminants), intent(inout) :: deltaDftb
 
-    !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
-    type(Tapicallback), intent(inout) :: apicallback
-
-    !> SCC iteration index. Used here to determine if we need invoke overlap and hamiltonian 
+    !> SCC iteration index. Used here to determine if we need invoke overlap and hamiltonian
     !> matrices exporting callbacks now.
     integer, intent(in) :: iSCC
 
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
+
+    !> Object for invocation of the density, overlap, and hamiltonian matrices exported by callbacks
+    type(Tapicallback), intent(inout), optional :: apiCallBack
 
     integer :: nSpin
 
@@ -3050,22 +3050,20 @@ contains
             & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, orb, tPeriodic, tHelical,&
             & coord, electronicSolver, parallelKS, hybridXc, densityMatrix%deltaRhoIn,&
             & nNeighbourCam, nNeighbourCamSym, HSqrReal, SSqrReal, eigVecsReal, eigen(:,1,:),&
-            & apicallback, iSCC, errStatus)
-        @:PROPAGATE_ERROR(errStatus)
+            & iSCC, errStatus, apicallback)
       else
         call buildAndDiagDenseCplxHam(env, denseDesc, ints, kPoint, kWeight, neighbourList,&
             & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, rCellVecs, iCellVec,&
             & recVecs2p, cellVec, electronicSolver, parallelKS, tHelical, orb, species, coord,&
             & hybridXc, densityMatrix, nNeighbourCamSym, HSqrCplx, SSqrCplx, eigVecsCplx, eigen,&
-            & apicallback, iSCC, errStatus)
-        @:PROPAGATE_ERROR(errStatus)
+            & iSCC, errStatus, apicallback)
       end if
     else
       call buildAndDiagDensePauliHam(env, denseDesc, ints, kPoint, neighbourList,&
           & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
           & parallelKS, eigen(:,:,1), HSqrCplx, SSqrCplx, eigVecsCplx, errStatus, xi, species)
-      @:PROPAGATE_ERROR(errStatus)
     end if
+    @:PROPAGATE_ERROR(errStatus)
     call env%globalTimer%stopTimer(globalTimers%diagonalization)
 
     call getFillingsAndBandEnergies(eigen, nEl, nSpin, tempElec, kWeight, tSpinSharedEf,&
@@ -3075,9 +3073,8 @@ contains
     if (nSpin /= 4) then
       if (tRealHS) then
         call getDensityFromRealEigvecs(env, denseDesc, filling(:,1,:), neighbourList, nNeighbourSK,&
-            & iSparseStart, img2CentCell, orb, species, coord, tPeriodic, tHelical, eigVecsReal,&
-            & parallelKS, rhoPrim, SSqrReal, rhoSqrReal, densityMatrix%deltaRhoOut, hybridXc,&
-            & apicallback)
+            & iSparseStart, img2CentCell, orb, species, coord, tHelical, eigVecsReal, parallelKS,&
+            & rhoPrim, SSqrReal, rhoSqrReal, densityMatrix%deltaRhoOut, hybridXc, apicallback)
       else
         call getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighbourList,&
             & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb,&
@@ -3103,7 +3100,7 @@ contains
   subroutine buildAndDiagDenseRealHam(env, denseDesc, ints, species, neighbourList,&
       & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, orb, tPeriodic, tHelical,&
       & coord, electronicSolver, parallelKS, hybridXc, deltaRhoIn, nNeighbourCam,&
-      & nNeighbourCamSym, HSqrReal, SSqrReal, eigvecsReal, eigen, apicallback, iSCC, errStatus)
+      & nNeighbourCamSym, HSqrReal, SSqrReal, eigvecsReal, eigen, iSCC, errStatus, apicallback)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3174,18 +3171,17 @@ contains
     !> Eigenvalues
     real(dp), intent(out) :: eigen(:,:)
 
-    !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
-    type(Tapicallback), intent(in), optional :: apicallback
-    
-    !> SCC iteration index. Used here to determine if we need invoke overlap and hamiltonian 
+    !> SCC iteration index. Used here to determine if we need invoke overlap and hamiltonian
     !> matrices exporting callbacks now.
     integer, intent(in) :: iSCC
-
-    integer :: iK, iKS, iSpin
 
     !> Status of operation
     type(TStatus), intent(inout) :: errStatus
 
+    !> Object for invocation of the density, overlap, and hamiltonian matrices exported by callbacks
+    type(Tapicallback), intent(in), optional :: apiCallBack
+
+    integer :: iK, iKS, iSpin
 
     eigen(:,:) = 0.0_dp
 
@@ -3216,11 +3212,11 @@ contains
         @:PROPAGATE_ERROR(errStatus)
       end if
 
-      if (present(apicallback)) then
+      if (present(apiCallBack)) then
         if (iSCC == 1) then
-          call apicallback%invokeS(iK, iSpin, SSqrReal, denseDesc%blacsOrbSqr)
+          call apiCallBack%invokeS(iK, iSpin, SSqrReal, denseDesc%blacsOrbSqr)
         endif
-        call apicallback%invokeH(iK, iSpin, HSqrReal, denseDesc%blacsOrbSqr)
+        call apiCallBack%invokeH(iK, iSpin, HSqrReal, denseDesc%blacsOrbSqr)
       endif
 
       call diagDenseMtxBlacs(electronicSolver, 1, 'V', denseDesc%blacsOrbSqr, HSqrReal, SSqrReal,&
@@ -3276,8 +3272,8 @@ contains
   subroutine buildAndDiagDenseCplxHam(env, denseDesc, ints, kPoint, kWeight, neighbourList,&
       & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, rCellVecs, iCellVec, recVecs2p,&
       & cellVec, electronicSolver, parallelKS, tHelical, orb, species, coord, hybridXc,&
-      & densityMatrix, nNeighbourCamSym, HSqrCplx, SSqrCplx, eigvecsCplx, eigen, apicallback,&
-      & iSCC, errStatus)
+      & densityMatrix, nNeighbourCamSym, HSqrCplx, SSqrCplx, eigvecsCplx, eigen, iSCC, errStatus,&
+      & apicallback)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3360,21 +3356,21 @@ contains
     !> Eigenvalues
     real(dp), intent(out) :: eigen(:,:,:)
 
-    !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
-    type(Tapicallback), intent(in), optional :: apicallback
-
-    !> SCC iteration index. Used here to determine if we need invoke overlap and hamiltonian 
+    !> SCC iteration index. Used here to determine if we need invoke overlap and hamiltonian
     !> matrices exporting callbacks now.
     integer, intent(in) :: iSCC
 
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
+    !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
+    type(Tapicallback), intent(in), optional :: apiCallBack
+
     !! Temporary storage for square, k-space CAM-Hamiltonian contribution
     complex(dp), allocatable :: HSqrCplxCam(:,:,:)
 
     !! Indices for k-points and spins + composite
-    integer :: iK, iSpin, iKS
+    integer :: iKS, iK, iSpin
 
     eigen(:,:,:) = 0.0_dp
 
@@ -3420,11 +3416,11 @@ contains
         HSqrCplx(:,:) = HSqrCplx + HSqrCplxCam(:,:, densityMatrix%iKiSToiGlobalKS(iK, iSpin))
       end if
 
-      if (present(apicallback)) then
+      if (present(apiCallBack)) then
         if (iSCC == 1) then
-          call apicallback%invokeS(iK, iSpin, SSqrCplx, denseDesc%blacsOrbSqr)
+          call apiCallBack%invokeS(iK, iSpin, SSqrCplx, denseDesc%blacsOrbSqr)
         endif
-        call apicallback%invokeH(iK, iSpin, HSqrCplx, denseDesc%blacsOrbSqr)
+        call apiCallBack%invokeH(iK, iSpin, HSqrCplx, denseDesc%blacsOrbSqr)
       endif
 
       call diagDenseMtxBlacs(env, electronicSolver, iKS, 'V', denseDesc%blacsOrbSqr, HSqrCplx,&
@@ -3456,9 +3452,9 @@ contains
 
       if (present(apicallback)) then
         if (iSCC == 1) then
-          call apicallback%invokeS(iK, iSpin, SSqrCplx)
+          call apiCallBack%invokeS(iK, iSpin, SSqrCplx)
         endif
-        call apicallback%invokeH(iK, iSpin, HSqrCplx)
+        call apiCallBack%invokeH(iK, iSpin, HSqrCplx)
       endif
 
       call diagDenseMtx(env, electronicSolver, 'V', HSqrCplx, SSqrCplx, eigen(:, iK, iSpin),&
@@ -3598,8 +3594,8 @@ contains
 
   !> Creates sparse density matrix from real eigenvectors.
   subroutine getDensityFromRealEigvecs(env, denseDesc, filling, neighbourList, nNeighbourSK,&
-      & iSparseStart, img2CentCell, orb, species, coord, tPeriodic, tHelical, eigvecs, parallelKS,&
-      & rhoPrim, work, rhoSqrReal, deltaRhoOut, hybridXc, apicallback)
+      & iSparseStart, img2CentCell, orb, species, coord, tHelical, eigvecs, parallelKS, rhoPrim,&
+      & work, rhoSqrReal, deltaRhoOut, hybridXc, apicallback)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3634,9 +3630,6 @@ contains
     !> All coordinates
     real(dp), intent(in) :: coord(:,:)
 
-    !> Is the system periodic (gamma)?
-    logical, intent(in) :: tPeriodic
-
     !> Is the geometry helical
     logical, intent(in) :: tHelical
 
@@ -3659,7 +3652,7 @@ contains
     class(THybridXcFunc), intent(in), allocatable :: hybridXc
 
     !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
-    type(Tapicallback), intent(in), optional :: apicallback
+    type(Tapicallback), intent(in), optional :: apiCallBack
 
     integer :: iKS, iK, iSpin
 
@@ -3729,9 +3722,9 @@ contains
       if (present(apicallback)) then
         if (.not. allocated(deltaRhoOut)) then
         #:if WITH_SCALAPACK
-          call apicallback%invokeDM(iK, iSpin, work, denseDesc%blacsOrbSqr)
+          call apiCallBack%invokeDM(iK, iSpin, work, denseDesc%blacsOrbSqr)
         #:else
-          call apicallback%invokeDM(iK, iSpin, work)
+          call apiCallBack%invokeDM(iK, iSpin, work)
         #:endif
         else
         #:if WITH_SCALAPACK
@@ -3741,7 +3734,7 @@ contains
         #:endif
         endif
       end if
-      
+
       if (allocated(rhoSqrReal)) then
         if (.not. allocated(deltaRhoOut)) then
           rhoSqrReal(:,:, iSpin) = work
@@ -3839,7 +3832,7 @@ contains
     class(THybridXcFunc), intent(in), allocatable :: hybridXc
 
     !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
-    type(Tapicallback), intent(in), optional :: apicallback
+    type(Tapicallback), intent(in), optional :: apiCallBack
 
     !! K-point-spin composite index and k-point/spin index
     integer :: iKS, iK, iSpin
@@ -3883,12 +3876,12 @@ contains
       call env%globalTimer%stopTimer(globalTimers%denseToSparse)
     #:endif
 
-      if (present(apicallback)) then
-        #:if WITH_SCALAPACK
-        call apicallback%invokeDM(iK, iSpin, work, denseDesc%blacsOrbSqr)
-        #:else
-        call apicallback%invokeDM(iK, iSpin, work)
-        #:endif
+      if (present(apiCallBack)) then
+      #:if WITH_SCALAPACK
+        call apiCallBack%invokeDM(iK, iSpin, work, denseDesc%blacsOrbSqr)
+      #:else
+        call apiCallBack%invokeDM(iK, iSpin, work)
+      #:endif
       endif
 
       if (allocated(hybridXc)) then
@@ -7710,8 +7703,8 @@ contains
     do iL = 1, reks%Lmax
 
       call getDensityFromRealEigvecs(env, denseDesc, reks%fillingL(:,:,iL), neighbourList,&
-          & nNeighbourSK, iSparseStart, img2CentCell, orb, species, coord, tPeriodic, tHelical,&
-          & eigvecs, parallelKS, rhoPrim, work, rhoSqrReal, deltaRhoOut, hybridXc)
+          & nNeighbourSK, iSparseStart, img2CentCell, orb, species, coord, tHelical, eigvecs,&
+          & parallelKS, rhoPrim, work, rhoSqrReal, deltaRhoOut, hybridXc)
 
       if (reks%tForces) then
         ! reks%rhoSqrL has (my_ud) component

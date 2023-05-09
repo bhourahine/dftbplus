@@ -1281,6 +1281,10 @@ contains
       call detailedError(node, "Invalid Hamiltonian")
     end select
 
+  #:if WITH_API
+    call getChildValue(node, 'ASI', ctrl%isASICallbackEnabled, .false.)
+  #:endif
+
   end subroutine readHamiltonian
 
 
