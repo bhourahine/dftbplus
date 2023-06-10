@@ -93,3 +93,8 @@ if(WITH_C_EXECUTABLES)
   target_link_libraries(test_qdepextpotc dftbplus)
   set_target_properties(test_qdepextpotc PROPERTIES LINKER_LANGUAGE C)
 endif()
+
+if(WITH_OMP AND INSTANCE_SAFE_BUILD)
+  add_executable(test_instances test_instances.f90 $<TARGET_OBJECTS:test_api_mm_utils>)
+  target_link_libraries(test_instances dftbplus)
+endif()
