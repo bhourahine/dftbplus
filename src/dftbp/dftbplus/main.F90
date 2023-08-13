@@ -2181,6 +2181,7 @@ contains
     type(TTransPar), intent(in) :: transpar
 
     call boundaryCond%handleBoundaryChanges(latVecs, invLatVecs, recVecs, cellVol, recCellVol)
+
     if (tStress) then
       call derivDeterminant33(extLatDerivs, latVecs)
       extLatDerivs(:,:) = extPressure * extLatDerivs
