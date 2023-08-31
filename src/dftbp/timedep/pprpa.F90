@@ -282,9 +282,9 @@ contains
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
-    
+
     !> Dense matrix descriptor
-    type(TDenseDescr), intent(in) :: denseDesc 
+    type(TDenseDescr), intent(in) :: denseDesc
 
     !> coulomb interaction
     real(dp), intent(in) :: gamma_eri(:,:)

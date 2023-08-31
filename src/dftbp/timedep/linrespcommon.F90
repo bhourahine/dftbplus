@@ -22,13 +22,13 @@ module dftbp_timedep_linrespcommon
   use dftbp_common_environment, only : TEnvironment
 
 #:if WITH_SCALAPACK
-  
+
   use dftbp_extlibs_scalapackfx, only : DLEN_, M_, N_, NB_, CSRC_, MB_, RSRC_, scalafx_indxl2g,&
        & scalafx_getlocalshape
   use dftbp_extlibs_mpifx, only : MPI_SUM, mpifx_allreduceip, mpifx_allgatherv
-  
+
 #:endif
-  
+
   implicit none
 
   public
@@ -334,7 +334,7 @@ contains
       end do
     end do
 
-  end subroutine transDens 
+  end subroutine transDens
 
 
   !> Returns the (spatial) MO overlap between orbitals in different spin channels
@@ -474,7 +474,7 @@ contains
     type(TEnvironment), intent(in) :: env
 
     !> Dense matrix descriptor
-    type(TDenseDescr), intent(in) :: denseDesc 
+    type(TDenseDescr), intent(in) :: denseDesc
 
     !> overlap times eigenvector. (nOrb, nOrb)
     real(dp), intent(in) :: ovrXev(:,:,:)
@@ -703,9 +703,9 @@ contains
     endif
 
   end subroutine actionAplusB
-  
+
 #:if WITH_SCALAPACK
-  
+
   !> Multiplies the excitation supermatrix with a supervector.
   !> For the hermitian RPA eigenvalue problem this corresponds to \Omega_ias,jbt * v_jbt
   !> (spin polarized case) or \Omega^{S/T}_ia,jb * v_jb (singlet/triplet)
@@ -719,7 +719,7 @@ contains
   !>
   !> Note: In order not to store the entire supermatrix (nmat, nmat), the various pieces are
   !> assembled individually and multiplied directly with the corresponding part of the supervector.
-  !> Note MPI: The supervector is distributed, locSize gives the local size. 
+  !> Note MPI: The supervector is distributed, locSize gives the local size.
   subroutine actionAplusB_MPI(locSize, vOffset, spin, wij, sym, win, nocc_ud, nvir_ud, nxoo_ud,&
       & nxvv_ud, nxov_ud, nxov_rd, iaTrans, getIA, getIJ, getAB, env, denseDesc, ovrXev, ovrXevGlb,&
       & grndEigVecs, eigVecGlb, occNr, sqrOccIA, gamma, species0, spinW, onsMEs, orb, tAplusB,&
@@ -777,20 +777,20 @@ contains
     type(TEnvironment), intent(in) :: env
 
     !> Dense matrix descriptor
-    type(TDenseDescr), intent(in) :: denseDesc 
+    type(TDenseDescr), intent(in) :: denseDesc
 
     !> overlap times eigenvector. (nOrb, nOrb) [distributed]
     real(dp), intent(in) :: ovrXev(:,:,:)
 
-    !> overlap times eigenvector. (nOrb, nOrb) [global array]   
+    !> overlap times eigenvector. (nOrb, nOrb) [global array]
     real(dp), intent(in) :: ovrXevGlb(:,:,:)
-    
+
     !> eigenvectors (nOrb, nOrb) [distributed]
     real(dp), intent(in) :: grndEigVecs(:,:,:)
 
     !> eigenvectors (nOrb, nOrb) [global array]
     real(dp), intent(in) :: eigVecGlb(:,:,:)
-    
+
     !> occupation numbers
     real(dp), intent(in) :: occNr(:,:)
 
@@ -851,11 +851,11 @@ contains
     @:ASSERT(nmat <= nxov_rd)
     natom = size(gamma, dim=1)
     norb = nocc_ud(1)+nvir_ud(1)
-    
+
     iam = env%mpi%globalComm%rank
     nLoc = locSize(iam+1)
     @:ASSERT(nmat == nLoc)
-    iGlb = vOffset(iam+1) + 1 
+    iGlb = vOffset(iam+1) + 1
     fGlb = vOffset(iam+1) + nLoc
     allocate(vLoc, mold=vin)
     vLoc = 0.0_dp
@@ -867,9 +867,9 @@ contains
       vLoc(:) = vin * sqrt(wij(iGlb:fGlb))
     endif
 
-    !> Compute w_ia = q^ia_A G_AB q^jb v_jb 
+    !> Compute w_ia = q^ia_A G_AB q^jb v_jb
 
-    oTmp(:) = 0.0_dp    
+    oTmp(:) = 0.0_dp
     do myia = 1, nLoc
       ia = vOffset(iam+1) + myia
       qij(:) = transChrg%qTransIA(ia, env, denseDesc, ovrXev, grndEigVecs, getIA, win)
@@ -890,10 +890,10 @@ contains
           ia = vOffset(iam+1) + myia
           qij(:) = transChrg%qTransIA(ia, env, denseDesc, ovrXev, grndEigVecs, getIA, win)
           vOut(myia) = 4.0_dp * sqrOccIA(ia) * dot_product(qij, gTmp)
-        enddo  
+        enddo
 
       else
-       
+
         otmp = otmp * spinW(species0)
 
         ! 4 * wn * (o * Q)
@@ -913,7 +913,7 @@ contains
       !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ia,ss,qij) &
       !$OMP& SCHEDULE(RUNTIME) REDUCTION(+:otmp)
       do myia = 1, nLoc
-         
+
         ia = vOffset(iam+1) + myia
         qij(:) = transChrg%qTransIA(ia, env, denseDesc, ovrXev, grndEigVecs, getIA, win)
 
@@ -936,30 +936,30 @@ contains
       !$OMP& SCHEDULE(RUNTIME)
       do myia = 1, nLoc
 
-        ia = vOffset(iam+1) + myia        
+        ia = vOffset(iam+1) + myia
         qij(:) = transChrg%qTransIA(ia, env, denseDesc, ovrXev, grndEigVecs, getIA, win)
 
         ss = getIA(win(ia), 3)
-      
+
         vOut(myia) = vOut(myia) + 2.0_dp * sqrOccIA(ia) * spinFactor(ss) * dot_product(qij, otmp)
 
       end do
       !$OMP  END PARALLEL DO
 
     end if
-    
-    !> The largest matrices in this part are of dim nAtoms*nVir*nVir, seems logical to distribute 
+
+    !> The largest matrices in this part are of dim nAtoms*nVir*nVir, seems logical to distribute
     !> them. The local dimensions are different from the case of nOcc*nVir, we require new offsets.
-    !> A new index array is required because the standard abs index is symmetrical in a and b  
+    !> A new index array is required because the standard abs index is symmetrical in a and b
     if (tRangeSep) then
-      
+
       !> This part is already fully coded for MPI, but was never tested.
       call error('You should never reach this point.')
 
       !! Number of vir-vir transitions a->b _and_ b->a, summed over spin channels
       nxvv_a = sum(nvir_ud**2)
       allocate(getABasym(nxvv_a, 3))
-  
+
       do ss = 1, size(iaTrans, dim=3)
         do aa = nocc_ud(ss) + 1, norb
           do bb = nocc_ud(ss) + 1, norb
@@ -973,29 +973,29 @@ contains
           end do
         end do
       end do
-            
+
       nProcs = env%mpi%globalComm%size
-      
+
       allocate(locSizeAB(nProcs))
       allocate(vOffSetAB(nProcs))
 
       call localSizeCasidaVectors(nProcs, nxvv_a, locSizeAB, vOffSetAB)
-      
+
       nLocAB = locSizeAB(iam+1)
 
       allocate(qv(natom, max(nLoc, nLocAB)))
       allocate(vGlb(nxov_rd))
       allocate(vGlb2(nxov_rd))
 
-      !> TD-LC-DFTB seems to require two additional global arrays of dim nOcc*nVir, qv is local 
+      !> TD-LC-DFTB seems to require two additional global arrays of dim nOcc*nVir, qv is local
       qv(:,:) = 0.0_dp
       vGlb(:) = 0.0_dp
       vGlb2(:) = 0.0_dp
 
-      !> Gather local arrays in corresponding global array  
+      !> Gather local arrays in corresponding global array
       call mpifx_allgatherv(env%mpi%globalComm, vLoc, vGlb, locSize, vOffset)
 
-      !> Compute w_ia = q^ij_A GLR_AB q^ab v_jb 
+      !> Compute w_ia = q^ij_A GLR_AB q^ab v_jb
       do myja = 1, nLoc
         jas = vOffset(iam+1) + myja
         jj = getIA(win(jas), 1)
@@ -1007,10 +1007,10 @@ contains
           jbs = iaTrans(jj, bb, ss)
           qv(:,myja) = qv(:,myja) + qij(:) * vGlb(jbs) * sqrOccIA(jbs)
         end do
-        
+
         otmp(:) = qv(:,myja)
         call dsymv('U', natom, 1.0d0, lrGamma, natom, otmp, 1, 0.d0, qv(:,myja), 1)
-        
+
         do ii = 1, nocc_ud(ss)
           ijs = iaTrans(ii, jj, ss)
           qij(:) = transChrg%qTransIJ(ijs, env, denseDesc, ovrXev, grndEigVecs, getIJ)
@@ -1019,7 +1019,7 @@ contains
         end do
       end do
 
-      !> Compute w_ia = q^ib_A GLR_AB q^ja v_jb 
+      !> Compute w_ia = q^ib_A GLR_AB q^ja v_jb
       qv(:,:) = 0.0_dp
       do myab = 1, nLocAB
         abs = vOffsetAB(iam+1) + myab
@@ -1039,37 +1039,37 @@ contains
           ibs = iaTrans(ii, bb, ss)
           qij(:) = transChrg%qTransIA(ibs, env, denseDesc, ovrXev, grndEigVecs, getIA, win)
           ias = iaTrans(ii, aa, ss)
-          vGlb2(ias) = vGlb2(ias) - cExchange * sqrOccIA(ias) * dot_product(qij, qv(:,myab)) 
+          vGlb2(ias) = vGlb2(ias) - cExchange * sqrOccIA(ias) * dot_product(qij, qv(:,myab))
         end do
       end do
 
       !> Get contribution of all ranks to global array
       call mpifx_allreduceip(env%mpi%globalComm, vGlb2, MPI_SUM)
-      
+
       do myja = 1, nLoc
         jas = vOffset(iam+1) + myja
-        vout(myja) = vout(myja) +  vGlb2(jas) 
+        vout(myja) = vout(myja) +  vGlb2(jas)
       end do
 
     end if
-   
+
     if (allocated(onsMEs)) then
       !> Parallelizing this routine is difficult. Calls transdens which refers to individual
-      !> global indices. Input vector is still distributed. 
+      !> global indices. Input vector is still distributed.
       call onsiteEner(env, spin, sym, wij, sqrOccIA, win, nxov_ud(1), denseDesc%iAtomStart, getIA,&
-          & species0, ovrXevGlb, eigVecGlb, onsMEs, orb, vLoc, vout_ons, vOffset(iam+1))      
+          & species0, ovrXevGlb, eigVecGlb, onsMEs, orb, vLoc, vout_ons, vOffset(iam+1))
       vout(:) = vout + vout_ons
     end if
-    
+
     vout(:) = vout + wij(iGlb:fGlb) * vLoc
-    
+
     if(.not. tAplusB) then
       vOut(:) = vOut * sqrt(wij(iGlb:fGlb))
     endif
 
   end subroutine actionAplusB_MPI
 
-#:endif 
+#:endif
 
   !> Multiplies the excitation supermatrix with a supervector.
   !> (A-B)_ias,jbt * v_jbt is computed (and similar for singlet/triplet)
@@ -1241,7 +1241,7 @@ contains
 
     ! orb. energy difference diagonal contribution
     vout(:) = vout + wij * vin
-    
+
   end subroutine actionAminusB
 
 
@@ -1284,7 +1284,7 @@ contains
     type(TEnvironment), intent(in) :: env
 
     !> Dense matrix descriptor
-    type(TDenseDescr), intent(in) :: denseDesc 
+    type(TDenseDescr), intent(in) :: denseDesc
 
     !> overlap times eigenvector. (nOrb, nOrb)
     real(dp), intent(in) :: sTimesGrndEigVecs(:,:,:)
@@ -1484,7 +1484,7 @@ contains
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
-    
+
     !> logical spin polarization
     logical, intent(in) :: spin
 
@@ -1605,11 +1605,11 @@ contains
     end do
 
   #:if WITH_SCALAPACK
-    
+
     call mpifx_allreduceip(env%mpi%globalComm, otmp, MPI_SUM)
 
   #:endif
-    
+
     do ia = 1, nmat
       iaGlb = ia + iOff
       call indxov(win, iaGlb, getIA, ii, jj, ss)
@@ -1622,9 +1622,9 @@ contains
       end do
     end do
 
-  end subroutine onsiteEner  
+  end subroutine onsiteEner
 
-  
+
   !> calculating spin polarized excitations
   !> Note: the subroutine is generalized to account for spin and partial occupancy
   subroutine getSPExcitations(nOcc, nVir, grndEigVal, filling, wij, getIA, getIJ, getAB)
@@ -1795,7 +1795,7 @@ contains
     integer, intent(in) :: nOrb
 
     !> number of spins
-    integer, intent(in) :: nSpin    
+    integer, intent(in) :: nSpin
 
     !> number of same-spin transitions
     integer, intent(in) :: nmatup
@@ -1804,7 +1804,7 @@ contains
     type(TEnvironment), intent(in) :: env
 
     !> Dense matrix descriptor
-    type(TDenseDescr), intent(in) :: denseDesc 
+    type(TDenseDescr), intent(in) :: denseDesc
 
     !> index array for excitation pairs
     integer, intent(in) :: getIA(:,:)
@@ -1825,7 +1825,7 @@ contains
     integer :: indm, ii, jj, ss
     real(dp), allocatable :: qij(:)
     logical :: updwn
-    
+
     nxov = size(win)
     natom = size(coord0, dim=2)
 
@@ -1877,7 +1877,7 @@ contains
     integer, allocatable :: TDvin(:)
     logical :: ud_ia, ud_jb
     real(dp) :: s_iaja, s_iaib, s_iajb, tmp
-    
+
     nmat = size(xpy, dim=1)
     nexc = size(Ssq)
     nup = ceiling(sum(filling(:,1)))
@@ -1987,17 +1987,17 @@ contains
   end subroutine getExcSpin
 
 #:if WITH_SCALAPACK
-  
+
   !> Calculate <S^2> as a measure of spin contamination (smaller magnitudes are better, 0.5 is
   !> considered an upper threshold for reliability according to Garcia thesis)
-  subroutine getExcSpin_MPI(env, denseDesc, Ssq, nOrb, nmatup, nmat, getIA, win, eval, xpy, & 
+  subroutine getExcSpin_MPI(env, denseDesc, Ssq, nOrb, nmatup, nmat, getIA, win, eval, xpy, &
     & filling, ovrXev, grndEigVecs)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
 
     !> Dense matrix descriptor
-    type(TDenseDescr), intent(in) :: denseDesc 
+    type(TDenseDescr), intent(in) :: denseDesc
 
     !> spin contamination
     real(dp), intent(out) :: Ssq(:)
@@ -2010,7 +2010,7 @@ contains
 
     !> total number of single-particle excitations
     integer, intent(in) :: nmat
-    
+
     !> index for composite excitations to specific occupied and empty states
     integer, intent(in) :: getIA(:,:)
 
@@ -2038,7 +2038,7 @@ contains
     real(dp), allocatable :: TDvec(:), TDvec_sq(:)
     real(dp), allocatable :: eigVecGlb(:,:,:), ovrXevGlb(:,:,:)
     integer, allocatable :: TDvin(:)
-    
+
     logical :: ud_ia, ud_jb
     real(dp) :: s_iaja, s_iaib, s_iajb, tmp
 
@@ -2048,7 +2048,7 @@ contains
     allocate(TDvec(nmat))
     allocate(TDvec_sq(nmat))
     allocate(TDvin(nmat))
-    
+
     allocate(eigVecGlb(nOrb,nOrb,2))
     allocate(ovrXevGlb(nOrb,nOrb,2))
     !!eigVecGlb=0.0
@@ -2057,7 +2057,7 @@ contains
       call local2GlobalBlacsArray(env, denseDesc, grndEigVecs(:,:,ss), eigVecGlb(:,:,ss))
       call local2GlobalBlacsArray(env, denseDesc, ovrXev(:,:,ss), ovrXevGlb(:,:,ss))
     end do
- 
+
     do i = 1, nexc
       TDvec(:) = xpy(:,i)
       TDvnorm = 1.0_dp / sqrt(sum(TDvec**2))
@@ -2157,8 +2157,8 @@ contains
     end do
 
   end subroutine getExcSpin_MPI
-  
- #:endif  
+
+ #:endif
 
   !> Write single particle excitations to a file
   subroutine writeSPExcitations(wij, win, nmatup, getIA, writeSPTrans, sposz, nxov, tSpin)
@@ -2530,7 +2530,7 @@ contains
   end subroutine incMemStratmann
 
 #:if WITH_SCALAPACK
-  
+
   !> Collect distributed BLACS orbitalGrid array into global one
   !> Note: should maybe go into different module and be more general
   subroutine local2GlobalBlacsArray(env, denseDesc, locArray, glbArray)
@@ -2545,9 +2545,9 @@ contains
     real(dp), intent(in) :: locArray(:,:)
 
     !> Global array
-    real(dp), intent(out) :: glbArray(:,:)    
-    
-    integer :: desc(DLEN_), iLoc, jLoc, iGlb, jGlb, nLocalRows, nLocalCols, ierr 
+    real(dp), intent(out) :: glbArray(:,:)
+
+    integer :: desc(DLEN_), iLoc, jLoc, iGlb, jGlb, nLocalRows, nLocalCols, ierr
 
     desc(:) = denseDesc%blacsOrbSqr
 
@@ -2565,13 +2565,13 @@ contains
       end do
     end do
     call mpifx_allreduceip(env%mpi%groupComm, glbArray, MPI_SUM)
-    
+
   end subroutine local2GlobalBlacsArray
 
 
   !> Determine size and offsets for distributed RPA/Casida vectors
   subroutine localSizeCasidaVectors(nProcs, nDim, locSize, vOffSet)
-    
+
     !> Number of processors
     integer, intent(in) :: nProcs
 
@@ -2585,7 +2585,7 @@ contains
     integer, intent(out) :: vOffSet(:)
 
     integer :: ii, iProc, nLoc
-    
+
     locSize = 0
     vOffSet = 0
     ii = 0
@@ -2600,7 +2600,7 @@ contains
     enddo
 
   end subroutine localSizeCasidaVectors
-  
+
 #:endif
-  
+
 end module dftbp_timedep_linrespcommon

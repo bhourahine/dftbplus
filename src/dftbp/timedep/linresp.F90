@@ -248,7 +248,7 @@ contains
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
-    
+
     !> data structure with additional linear response values
     type(TLinresp), intent(inout) :: this
 
@@ -331,7 +331,7 @@ contains
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
-    
+
     !> is this a spin-polarized calculation
     logical, intent(in) :: tSpin
 

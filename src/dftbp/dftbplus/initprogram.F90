@@ -4878,17 +4878,17 @@ contains
     integer :: nLocalCols, nLocalRows, nLocalKS
 
     nLocalKS = size(this%parallelKS%localKS, dim=2)
-    
+
   #:if WITH_SCALAPACK
-    
+
     call scalafx_getlocalshape(env%blacs%orbitalGrid, this%denseDesc%blacsOrbSqr, nLocalRows,&
          & nLocalCols)
 
   #:else
-    
+
     nLocalRows = this%denseDesc%fullSize
     nLocalCols = this%denseDesc%fullSize
-    
+
   #:endif
 
     if (this%t2Component .or. .not. this%tRealHS) then

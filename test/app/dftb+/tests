@@ -341,7 +341,7 @@ timedep/C6H6-Sym                       #? WITH_ARPACK and MPI_PROCS <= 2
 timedep/C6H6-Sym_Arnoldi               #? WITH_ARPACK and MPI_PROCS <= 2
 timedep/C66O10N4H44_Ewindow            #? WITH_ARPACK and MPI_PROCS <= 2
 timedep/C66O10N4H44_OscWindow          #? WITH_ARPACK and MPI_PROCS <= 2
-timedep/C60_EandOsc                    #? WITH_ARPACK and MPI_PROCS <= 2 
+timedep/C60_EandOsc                    #? WITH_ARPACK and MPI_PROCS <= 2
 
 dftb+u/Fe4                             #? MPI_PROCS <= 2
 dftb+u/Fe4_read                        #? MPI_PROCS <= 2

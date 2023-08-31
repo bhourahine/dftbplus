@@ -4534,16 +4534,16 @@ contains
     allocate(dQAtom(nAtom, nSpin))
     dQAtom(:,:) = sum(qOutput(:,:,:) - q0(:,:,:), dim=1)
 
-  #:if WITH_SCALAPACK   
+  #:if WITH_SCALAPACK
 
     call unpackHSRealBlacs(env%blacs, ints%overlap, neighbourList%iNeighbour, nNeighbourSK,&
          & iSparseStart, img2CentCell, denseDesc, work)
   #:else
-    
+
     call unpackHS(work, ints%overlap, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
          & iSparseStart, img2CentCell)
     call blockSymmetrizeHS(work, denseDesc%iAtomStart)
-    
+
   #:endif
 
     if (allocated(rhoSqrReal)) then
@@ -4559,7 +4559,7 @@ contains
     if (tWriteAutotest) then
       call openFile(fdAutotest, autotestTag, mode="a")
     end if
-    
+
     if (tLinRespZVect) then
       if (tPrintExcEigVecs) then
         allocate(naturalOrbs(orb%nOrb, orb%nOrb, 1))
