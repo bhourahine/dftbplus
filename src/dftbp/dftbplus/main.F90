@@ -242,6 +242,20 @@ contains
           call error(errStatus%message)
         end if
 
+        tWriteCharges = allocated(this%qInput) .and. tWriteRestart .and. this%tMulliken&
+            & .and. this%tSccCalc .and. .not. this%tDerivs&
+            & .and. this%maxSccIter > 1 .and. this%deltaDftb%nDeterminant() == 1&
+            & .and. this%tWriteCharges
+      #:if WITH_SCALAPACK
+        if (this%isHybridXc .and. this%tRealHS) tWriteCharges = .false.
+      #:endif
+        if (tWriteCharges) then
+          call writeCharges(fCharges, this%tWriteChrgAscii, this%orb, this%qInput, this%qBlockIn,&
+              & this%qiBlockIn, this%densityMatrix, this%tRealHS, size(this%iAtInCentralRegion),&
+              & this%hybridXcAlg, coeffsAndShifts=this%supercellFoldingMatrix,&
+              & multipoles=this%multipoleInp)
+        end if
+
         call postDetCharges(iDet, this%nDets, this%qOutput, this%qDets, this%qBlockDets,&
             & this%qBlockOut, this%deltaRhoDets, this%densityMatrix%deltaRhoOut)
 
@@ -290,21 +304,6 @@ contains
             & this%derivs, this%totalStress, this%cellVol)
       end if
     #:endif
-      tWriteCharges = allocated(this%qInput) .and. tWriteRestart .and. this%tMulliken&
-          & .and. this%tSccCalc .and. .not. this%tDerivs&
-          & .and. this%maxSccIter > 1 .and. this%deltaDftb%nDeterminant() == 1&
-          & .and. this%tWriteCharges
-    #:if WITH_SCALAPACK
-      if (this%isHybridXc .and. this%tRealHS) then
-        tWriteCharges = .false.
-      end if
-    #:endif
-      if (tWriteCharges) then
-        call writeCharges(fCharges, this%tWriteChrgAscii, this%orb, this%qInput, this%qBlockIn,&
-            & this%qiBlockIn, this%densityMatrix, this%tRealHS, size(this%iAtInCentralRegion),&
-            & this%hybridXcAlg, coeffsAndShifts=this%supercellFoldingMatrix,&
-            & multipoles=this%multipoleInp)
-      end if
 
       if (this%tDipole.and.allocated(this%derivDriver)) then
         call dipoleAdd(this%derivDriver, this%dipoleMoment)
