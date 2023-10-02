@@ -36,6 +36,14 @@ module dftbp_energies
     !> range-separation energy
     real(dp) :: Efock   = 0.0_dp
 
+    !> MultiPole energy
+    real(dp) :: EMultiPole   = 0.0_dp
+    real(dp) :: EMultiPoleMD = 0.0_dp
+    real(dp) :: EMultiPoleDD = 0.0_dp
+    real(dp) :: EMultiPoleMQ = 0.0_dp
+    real(dp) :: EMultiPoleDQ = 0.0_dp
+    real(dp) :: EMultiPoleQQ = 0.0_dp
+
     !> spin orbit energy
     real(dp) :: ELS     = 0.0_dp
 
@@ -124,6 +132,9 @@ module dftbp_energies
     !> atom resolved 3rd order
     real(dp), allocatable :: atom3rd(:)
 
+    !> atom resolved Multipole order
+    real(dp), allocatable :: atomMultiPole(:)
+
     !> atom resolved total
     real(dp), allocatable :: atomTotal(:)
 
@@ -162,6 +173,7 @@ contains
     allocate(self%atomOnSite(nAtom))
     allocate(self%atomHalogenX(nAtom))
     allocate(self%atom3rd(nAtom))
+    allocate(self%atomMultiPole(nAtom))
     allocate(self%atomTotal(nAtom))
     self%atomRep(:) = 0.0_dp
     self%atomNonSCC(:) = 0.0_dp

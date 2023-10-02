@@ -32,6 +32,7 @@ set(sources-fpp
   ${curdir}/populations.F90
   ${curdir}/potentials.F90
   ${curdir}/rangeseparated.F90
+  ${curdir}/multipole.F90
   ${curdir}/repcont.F90
   ${curdir}/reppoly.F90
   ${curdir}/repspline.F90

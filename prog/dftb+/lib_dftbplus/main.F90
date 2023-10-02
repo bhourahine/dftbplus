@@ -68,6 +68,7 @@ module dftbp_main
   use dftbp_xmlf90
   use dftbp_thirdorder, only : TThirdOrder
   use dftbp_rangeseparated, only : TRangeSepFunc
+  use dftbp_multipole, only : TMultiPole
   use dftbp_simplealgebra
   use dftbp_message
   use dftbp_repcont
@@ -225,7 +226,7 @@ contains
     if (env%tGlobalMaster) then
       if (tWriteDetailedOut) then
         call writeDetailedOut5(fdDetailedOut, isGeoOpt, tGeomEnd, tMd, tDerivs, tEField, absEField,&
-            & dipoleMoment)
+            & dipoleMoment, quadrupoleMoment)
       end if
 
       call writeFinalDriverStatus(isGeoOpt, tGeomEnd, tMd, tDerivs)
@@ -383,7 +384,7 @@ contains
 
     if (tCoordsChanged) then
       call handleCoordinateChange(env, coord0, latVec, invLatVec, species0, cutOff, orb,&
-          & tPeriodic, sccCalc, dispersion, thirdOrd, rangeSep, img2CentCell, iCellVec,&
+          & tPeriodic, sccCalc, dispersion, thirdOrd, rangeSep, multiPole, img2CentCell, iCellVec,&
           & neighbourList, nAllAtom, coord0Fold, coord, species, rCellVec, nNeighbourSk,&
           & nNeighbourRep, nNeighbourLC, ham, over, H0, rhoPrim, iRhoPrim, iHam, ERhoPrim,&
           & iSparseStart, tPoisson)
@@ -490,7 +491,7 @@ contains
       #:endif
 
         call addChargePotentials(env, sccCalc, qInput, q0, chargePerShell, orb, species,&
-            & neighbourList, img2CentCell, spinW, thirdOrd, potential, electrostatics, tPoisson,&
+            & neighbourList, img2CentCell, spinW, thirdOrd, multiPole, potential, electrostatics, tPoisson,&
             & tUpload, shiftPerLUp)
 
         call addBlockChargePotentials(qBlockIn, qiBlockIn, tDftbU, tImHam, species, orb,&
@@ -532,13 +533,13 @@ contains
       call getDensity(env, iSccIter, denseDesc, ham, over, neighbourList, nNeighbourSk,&
           & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species,&
           & electronicSolver, tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep,&
-          & tFixEf, tMulliken, iDistribFn, tempElec, nEl, parallelKS, Ef, mu, energy, rangeSep,&
+          & tFixEf, tMulliken, iDistribFn, tempElec, nEl, parallelKS, Ef, mu, energy, rangeSep, multiPole,&
           & eigen, filling, rhoPrim, Eband, TS, E0, iHam, xi, orbitalL, HSqrReal, SSqrReal,&
           & eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx, rhoSqrReal, deltaRhoInSqr,&
           & deltaRhoOutSqr, qOutput, nNeighbourLC, tLargeDenseMatrices)
 
       !> For rangeseparated calculations deduct atomic charges from deltaRho
-      if (tRangeSep) then
+      if (tRangeSep .or. isMultiPole) then
         select case(nSpin)
         case(2)
           do iSpin = 1, 2
@@ -547,8 +548,15 @@ contains
         case(1)
           call denseSubtractDensityOfAtoms(q0, denseDesc%iAtomStart, deltaRhoOutSqr)
         case default
-          call error("Range separation not implemented for non-colinear spin")
+          call error("Range separation or Multipole not implemented for non-colinear spin")
         end select
+      end if
+
+      if (isMultiPole) then
+        call unpackHS(SSqrReal, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+                      & iSparseStart, img2CentCell)
+        call multiPole%updateDeltaDQAtom(deltaRhoOutSqr(:,:,1), over, &
+                                                       & denseDesc%iAtomStart, orb, SSqrReal)
       end if
 
       if (tWriteBandDat) then
@@ -579,7 +587,7 @@ contains
         call getChargePerShell(qOutput, orb, species, chargePerShell)
 
         call addChargePotentials(env, sccCalc, qOutput, q0, chargePerShell, orb, species,&
-            & neighbourList, img2CentCell, spinW, thirdOrd, potential, electrostatics,&
+            & neighbourList, img2CentCell, spinW, thirdOrd, multiPole, potential, electrostatics,&
             & tPoissonTwice, tUpload, shiftPerLUp)
 
         call addBlockChargePotentials(qBlockOut, qiBlockOut, tDftbU, tImHam, species, orb,&
@@ -601,7 +609,7 @@ contains
 
       call getEnergies(sccCalc, qOutput, q0, chargePerShell, species, tExtField, isXlbomd,&
           & tDftbU, tDualSpinOrbit, rhoPrim, H0, orb, neighbourList, nNeighbourSk, img2CentCell,&
-          & iSparseStart, cellVol, extPressure, TS, potential, energy, thirdOrd, rangeSep,&
+          & iSparseStart, cellVol, extPressure, TS, potential, energy, thirdOrd, rangeSep, multiPole,&
           & qDepExtPot, qBlockOut, qiBlockOut, nDftbUFunc, UJ, nUJ, iUJ, niUJ, xi,&
           & iAtInCentralRegion, tFixEf, Ef, onSiteElements)
 
@@ -609,18 +617,31 @@ contains
 
       ! Mix charges Input/Output
       if (tSccCalc) then
-        if(.not. tRangeSep) then
-          call getNextInputCharges(env, pChrgMixer, qOutput, qOutRed, orb, nIneqOrb, iEqOrbitals,&
-              & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tMixBlockCharges,&
-              & tReadChrg, qInput, qInpRed, sccErrorQ, tConverged, qBlockOut, iEqBlockDftbU,&
-              & qBlockIn, qiBlockOut, iEqBlockDftbULS, species0, nUJ, iUJ, niUJ, qiBlockIn,&
-              & iEqBlockOnSite, iEqBlockOnSiteLS)
-        else
+        if(tRangeSep) then
           call getNextInputDensity(SSqrReal, over, neighbourList, nNeighbourSK,&
               & denseDesc%iAtomStart, iSparseStart, img2CentCell, pChrgMixer, qOutput, orb,&
               & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tReadChrg, q0,&
               & qInput, sccErrorQ, tConverged, deltaRhoOut, deltaRhoIn, deltaRhoDiff,&
               & qBlockIn, qBlockOut)
+        else if(isMultiPole) then
+            call getNextInputDensity(SSqrReal, over, neighbourList, nNeighbourSK,&
+                & denseDesc%iAtomStart, iSparseStart, img2CentCell, pChrgMixer, qOutput, orb,&
+                & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tReadChrg, q0,&
+                & qInput, sccErrorQ, tConverged, deltaRhoOut, deltaRhoIn, deltaRhoDiff,&
+                & qBlockIn, qBlockOut)
+            call multiPole%updateDeltaDQAtom(deltaRhoInSqr(:,:,1), over, &
+                                                      & denseDesc%iAtomStart, orb, SSqrReal)
+           !call getNextInputCharges(env, pChrgMixer, qOutput, qOutRed, orb, nIneqOrb, iEqOrbitals,&
+           !    & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tMixBlockCharges,&
+           !    & tReadChrg, qInput, qInpRed, sccErrorQ, tConverged, qBlockOut, iEqBlockDftbU,&
+           !    & qBlockIn, qiBlockOut, iEqBlockDftbULS, species0, nUJ, iUJ, niUJ, qiBlockIn,&
+           !    & iEqBlockOnSite, iEqBlockOnSiteLS)
+        else
+          call getNextInputCharges(env, pChrgMixer, qOutput, qOutRed, orb, nIneqOrb, iEqOrbitals,&
+              & iGeoStep, iSccIter, minSccIter, maxSccIter, sccTol, tStopScc, tMixBlockCharges,&
+              & tReadChrg, qInput, qInpRed, sccErrorQ, tConverged, qBlockOut, iEqBlockDftbU,&
+              & qBlockIn, qiBlockOut, iEqBlockDftbULS, species0, nUJ, iUJ, niUJ, qiBlockIn,&
+              & iEqBlockOnSite, iEqBlockOnSiteLS)
         end if
 
         call getSccInfo(iSccIter, energy%Eelec, Eold, diffElec)
@@ -650,7 +671,7 @@ contains
             & extPressure, cellVol, tAtomicEnergy, tDispersion, tEField, tPeriodic, nSpin, tSpin,&
             & tSpinOrbit, tSccCalc, allocated(onSiteElements), tNegf, invLatVec, kPoint,&
             & iAtInCentralRegion, electronicSolver, tDefinedFreeE, allocated(halogenXCorrection),&
-            & tRangeSep, allocated(thirdOrd))
+            & tRangeSep, isMultiPole, allocated(thirdOrd))
       end if
 
       if (tConverged .or. tStopScc) then
@@ -690,10 +711,20 @@ contains
 
     if (tDipole) then
       call getDipoleMoment(qOutput, q0, coord, dipoleMoment, iAtInCentralRegion)
+      if (isMultiPole) then
+        call multiPole%addAtomicDipoleMoment(dipoleMoment)
+      end if
     #:call DEBUG_CODE
       call checkDipoleViaHellmannFeynman(rhoPrim, q0, coord0, over, orb, neighbourList,&
           & nNeighbourSk, species, iSparseStart, img2CentCell)
     #:endcall DEBUG_CODE
+    end if
+
+    if (tQuadrupole) then
+      call getQuadrupoleMoment(qOutput, q0, coord, quadrupoleMoment, iAtInCentralRegion)
+      if (isMultiPole) then
+        call multiPole%addAtomicQuadrupoleMoment(quadrupoleMoment)
+      end if
     end if
 
     call env%globalTimer%startTimer(globalTimers%eigvecWriting)
@@ -731,7 +762,7 @@ contains
       call getGradients(env, sccCalc, tExtField, isXlbomd, nonSccDeriv, EField, rhoPrim, ERhoPrim,&
           & qOutput, q0, skHamCont, skOverCont, pRepCont, neighbourList, nNeighbourSk,&
           & nNeighbourRep, species, img2CentCell, iSparseStart, orb, potential, coord, derivs,&
-          & iRhoPrim, thirdOrd, qDepExtPot, chrgForces, dispersion, rangeSep, SSqrReal, over,&
+          & iRhoPrim, thirdOrd, qDepExtPot, chrgForces, dispersion, rangeSep, multiPole, rhoSqrReal, SSqrReal, over,&
           & denseDesc, deltaRhoOutSqr, tPoisson, halogenXCorrection)
 
       if (tCasidaForces) then
@@ -933,7 +964,7 @@ contains
         end if
         call writeMdOut2(fdMd, tStress, tBarostat, isLinResp, tEField, tFixEf, tPrintMulliken,&
             & energy, energiesCasida, latVec, cellVol, intPressure, extPressure, tempIon,&
-            & absEField, qOutput, q0, dipoleMoment)
+            & absEField, qOutput, q0, dipoleMoment, quadrupoleMoment)
         call writeCurrentGeometry(geoOutFile, pCoord0Out, .false., .true., .true., tFracCoord,&
             & tPeriodic, tPrintMulliken, species0, speciesName, latVec, iGeoStep, iLatGeoStep,&
             & nSpin, qOutput, velocities)
@@ -1064,7 +1095,7 @@ contains
 
   !> Does the operations that are necessary after atomic coordinates change
   subroutine handleCoordinateChange(env, coord0, latVec, invLatVec, species0, cutOff, orb,&
-      & tPeriodic, sccCalc, dispersion, thirdOrd, rangeSep, img2CentCell, iCellVec, neighbourList,&
+      & tPeriodic, sccCalc, dispersion, thirdOrd, rangeSep, multiPole, img2CentCell, iCellVec, neighbourList,&
       & nAllAtom, coord0Fold, coord, species, rCellVec, nNeighbourSK, nNeighbourRep, nNeighbourLC,&
       & ham, over, H0, rhoPrim, iRhoPrim, iHam, ERhoPrim, iSparseStart, tPoisson)
 
@@ -1105,6 +1136,9 @@ contains
 
     !> Range separation contributions
     type(TRangeSepFunc), allocatable, intent(inout) :: rangeSep
+
+    !> multipole contributions
+    type(TMultiPole), allocatable, intent(inout) :: multiPole 
 
     !> Image atoms to their equivalent in the central cell
     integer, allocatable, intent(inout) :: img2CentCell(:)
@@ -1215,6 +1249,9 @@ contains
     end if
     if (allocated(rangeSep)) then
        call rangeSep%updateCoords(coord0)
+    end if
+    if (allocated(multiPole)) then
+       call multiPole%updateCoords(coord0)
     end if
 
 
@@ -1681,7 +1718,7 @@ contains
 
   !> Add potentials comming from point charges.
   subroutine addChargePotentials(env, sccCalc, qInput, q0, chargePerShell, orb, species,&
-      & neighbourList, img2CentCell, spinW, thirdOrd, potential, electrostatics, tPoisson,&
+      & neighbourList, img2CentCell, spinW, thirdOrd, multiPole, potential, electrostatics, tPoisson,&
       & tUpload, shiftPerLUp)
 
     !> Environment settings
@@ -1717,6 +1754,9 @@ contains
     !> third order SCC interactions
     type(TThirdOrder), allocatable, intent(inout) :: thirdOrd
 
+    !> Multipole expansion
+    type(TMultiPole), allocatable, intent(inout) :: multiPole
+
     !> Potentials acting
     type(TPotentials), intent(inout) :: potential
 
@@ -1736,6 +1776,7 @@ contains
     real(dp), allocatable :: atomPot(:,:)
     real(dp), allocatable :: shellPot(:,:,:)
     real(dp), allocatable, save :: shellPotBk(:,:)
+    real(dp), allocatable :: deltaMAtom(:)
     integer, pointer :: pSpecies0(:)
     integer :: nAtom, nSpin
 
@@ -1745,6 +1786,9 @@ contains
 
     allocate(atomPot(nAtom, nSpin))
     allocate(shellPot(orb%mShell, nAtom, nSpin))
+    if (allocated(multiPole)) then
+      allocate(deltaMAtom(nAtom))
+    end if
 
     call sccCalc%updateCharges(env, qInput, q0, orb, species)
 
@@ -1797,6 +1841,12 @@ contains
       call thirdOrd%getShifts(atomPot(:,1), shellPot(:,:,1))
       potential%intAtom(:,1) = potential%intAtom(:,1) + atomPot(:,1)
       potential%intShell(:,:,1) = potential%intShell(:,:,1) + shellPot(:,:,1)
+    end if
+
+    if (allocated(multiPole)) then
+      call sccCalc%getDeltaQAtom(deltaMAtom)
+      call MultiPole%updateDQPotentials(deltaMAtom)
+      deallocate(deltaMAtom)
     end if
 
     if (nSpin /= 1 .and. allocated(spinW)) then
@@ -1961,7 +2011,7 @@ contains
   subroutine getDensity(env, iScc, denseDesc, ham, over, neighbourList, nNeighbourSK, iSparseStart,&
       & img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species, electronicSolver, tRealHS,&
       & tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken, iDistribFn,&
-      & tempElec, nEl, parallelKS, Ef, mu, energy, rangeSep, eigen, filling, rhoPrim, Eband, TS,&
+      & tempElec, nEl, parallelKS, Ef, mu, energy, rangeSep, multiPole, eigen, filling, rhoPrim, Eband, TS,&
       & E0, iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
       & eigvecsCplx, rhoSqrReal, deltaRhoInSqr, deltaRhoOutSqr, qOutput, nNeighbourLC,&
       & tLargeDenseMatrices)
@@ -2058,6 +2108,9 @@ contains
 
     !> Data for rangeseparated calculation
     type(TRangeSepFunc), allocatable, intent(inout) :: rangeSep
+
+    !> Data for multiPole calculation
+    type(TMultiPole), allocatable, intent(inout) :: multiPole 
 
     !> eigenvalues (level, kpoint, spin)
     real(dp), intent(out) :: eigen(:,:,:)
@@ -2160,7 +2213,7 @@ contains
       call getDensityFromDenseDiag(env, denseDesc, ham, over, neighbourList, nNeighbourSK,&
           & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species,&
           & electronicSolver, tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep,&
-          & tFixEf, tMulliken, iDistribFn, tempElec, nEl, parallelKS, Ef, energy, rangeSep, eigen,&
+          & tFixEf, tMulliken, iDistribFn, tempElec, nEl, parallelKS, Ef, energy, rangeSep, multiPole, eigen,&
           & filling, rhoPrim, Eband, TS, E0, iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal,&
           & iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx, rhoSqrReal, deltaRhoInSqr, deltaRhoOutSqr,&
           & qOutput, nNeighbourLC)
@@ -2185,7 +2238,7 @@ contains
   subroutine getDensityFromDenseDiag(env, denseDesc, ham, over, neighbourList, nNeighbourSK,&
       & iSparseStart, img2CentCell, iCellVec, cellVec, kPoint, kWeight, orb, species,&
       & electronicSolver, tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf,&
-      & tMulliken, iDistribFn, tempElec, nEl, parallelKS, Ef, energy, rangeSep, eigen, filling,&
+      & tMulliken, iDistribFn, tempElec, nEl, parallelKS, Ef, energy, rangeSep, multiPole, eigen, filling,&
       & rhoPrim, Eband, TS, E0, iHam, xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim,&
       & HSqrCplx, SSqrCplx, eigvecsCplx, rhoSqrReal, deltaRhoInSqr, deltaRhoOutSqr, qOutput,&
       & nNeighbourLC)
@@ -2277,6 +2330,9 @@ contains
     !> Data for rangeseparated calculation
     type(TRangeSepFunc), allocatable, intent(inout) :: rangeSep
 
+    !> Data for multipole calculation
+    type(TMultiPole), allocatable, intent(inout) :: multiPole
+
     !> eigenvalues (level, kpoint, spin)
     real(dp), intent(out) :: eigen(:,:,:)
 
@@ -2349,7 +2405,7 @@ contains
     if (nSpin /= 4) then
       if (tRealHS) then
         call buildAndDiagDenseRealHam(env, denseDesc, ham, over, neighbourList, nNeighbourSK,&
-            & iSparseStart, img2CentCell, orb, electronicSolver, parallelKS, rangeSep,&
+            & iSparseStart, img2CentCell, orb, electronicSolver, parallelKS, rangeSep, multiPole,&
             & deltaRhoInSqr, qOutput, nNeighbourLC, HSqrReal, SSqrReal, eigVecsReal, eigen(:,1,:))
       else
         call buildAndDiagDenseCplxHam(env, denseDesc, ham, over, kPoint, neighbourList,&
@@ -2394,7 +2450,7 @@ contains
 
   !> Builds and diagonalises dense Hamiltonians.
   subroutine buildAndDiagDenseRealHam(env, denseDesc, ham, over, neighbourList, nNeighbourSK,&
-      & iSparseStart, img2CentCell, orb, electronicSolver, parallelKS, rangeSep, deltaRhoInSqr,&
+      & iSparseStart, img2CentCell, orb, electronicSolver, parallelKS, rangeSep, multiPole, deltaRhoInSqr,&
       & qOutput, nNeighbourLC, HSqrReal, SSqrReal, eigvecsReal, eigen)
 
     !> Environment settings
@@ -2432,6 +2488,9 @@ contains
 
     !>Data for rangeseparated calcualtion
     type(TRangeSepFunc), allocatable, intent(inout) :: rangeSep
+
+    !>Data for multipole calcualtion
+    type(TMultiPole), allocatable, intent(inout) :: multiPole 
 
     !> Change in density matrix during last rangesep SCC cycle
     real(dp), pointer, intent(in) :: deltaRhoInSqr(:,:,:)
@@ -2487,6 +2546,13 @@ contains
         call denseMulliken(deltaRhoInSqr, SSqrReal, denseDesc%iAtomStart, qOutput)
         call rangeSep%addLRHamiltonian(env, deltaRhoInSqr(:,:,iSpin), over,&
             & neighbourList%iNeighbour,  nNeighbourLC, denseDesc%iAtomStart, iSparseStart,&
+            & orb, HSqrReal, SSqrReal)
+      end if
+      ! Add multipole contribution
+      if (allocated(multiPole)) then
+        call denseMulliken(deltaRhoInSqr, SSqrReal, denseDesc%iAtomStart, qOutput)
+        call multiPole%addMultiPoleHamiltonian(env, over,&
+            & neighbourList%iNeighbour,  nNeighbourSK, denseDesc%iAtomStart, iSparseStart,&
             & orb, HSqrReal, SSqrReal)
       end if
 
@@ -2759,7 +2825,7 @@ contains
     !> Dense density matrix if needed
     real(dp), intent(inout), allocatable  :: rhoSqrReal(:,:,:)
 
-    !> Change in density matrix during this SCC step for rangesep
+    !> Change in density matrix during this SCC step for rangesep/multipole
     real(dp), pointer, intent(inout) :: deltaRhoOutSqr(:,:,:)
 
     integer :: iKS, iSpin
@@ -3260,7 +3326,7 @@ contains
   !> Calculates various energy contribution that can potentially update for the same geometry
   subroutine getEnergies(sccCalc, qOrb, q0, chargePerShell, species, tExtField, isXlbomd, tDftbU,&
       & tDualSpinOrbit, rhoPrim, H0, orb, neighbourList, nNeighbourSK, img2CentCell, iSparseStart,&
-      & cellVol, extPressure, TS, potential, energy, thirdOrd, rangeSep, qDepExtPot, qBlock,&
+      & cellVol, extPressure, TS, potential, energy, thirdOrd, rangeSep, multiPole, qDepExtPot, qBlock,&
       & qiBlock, nDftbUFunc, UJ, nUJ, iUJ, niUJ, xi, iAtInCentralRegion, tFixEf, Ef, onSiteElements)
 
     !> SCC module internal variables
@@ -3331,6 +3397,9 @@ contains
 
     !> Data from rangeseparated calculations
     type(TRangeSepFunc), intent(inout), allocatable ::rangeSep
+
+    !> Data from multipole calculations
+    type(TMultiPole), intent(inout), allocatable :: multiPole 
 
     !> Proxy for querying Q-dependant external potentials
     type(TQDepExtPotProxy), intent(inout), allocatable :: qDepExtPot
@@ -3438,8 +3507,14 @@ contains
       energy%ELS = sum(energy%atomLS(iAtInCentralRegion(:)))
     end if
 
+    !> Add exchange conribution for multipole calculations
+    if (allocated(multiPole)) then
+      call multiPole%addMultiPoleEnergy(energy%atomMultiPole, energy%EMultiPoleMD, energy%EMultiPoleDD,&
+                                        & energy%EMultiPoleMQ, energy%EMultiPoleDQ,  energy%EMultiPoleQQ,  energy%EMultiPole)
+    end if
+
     energy%Eelec = energy%EnonSCC + energy%ESCC + energy%Espin + energy%ELS + energy%Edftbu&
-        & + energy%Eext + energy%e3rd + energy%eOnSite
+        & + energy%Eext + energy%e3rd + energy%eOnSite + energy%EMultiPole
 
     !> Add exchange conribution for range separated calculations
     if (allocated(rangeSep)) then
@@ -3449,7 +3524,7 @@ contains
     end if
 
     energy%atomElec(:) = energy%atomNonSCC + energy%atomSCC + energy%atomSpin + energy%atomDftbu&
-        & + energy%atomLS + energy%atomExt + energy%atom3rd + energy%atomOnSite
+        & + energy%atomLS + energy%atomExt + energy%atom3rd + energy%atomOnSite + energy%atomMultiPole
     energy%atomTotal(:) = energy%atomElec + energy%atomRep + energy%atomDisp + energy%atomHalogenX
     energy%Etotal = energy%Eelec + energy%Erep + energy%eDisp + energy%eHalogenX
     energy%EMermin = energy%Etotal - sum(TS)
@@ -3702,7 +3777,7 @@ contains
     !> Has the calculation converged>
     logical, intent(out) :: tConverged
 
-    !> delta density matrix for rangeseparated calculations
+    !> delta density matrix for rangeseparated/multipole calculations
     real(dp), intent(inout) :: deltaRhoOut(:)
 
     !> delta density matrix as inpurt for next SCC cycle
@@ -4383,6 +4458,47 @@ contains
   end subroutine checkDipoleViaHellmannFeynman
 
 
+  !> Calculates quadrupole moment.
+  subroutine getQuadrupoleMoment(qOutput, q0, coord, quadrupoleMoment, iAtInCentralRegion)
+
+    !> electrons in orbitals
+    real(dp), intent(in) :: qOutput(:,:,:)
+
+    !> reference atomic charges
+    real(dp), intent(in) :: q0(:,:,:)
+
+    !> atomic coordinates
+    real(dp), intent(in) :: coord(:,:)
+
+    !> resulting quadrupole moment
+    real(dp), intent(out) :: quadrupoleMoment(:,:)
+
+    !> atoms in the central cell (or device region if transport)
+    integer, intent(in) :: iAtInCentralRegion(:)
+
+    integer :: nAtom, ii, iAtom, jj, ll
+    real(dp) dqAtom, tmpTrace
+
+    nAtom = size(qOutput, dim=2)
+    quadrupoleMoment(:,:) = 0.0_dp
+    do ii = 1, size(iAtInCentralRegion)
+      iAtom = iAtInCentralRegion(ii)
+      dqAtom = sum(q0(:, iAtom, 1) - qOutput(:, iAtom, 1))
+      do jj = 1, 3
+        do ll = 1, 3
+          quadrupoleMoment(jj,ll) = quadrupoleMoment(jj,ll) + dqAtom * coord(jj,iAtom) * coord(ll,iAtom)
+        end do
+      end do
+    end do
+
+    tmpTrace = (quadrupoleMoment(1,1) + quadrupoleMoment(2,2) + quadrupoleMoment(3,3)) / 3.0_dp
+    do ii = 1, 3
+      quadrupoleMoment(ii,ii) = quadrupoleMoment(ii,ii) - tmpTrace
+    end do
+
+  end subroutine getQuadrupoleMoment
+
+
   !> Calculate the energy weighted density matrix
   !>
   !> NOTE: Dense eigenvector and overlap matrices are overwritten.
@@ -5036,7 +5152,7 @@ contains
   subroutine getGradients(env, sccCalc, tExtField, isXlbomd, nonSccDeriv, EField, rhoPrim, ERhoPrim,&
       & qOutput, q0, skHamCont, skOverCont, pRepCont, neighbourList, nNeighbourSK, nNeighbourRep,&
       & species, img2CentCell, iSparseStart, orb, potential, coord, derivs, iRhoPrim, thirdOrd,&
-      & qDepExtPot, chrgForces, dispersion, rangeSep, SSqrReal, over, denseDesc, deltaRhoOutSqr,&
+      & qDepExtPot, chrgForces, dispersion, rangeSep, multiPole, rhoSqrReal, SSqrReal, over, denseDesc, deltaRhoOutSqr,&
       & tPoisson, halogenXCorrection)
 
     !> Environment settings
@@ -5125,6 +5241,12 @@ contains
 
     !> Data from rangeseparated calculations
     type(TRangeSepFunc), intent(inout), allocatable ::rangeSep
+
+    !> multipole contributions
+    type(TMultiPole), allocatable, intent(inout) :: multiPole 
+
+    !> Dense density matrix
+    real(dp), intent(inout), allocatable :: rhoSqrReal(:,:,:)
 
     !> dense overlap matrix, required for rangeSep
     real(dp), intent(inout), allocatable :: SSqrReal(:,:)
@@ -5252,6 +5374,17 @@ contains
             & skOverCont, coord, species, orb, denseDesc%iAtomStart, SSqrReal,&
             & neighbourList%iNeighbour, nNeighbourSK)
       end if
+    end if
+    if (allocated(multiPole)) then
+      call unpackHS(SSqrReal, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+          & iSparseStart, img2CentCell)
+        
+
+     !write (*,*) "test_qv0: MultiPole rhoSqrReal", rhoSqrReal(:,:,:)
+     !call multiPole%addMultiPoleGradients(derivs, nonSccDeriv, rhoSqrReal(:,:,:), skHamCont,&
+      call multiPole%addMultiPoleGradients(derivs, nonSccDeriv, deltaRhoOutSqr, skHamCont,&
+          & skOverCont, coord, species, orb, denseDesc%iAtomStart, SSqrReal,&
+          & neighbourList%iNeighbour, nNeighbourSK)
     end if
 
     call getERepDeriv(tmpDerivs, coord, nNeighbourRep, neighbourList%iNeighbour, species, pRepCont,&

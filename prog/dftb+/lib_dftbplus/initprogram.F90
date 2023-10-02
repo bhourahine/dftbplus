@@ -73,6 +73,7 @@ module dftbp_initprogram
   use dftbp_thirdorder
   use dftbp_linresp
   use dftbp_RangeSeparated
+  use dftbp_multipole
   use dftbp_stress
   use dftbp_orbitalequiv
   use dftbp_orbitals
@@ -461,6 +462,9 @@ module dftbp_initprogram
   !> calculate an electric dipole?
   logical :: tDipole
 
+  !> calculate an electric Quadrupole?
+  logical :: tQuadrupole
+
   !> Do we need atom resolved E?
   logical :: tAtomicEnergy
 
@@ -692,6 +696,15 @@ module dftbp_initprogram
   !> DeltaRho output from range separation in matrix form
   real(dp), pointer :: deltaRhoOutSqr(:,:,:) => null()
 
+  !> Multipole DFTB
+  logical :: isMultiPole
+
+  !> input data structure for multipole
+  type(TMultiPoleInp) :: multiPoleInp
+
+  !> data structure for multipole
+  type(TMultiPole), allocatable :: multiPole
+
   !> If initial charges/dens mtx. from external file.
   logical :: tReadChrg
 
@@ -844,6 +857,9 @@ module dftbp_initprogram
 
   !> dipole moments when available
   real(dp), allocatable :: dipoleMoment(:)
+
+  !> quadrupole moments when available
+  real(dp), allocatable :: quadrupoleMoment(:,:)
 
   !> Coordinates to print out
   real(dp), pointer :: pCoord0Out(:,:)
@@ -1151,6 +1167,7 @@ contains
     tDualSpinOrbit = input%ctrl%tDualSpinOrbit
     t2Component = input%ctrl%t2Component
     tRangeSep = allocated(input%ctrl%rangeSepInp)
+    isMultiPole = input%ctrl%isMultiPole
 
     if (t2Component) then
       nSpin = 4
@@ -1738,7 +1755,7 @@ contains
     tPrintMulliken = input%ctrl%tPrintMulliken
     tEField = input%ctrl%tEfield ! external electric field
     tExtField = tEField
-    tMulliken = input%ctrl%tMulliken .or. tPrintMulliken .or. tExtField .or. tFixEf .or. tRangeSep
+    tMulliken = input%ctrl%tMulliken .or. tPrintMulliken .or. tExtField .or. tFixEf .or. tRangeSep .or. isMultiPole
     tAtomicEnergy = input%ctrl%tAtomicEnergy
     tPrintEigVecs = input%ctrl%tPrintEigVecs
     tPrintEigVecsTxt = input%ctrl%tPrintEigVecsTxt
@@ -2083,8 +2100,10 @@ contains
 
     if (input%ctrl%nrChrg == 0.0_dp .and. (.not.tPeriodic) .and. tMulliken) then
       tDipole = .true.
+      tQuadrupole = .true.
     else
       tDipole = .false.
+      tQuadrupole = .false.
     end if
 
     if (allocated(input%ctrl%elStatPotentialsInp)) then
@@ -2354,13 +2373,92 @@ contains
 
     tReadChrg = input%ctrl%tReadChrg
 
-    if (tRangeSep) then
+    if (tRangeSep .and. ( .not. isMultiPole)) then
       call ensureRangeSeparatedReqs(tPeriodic, tReadChrg, input%ctrl%tShellResolved,&
           & tAtomicEnergy, input%ctrl%rangeSepInp)
       call getRangeSeparatedCutoff(input%ctrl%rangeSepInp%cutoffRed, cutOff)
       call initRangeSeparated(nAtom, species0, speciesName, hubbU, input%ctrl%rangeSepInp,&
           & tSpin, tREKS, rangeSep, deltaRhoIn, deltaRhoOut, deltaRhoDiff, deltaRhoInSqr,&
           & deltaRhoOutSqr, nMixElements)
+    else if (isMultiPole .and. ( .not. tRangeSep)) then
+      ! Initialize multipole module
+      @:ASSERT(tSccCalc)
+      multiPoleInp%orb => orb
+      multiPoleInp%nOrb = nOrb
+      multiPoleInp%nSpin = nSpin
+      multiPoleInp%nSpecies = nType
+     !allocate(multiPoleInp%atomicSXPIntgrl(nType))
+     !allocate(multiPoleInp%atomicSXXSIntgrl(nType))
+     !allocate(multiPoleInp%atomicPXXPIntgrl(nType))
+     !allocate(multiPoleInp%atomicPXYPIntgrl(nType))
+     !multiPoleInp%atomicSXPIntgrl(:) = input%ctrl%atomicSXPIntgrl(:)
+     !multiPoleInp%atomicSXXSIntgrl(:) = input%ctrl%atomicSXXSIntgrl(:)
+     !multiPoleInp%atomicPXXPIntgrl(:) = input%ctrl%atomicPXXPIntgrl(:)
+     !multiPoleInp%atomicPXYPIntgrl(:) = input%ctrl%atomicPXYPIntgrl(:)
+
+      allocate(multiPoleInp%atomicDIntgrlScaling(nType))
+      allocate(multiPoleInp%atomicQIntgrlScaling(nType))
+      allocate(multiPoleInp%atomicOnsiteScaling(nType))
+      allocate(multiPoleInp%atomicSXPxIntgrl(nType))
+      allocate(multiPoleInp%atomicPxXDxxyyIntgrl(nType))
+      allocate(multiPoleInp%atomicPxXDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicPyYDxxyyIntgrl(nType))
+      allocate(multiPoleInp%atomicPzZDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicSXXSIntgrl(nType))
+      allocate(multiPoleInp%atomicPxXXPxIntgrl(nType))
+      allocate(multiPoleInp%atomicPyXXPyIntgrl(nType))
+      allocate(multiPoleInp%atomicSXXDxxyyIntgrl(nType))
+      allocate(multiPoleInp%atomicSXXDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicSYYDxxyyIntgrl(nType))
+      allocate(multiPoleInp%atomicSZZDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicDxyXXDxyIntgrl(nType))
+      allocate(multiPoleInp%atomicDyzXXDyzIntgrl(nType))
+      allocate(multiPoleInp%atomicDxxyyXXDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicDzzXXDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicDxxyyYYDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicDzzZZDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicDxzXZDzzIntgrl(nType))
+      allocate(multiPoleInp%atomicDyzYZDxxyyIntgrl(nType))
+
+      multiPoleInp%atomicDIntgrlScaling(:) = input%ctrl%atomicDIntgrlScaling(:)
+      multiPoleInp%atomicQIntgrlScaling(:) = input%ctrl%atomicQIntgrlScaling(:)
+      multiPoleInp%atomicOnsiteScaling(:) = input%ctrl%atomicOnsiteScaling(:)
+      multiPoleInp%atomicSXPxIntgrl(:) = input%ctrl%atomicSXPxIntgrl(:)
+      multiPoleInp%atomicPxXDxxyyIntgrl(:) = input%ctrl%atomicPxXDxxyyIntgrl(:)
+      multiPoleInp%atomicPxXDzzIntgrl(:) = input%ctrl%atomicPxXDzzIntgrl(:)
+      multiPoleInp%atomicPyYDxxyyIntgrl(:) = input%ctrl%atomicPyYDxxyyIntgrl(:)
+      multiPoleInp%atomicPzZDzzIntgrl(:) = input%ctrl%atomicPzZDzzIntgrl(:)
+      multiPoleInp%atomicSXXSIntgrl(:) = input%ctrl%atomicSXXSIntgrl(:)
+      multiPoleInp%atomicPxXXPxIntgrl(:) = input%ctrl%atomicPxXXPxIntgrl(:)
+      multiPoleInp%atomicPyXXPyIntgrl(:) = input%ctrl%atomicPyXXPyIntgrl(:)
+      multiPoleInp%atomicSXXDxxyyIntgrl(:) = input%ctrl%atomicSXXDxxyyIntgrl(:)
+      multiPoleInp%atomicSXXDzzIntgrl(:) = input%ctrl%atomicSXXDzzIntgrl(:)
+      multiPoleInp%atomicSYYDxxyyIntgrl(:) = input%ctrl%atomicSYYDxxyyIntgrl(:)
+      multiPoleInp%atomicSZZDzzIntgrl(:) = input%ctrl%atomicSZZDzzIntgrl(:)
+      multiPoleInp%atomicDxyXXDxyIntgrl(:) = input%ctrl%atomicDxyXXDxyIntgrl(:)
+      multiPoleInp%atomicDyzXXDyzIntgrl(:) = input%ctrl%atomicDyzXXDyzIntgrl(:)
+      multiPoleInp%atomicDxxyyXXDzzIntgrl(:) = input%ctrl%atomicDxxyyXXDzzIntgrl(:)
+      multiPoleInp%atomicDzzXXDzzIntgrl(:) = input%ctrl%atomicDzzXXDzzIntgrl(:)
+      multiPoleInp%atomicDxxyyYYDzzIntgrl(:) = input%ctrl%atomicDxxyyYYDzzIntgrl(:)
+      multiPoleInp%atomicDzzZZDzzIntgrl(:) = input%ctrl%atomicDzzZZDzzIntgrl(:)
+      multiPoleInp%atomicDxzXZDzzIntgrl(:) = input%ctrl%atomicDxzXZDzzIntgrl(:)
+      multiPoleInp%atomicDyzYZDxxyyIntgrl(:) = input%ctrl%atomicDyzYZDxxyyIntgrl(:)
+
+      allocate(multiPoleInp%hubbU(size(hubbU, dim=2)))
+      multiPoleInp%hubbU = hubbU(1,:)
+      allocate(multiPoleInp%species(nAtom))
+      multiPoleInp%species(:) = input%geom%species(:)
+      allocate(multiPole)
+      call MultiPole_init(multiPole, multiPoleInp)
+      allocate(deltaRhoIn(nOrb * nOrb * nSpin))
+      allocate(deltaRhoOut(nOrb * nOrb * nSpin))
+      allocate(deltaRhoDiff(nOrb * nOrb * nSpin))
+      deltaRhoInSqr(1:nOrb, 1:nOrb, 1:nSpin) => deltaRhoIn(1 : nOrb * nOrb * nSpin)
+      deltaRhoOutSqr(1:nOrb, 1:nOrb, 1:nSpin) => deltaRhoOut(1 : nOrb * nOrb * nSpin)
+      deltaRhoInSqr(:,:,:) = 0.0_dp
+      nMixElements = nOrb * nOrb * nSpin
+    else if (tRangeSep .and. isMultiPole) then
+      call error("Range separated calculations do not work with multipole yet")
     end if
 
     tReadShifts = input%ctrl%tReadShifts
@@ -2590,11 +2688,11 @@ contains
 
     call initArrays(env, electronicSolver, tForces, tExtChrg, isLinResp, tLinRespZVect, tMd,&
         & tMulliken, tSpinOrbit, tImHam, tWriteRealHS, tWriteHS, t2Component, tRealHS,&
-        & tPrintExcitedEigvecs, tDipole, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg,&
+        & tPrintExcitedEigvecs, tDipole, tQuadrupole, isMultiPole, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg,&
         & indMovedAtom, mass, denseDesc, rhoPrim, h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs,&
         & chrgForces, energy, potential, TS, E0, Eband, eigen, filling, coord0Fold, newCoords,&
         & orbitalL, HSqrCplx, SSqrCplx, eigvecsCplx, HSqrReal, SSqrReal, eigvecsReal, rhoSqrReal,&
-        & chargePerShell, occNatural, velocities, movedVelo, movedAccel, movedMass, dipoleMoment)
+        & chargePerShell, occNatural, velocities, movedVelo, movedAccel, movedMass, dipoleMoment, quadrupoleMoment)
 
   #:if WITH_TRANSPORT
     ! note, this has the side effect of setting up module variable transpar as copy of
@@ -3151,6 +3249,10 @@ contains
       end select
     end if
 
+    if (isMultiPole) then
+      write(stdOut, "(A,':',T30,A)") "MultiPole expansion", "Yes"
+    end if
+
 
     write(stdOut, "(A,':')") "Extra options"
     if (tPrintMulliken) then
@@ -3382,7 +3484,7 @@ contains
     @:SAFE_DEALLOC(velocities, movedVelo, movedAccel, movedMass)
     @:SAFE_DEALLOC(rhoPrim, iRhoPrim, ERhoPrim, h0, filling, Eband, TS, E0)
     @:SAFE_DEALLOC(HSqrCplx, SSqrCplx, eigvecsCplx, HSqrReal, SSqrReal, eigvecsReal, eigen)
-    @:SAFE_DEALLOC(RhoSqrReal, qDepExtPot, derivs, chrgForces, excitedDerivs, dipoleMoment)
+    @:SAFE_DEALLOC(RhoSqrReal, qDepExtPot, derivs, chrgForces, excitedDerivs, dipoleMoment, quadrupoleMoment)
     @:SAFE_DEALLOC(coord0Fold, newCoords, orbitalL, occNatural, mu)
     @:SAFE_DEALLOC(tunneling, ldos, current, leadCurrents, poissonDerivs, shiftPerLUp, chargeUp)
     @:SAFE_DEALLOC(regionLabelLDOS)
@@ -3682,11 +3784,11 @@ contains
   !> Allocates most of the large arrays needed during the DFTB run.
   subroutine initArrays(env, electronicSolver, tForces, tExtChrg, isLinResp, tLinRespZVect, tMd,&
       & tMulliken, tSpinOrbit, tImHam, tWriteRealHS, tWriteHS, t2Component, tRealHS,&
-      & tPrintExcitedEigvecs, tDipole, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg,&
+      & tPrintExcitedEigvecs, tDipole, tQuadrupole, isMultiPole, orb, nAtom, nMovedAtom, nKPoint, nSpin, nExtChrg,&
       & indMovedAtom, mass, denseDesc, rhoPrim, h0, iRhoPrim, excitedDerivs, ERhoPrim, derivs,&
       & chrgForces, energy, potential, TS, E0, Eband, eigen, filling, coord0Fold, newCoords,&
       & orbitalL, HSqrCplx, SSqrCplx, eigvecsCplx, HSqrReal, SSqrReal, eigvecsReal, rhoSqrReal,&
-      & chargePerShell, occNatural, velocities, movedVelo, movedAccel, movedMass, dipoleMoment)
+      & chargePerShell, occNatural, velocities, movedVelo, movedAccel, movedMass, dipoleMoment, quadrupoleMoment)
 
     !> Current environment
     type(TEnvironment), intent(in) :: env
@@ -3735,6 +3837,12 @@ contains
 
     !> Print the dipole moment
     logical, intent(in) :: tDipole
+
+    !> Print the quadrupole moment
+    logical, intent(in) :: tQuadrupole
+
+    !> Multipole DFTB
+    logical, intent(in) :: isMultiPole
 
     !> data structure with atomic orbital information
     type(TOrbitals), intent(in) :: orb
@@ -3856,6 +3964,9 @@ contains
     !> system dipole moment
     real(dp), intent(out), allocatable :: dipoleMoment(:)
 
+    !> system quadrupole moment
+    real(dp), intent(out), allocatable :: quadrupoleMoment(:,:)
+
 
     integer :: nSpinHams, sqrHamSize
 
@@ -3966,6 +4077,16 @@ contains
 
     if (tDipole) then
       allocate(dipoleMoment(3))
+    end if
+
+    if (tQuadrupole) then
+      allocate(quadrupoleMoment(3,3))
+    end if
+
+    if (isMultiPole) then
+      if ( .not. allocated(rhoSqrReal)) then
+        allocate(rhoSqrReal(sqrHamSize, sqrHamSize, nSpin))
+      end if
     end if
 
   end subroutine initArrays

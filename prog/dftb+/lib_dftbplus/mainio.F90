@@ -2311,7 +2311,7 @@ contains
       & qInput, qOutput, eigen, filling, orb, species, tDFTBU, tImHam, tPrintMulliken, orbitalL,&
       & qBlockOut, Ef, Eband, TS, E0, pressure, cellVol, tAtomicEnergy, tDispersion, tEField,&
       & tPeriodic, nSpin, tSpin, tSpinOrbit, tScc, tOnSite, tNegf,  invLatVec, kPoints,&
-      & iAtInCentralRegion, electronicSolver, tDefinedFreeE, tHalogenX, tRangeSep, t3rd)
+      & iAtInCentralRegion, electronicSolver, tDefinedFreeE, tHalogenX, tRangeSep, isMultiPole, t3rd)
 
     !> File ID
     integer, intent(in) :: fd
@@ -2462,6 +2462,9 @@ contains
 
     !> Is this a range separation calculation?
     logical, intent(in) :: tRangeSep
+
+    !> Is this a multipole calculation?
+    logical, intent(in) :: isMultiPole
 
     !> Is this a 3rd order scc calculation?
     logical, intent(in) :: t3rd
@@ -2791,6 +2794,14 @@ contains
       if (tRangeSep) then
         write(fd, format2U) 'Energy Fock', energy%Efock, 'H', energy%Efock * Hartree__eV, 'eV'
       end if
+      if (isMultiPole) then
+        write(fd, format2U) 'Energy Monopole-Dipole', energy%EMultiPoleMD, 'H', energy%EMultiPoleMD * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Dipole-Dipole', energy%EMultiPoleDD, 'H', energy%EMultiPoleDD * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Monopole-Quadrupole', energy%EMultiPoleMQ, 'H', energy%EMultiPoleMQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Dipole-Quadrupole', energy%EMultiPoleDQ, 'H', energy%EMultiPoleDQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Quadrupole-Quadrupole', energy%EMultiPoleQQ, 'H', energy%EMultiPoleQQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Multipole', energy%EMultiPole, 'H', energy%EMultiPole * Hartree__eV, 'eV'
+      end if
       if (tDFTBU) then
         write(fd, format2U) 'Energy DFTB+U', energy%Edftbu, 'H', energy%Edftbu * Hartree__eV, 'eV'
       end if
@@ -3104,7 +3115,7 @@ contains
 
   !> Fifth group of data for detailed.out
   subroutine writeDetailedOut5(fd, tGeoOpt, tGeomEnd, tMd, tDerivs, tEField, absEField,&
-      & dipoleMoment)
+      & dipoleMoment, quadrupoleMoment)
 
     !> File ID
     integer, intent(in) :: fd
@@ -3130,6 +3141,9 @@ contains
     !> What is the dipole moment (if available)
     real(dp), intent(in), allocatable :: dipoleMoment(:)
 
+    !> What is the quadrupole moment (if available)
+    real(dp), intent(in), allocatable :: quadrupoleMoment(:,:)
+
     if (tEfield) then
       write(fd, format1U1e) 'External E field', absEField, 'au', absEField * au__V_m, 'V/m'
     end if
@@ -3137,6 +3151,16 @@ contains
     if (allocated(dipoleMoment)) then
       write(fd, "(A, 3F14.8, A)") 'Dipole moment:', dipoleMoment, ' au'
       write(fd, "(A, 3F14.8, A)") 'Dipole moment:', dipoleMoment * au__Debye, ' Debye'
+      write(fd, *)
+    end if
+
+    if (allocated(quadrupoleMoment)) then
+      write(fd, "(A)") ' Traceless Quadrupole moment in au'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY', quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ', quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
+      write(fd, "(A)") ' Traceless Quadrupole moment in Debye*Ang'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY', quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ', quadrupoleMoment(3,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ', quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ', quadrupoleMoment(2,3) * au__Debye * Bohr__AA
       write(fd, *)
     end if
 
@@ -3190,7 +3214,7 @@ contains
   !> Second group of output data during molecular dynamics
   subroutine writeMdOut2(fd, tStress, tBarostat, isLinResp, tEField, tFixEf, tPrintMulliken,&
       & energy, energiesCasida, latVec, cellVol, cellPressure, pressure, tempIon, absEField,&
-      & qOutput, q0, dipoleMoment)
+      & qOutput, q0, dipoleMoment, quadrupoleMoment)
 
     !> File ID
     integer, intent(in) :: fd
@@ -3246,6 +3270,9 @@ contains
     !> dipole moment if available
     real(dp), intent(inout), allocatable :: dipoleMoment(:)
 
+    !> quadrupole moment if available
+    real(dp), intent(inout), allocatable :: quadrupoleMoment(:,:)
+
     integer :: ii
     character(lc) :: strTmp
 
@@ -3292,6 +3319,14 @@ contains
     if (allocated(dipoleMoment)) then
       write(fd, "(A, 3F14.8, A)") 'Dipole moment:', dipoleMoment,  'au'
       write(fd, "(A, 3F14.8, A)") 'Dipole moment:', dipoleMoment * au__Debye,  'Debye'
+    end if
+    if (allocated(quadrupoleMoment)) then
+      write(fd, "(A)") ' Traceless Quadrupole moment (in au)'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY', quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ', quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
+      write(fd, "(A)") ' Traceless Quadrupole moment (in Debye)'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY', quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ', quadrupoleMoment(3,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ', quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ', quadrupoleMoment(2,3) * au__Debye * Bohr__AA
     end if
 
   end subroutine writeMdOut2
