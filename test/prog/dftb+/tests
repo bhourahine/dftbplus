@@ -24,6 +24,12 @@ rangesep/cyclopropene_nb_restart       #? not WITH_MPI
 rangesep/C240_tn                       #? not WITH_MPI
 rangesep/Thymine-T1_onsite             #? not WITH_MPI
 
+mdftb/2H2O                             #? not WITH_MPI
+mdftb/32H2O                            #? not WITH_MPI
+mdftb/Glycine                          #? not WITH_MPI
+mdftb/OH-H2O                           #? not WITH_MPI
+mdftb/NH4+H2O                          #? not WITH_MPI
+
 solvers/GaAs_2_ELPA2                   #? WITH_ELSI and MPI_PROCS == 8 and OMP_THREADS == 1
 solvers/Si32C32_ELPA1                  #? WITH_ELSI and MPI_PROCS <= 4 and OMP_THREADS == 1
 solvers/Si32C32_ELPA2                  #? WITH_ELSI and MPI_PROCS <= 4 and OMP_THREADS == 1
