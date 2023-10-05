@@ -35,6 +35,14 @@ module dftbp_dftb_energytypes
     !> range-separation energy
     real(dp) :: Efock = 0.0_dp
 
+    !> MultiPole energy
+    real(dp) :: EMultiPole = 0.0_dp
+    real(dp) :: EMultiPoleMD = 0.0_dp
+    real(dp) :: EMultiPoleDD = 0.0_dp
+    real(dp) :: EMultiPoleMQ = 0.0_dp
+    real(dp) :: EMultiPoleDQ = 0.0_dp
+    real(dp) :: EMultiPoleQQ = 0.0_dp
+
     !> spin orbit energy
     real(dp) :: ELS = 0.0_dp
 
@@ -120,6 +128,9 @@ module dftbp_dftb_energytypes
 
     !> atom resolved spin
     real(dp), allocatable :: atomSpin(:)
+
+    !> atom resolved Multipole
+    real(dp), allocatable :: atomMultiPole(:)
 
     !> atom resolved spin orbit
     real(dp), allocatable :: atomLS(:)
@@ -214,6 +225,12 @@ contains
     this%ESCC = 0.0_dp
     this%Espin = 0.0_dp
     this%Efock = 0.0_dp
+    this%EMultiPole = 0.0_dp
+    this%EMultiPoleMD = 0.0_dp
+    this%EMultiPoleDD = 0.0_dp
+    this%EMultiPoleMQ = 0.0_dp
+    this%EMultiPoleDQ = 0.0_dp
+    this%EMultiPoleQQ = 0.0_dp
     this%ELS = 0.0_dp
     this%Edftbu = 0.0_dp
     this%Eext = 0.0_dp

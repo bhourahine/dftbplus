@@ -41,6 +41,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_dftb_h5correction, only : TH5CorrectionInput
   use dftbp_dftb_halogenx, only : THalogenX, THalogenX_init
   use dftbp_dftb_hamiltonian, only : TRefExtPot
+  use dftbp_dftb_multipole, only : TDftbMultiPole, TDftbMultiPoleInp, dftbMultiPole_init
   use dftbp_dftb_nonscc, only : TNonSccDiff, NonSccDiff_init, diffTypes
   use dftbp_dftb_onsitecorrection, only : Ons_getOrbitalEquiv, Ons_blockIndx
   use dftbp_dftb_orbitalequiv, only : OrbitalEquiv_merge, OrbitalEquiv_reduce
@@ -493,6 +494,9 @@ module dftbp_dftbplus_initprogram
     !> Calculate an electric dipole?
     logical :: tDipole
 
+    !> calculate an electric Quadrupole?
+    logical :: tQuadrupole = .false.
+
     !> Do we need atom resolved E?
     logical :: tAtomicEnergy
 
@@ -710,7 +714,7 @@ module dftbp_dftbplus_initprogram
     integer :: nIneqQuad
 
     !> Multipole moments for the input charges
-    type(TMultipole) :: multipoleInp
+    type(TMultipole) :: multipoleIn
 
     !> Multipole moments for the output charges
     type(TMultipole) :: multipoleOut
@@ -801,6 +805,15 @@ module dftbp_dftbplus_initprogram
 
     !> Linear response calculation with range-separated functional
     logical :: isRS_LinResp
+
+    !> Multipole DFTB
+    logical :: isMultiPole
+
+    !> input data structure for multipole
+    type(TDftbMultiPoleInp) :: multiPoleInp
+
+    !> data structure for multipole
+    type(TDftbMultiPole), allocatable :: multiPole
 
     !> If initial charges/dens mtx. from external file.
     logical :: tReadChrg
@@ -981,6 +994,9 @@ module dftbp_dftbplus_initprogram
 
     !> Additional dipole moment related message to write out
     character(lc) :: dipoleMessage
+
+    !> quadrupole moments, when availables
+    real(dp), allocatable :: quadrupoleMoment(:,:)
 
     !> Coordinates to print out
     real(dp), pointer :: pCoord0Out(:,:)
@@ -1364,6 +1380,7 @@ contains
     if (this%isHybridXc) then
       allocate(this%symNeighbourList)
     end if
+    this%isMultiPole = input%ctrl%isMultiPole
 
     if (this%t2Component) then
       this%nSpin = 4
@@ -1763,7 +1780,7 @@ contains
     end if
     call TMultipole_init(this%multipoleOut, this%nAtom, this%nDipole, this%nQuadrupole,&
         & this%nSpin)
-    this%multipoleInp = this%multipoleOut
+    this%multipoleIn = this%multipoleOut
 
     ! Initialize Hamilton and overlap
     this%tImHam = this%tDualSpinOrbit .or. (this%tSpinOrbit .and. allocated(this%dftbU))
@@ -1884,7 +1901,7 @@ contains
     end if
 
     this%tMulliken = input%ctrl%tMulliken .or. this%tPrintMulliken .or. this%isExtField .or.&
-        & this%tFixEf .or. this%tSpinSharedEf .or. this%isHybridXc .or.&
+        & this%tFixEf .or. this%tSpinSharedEf .or. this%isHybridXc .or. this%isMultiPole .or.&
         & this%electronicSolver%iSolver == electronicSolverTypes%GF
     this%tAtomicEnergy = input%ctrl%tAtomicEnergy
     this%tPrintEigVecs = input%ctrl%tPrintEigVecs
@@ -2335,8 +2352,10 @@ contains
         end if
         this%cutOff%mCutOff = max(this%cutOff%mCutOff, this%cm5Cont%getRCutOff())
       end if
+      this%tQuadrupole = input%ctrl%isMultiPole
     else
       this%tNetAtomCharges = .false.
+      this%tQuadrupole = .false.
     end if
 
     if (allocated(input%ctrl%elStatPotentialsInp)) then
@@ -2736,6 +2755,72 @@ contains
         end if
       end if
 
+      if (this%isMultiPole) then
+        ! Initialize multipole module
+        @:ASSERT(this%tSccCalc)
+        this%multiPoleInp%orb => this%orb
+        this%multiPoleInp%nOrb = this%nOrb
+        this%multiPoleInp%nSpin = this%nSpin
+        this%multiPoleInp%nSpecies = this%nType
+
+        allocate(this%multiPoleInp%atomicDIntgrlScaling(this%nType))
+        allocate(this%multiPoleInp%atomicQIntgrlScaling(this%nType))
+        allocate(this%multiPoleInp%atomicOnsiteScaling(this%nType))
+        allocate(this%multiPoleInp%atomicSXPxIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicPxXDxxyyIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicPxXDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicPyYDxxyyIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicPzZDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicSXXSIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicPxXXPxIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicPyXXPyIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicSXXDxxyyIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicSXXDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicSYYDxxyyIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicSZZDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDxyXXDxyIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDyzXXDyzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDxxyyXXDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDzzXXDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDxxyyYYDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDzzZZDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDxzXZDzzIntgrl(this%nType))
+        allocate(this%multiPoleInp%atomicDyzYZDxxyyIntgrl(this%nType))
+
+        this%multiPoleInp%atomicDIntgrlScaling(:) = input%ctrl%atomicDIntgrlScaling(:)
+        this%multiPoleInp%atomicQIntgrlScaling(:) = input%ctrl%atomicQIntgrlScaling(:)
+        this%multiPoleInp%atomicOnsiteScaling(:) = input%ctrl%atomicOnsiteScaling(:)
+        this%multiPoleInp%atomicSXPxIntgrl(:) = input%ctrl%atomicSXPxIntgrl(:)
+        this%multiPoleInp%atomicPxXDxxyyIntgrl(:) = input%ctrl%atomicPxXDxxyyIntgrl(:)
+        this%multiPoleInp%atomicPxXDzzIntgrl(:) = input%ctrl%atomicPxXDzzIntgrl(:)
+        this%multiPoleInp%atomicPyYDxxyyIntgrl(:) = input%ctrl%atomicPyYDxxyyIntgrl(:)
+        this%multiPoleInp%atomicPzZDzzIntgrl(:) = input%ctrl%atomicPzZDzzIntgrl(:)
+        this%multiPoleInp%atomicSXXSIntgrl(:) = input%ctrl%atomicSXXSIntgrl(:)
+        this%multiPoleInp%atomicPxXXPxIntgrl(:) = input%ctrl%atomicPxXXPxIntgrl(:)
+        this%multiPoleInp%atomicPyXXPyIntgrl(:) = input%ctrl%atomicPyXXPyIntgrl(:)
+        this%multiPoleInp%atomicSXXDxxyyIntgrl(:) = input%ctrl%atomicSXXDxxyyIntgrl(:)
+        this%multiPoleInp%atomicSXXDzzIntgrl(:) = input%ctrl%atomicSXXDzzIntgrl(:)
+        this%multiPoleInp%atomicSYYDxxyyIntgrl(:) = input%ctrl%atomicSYYDxxyyIntgrl(:)
+        this%multiPoleInp%atomicSZZDzzIntgrl(:) = input%ctrl%atomicSZZDzzIntgrl(:)
+        this%multiPoleInp%atomicDxyXXDxyIntgrl(:) = input%ctrl%atomicDxyXXDxyIntgrl(:)
+        this%multiPoleInp%atomicDyzXXDyzIntgrl(:) = input%ctrl%atomicDyzXXDyzIntgrl(:)
+        this%multiPoleInp%atomicDxxyyXXDzzIntgrl(:) = input%ctrl%atomicDxxyyXXDzzIntgrl(:)
+        this%multiPoleInp%atomicDzzXXDzzIntgrl(:) = input%ctrl%atomicDzzXXDzzIntgrl(:)
+        this%multiPoleInp%atomicDxxyyYYDzzIntgrl(:) = input%ctrl%atomicDxxyyYYDzzIntgrl(:)
+        this%multiPoleInp%atomicDzzZZDzzIntgrl(:) = input%ctrl%atomicDzzZZDzzIntgrl(:)
+        this%multiPoleInp%atomicDxzXZDzzIntgrl(:) = input%ctrl%atomicDxzXZDzzIntgrl(:)
+        this%multiPoleInp%atomicDyzYZDxxyyIntgrl(:) = input%ctrl%atomicDyzYZDxxyyIntgrl(:)
+
+        allocate(this%multiPoleInp%hubbU(size(hubbU, dim=2)))
+        this%multiPoleInp%hubbU = hubbU(1,:)
+        allocate(this%multiPoleInp%species(this%nAtom))
+        this%multiPoleInp%species(:) = input%geom%species(:)
+        allocate(this%multiPole)
+        call dftbMultiPole_init(this%multiPole, this%multiPoleInp)
+        allocate(this%quadrupoleMoment(3,3))
+        this%nMixElements = max(this%nOrb * this%nOrb * this%nSpin, this%nMixElements)
+      end if
+
     #:if WITH_SCALAPACK
       call scalafx_getlocalshape(env%blacs%orbitalGrid, this%denseDesc%blacsOrbSqr, nLocalRows,&
           & nLocalCols)
@@ -2744,12 +2829,12 @@ contains
       nLocalCols = this%denseDesc%fullSize
     #:endif
 
-      if (this%isHybridXc) then
-        ! allocation is necessary to hint "initializeCharges" what information to extract
-        call reallocateHybridXc(this, nLocalRows, nLocalCols,&
-            & size(this%parallelKS%localKS, dim=2))
-      end if
+    end if
 
+    if (this%isHybridXc .or. this%isMultiPole) then
+      ! allocation is necessary to hint "initializeCharges" what information to extract
+      call reallocateHybridXc(this, nLocalRows, nLocalCols,&
+          & size(this%parallelKS%localKS, dim=2))
     end if
 
     call this%initializeCharges(errStatus, input%ctrl%initialSpins, input%ctrl%initialCharges)
@@ -3217,6 +3302,9 @@ contains
       !if (this%tPeriodic) then
       !  write(stdout, "(A,':',T30,E14.6)") "Ewald alpha parameter", this%scc%getEwaldPar()
       !end if
+      if (this%isMultiPole) then
+        write(stdOut, "(A,':',T30,A)") "MultiPole expansion", "Yes"
+      end if
       if (input%ctrl%tShellResolved) then
          write(stdOut, "(A,':',T30,A)") "Shell resolved Hubbard", "Yes"
       else
@@ -4203,20 +4291,20 @@ contains
         ! do not check charge or magnetisation from file
         call initQFromFile(this%qInput, fCharges, this%tReadChrgAscii, this%orb, this%qBlockIn,&
             & this%qiBlockIn, this%densityMatrix, this%tRealHS, errStatus,&
-            & multipoles=this%multipoleInp, coeffsAndShifts=this%supercellFoldingMatrix)
+            & multipoles=this%multipoleIn, coeffsAndShifts=this%supercellFoldingMatrix)
         @:PROPAGATE_ERROR(errStatus)
       else
         ! check number of electrons in file
         if (this%nSpin /= 2) then
           call initQFromFile(this%qInput, fCharges, this%tReadChrgAscii, this%orb, this%qBlockIn,&
               & this%qiBlockIn, this%densityMatrix, this%tRealHS, errStatus, nEl=sum(this%nEl),&
-              & multipoles=this%multipoleInp, coeffsAndShifts=this%supercellFoldingMatrix)
+              & multipoles=this%multipoleIn, coeffsAndShifts=this%supercellFoldingMatrix)
           @:PROPAGATE_ERROR(errStatus)
         else
           ! check magnetisation in addition
           call initQFromFile(this%qInput, fCharges, this%tReadChrgAscii, this%orb, this%qBlockIn,&
               & this%qiBlockIn, this%densityMatrix, this%tRealHS, errStatus, nEl=sum(this%nEl),&
-              & magnetisation=this%nEl(1)-this%nEl(2), multipoles=this%multipoleInp,&
+              & magnetisation=this%nEl(1)-this%nEl(2), multipoles=this%multipoleIn,&
               & coeffsAndShifts=this%supercellFoldingMatrix)
           @:PROPAGATE_ERROR(errStatus)
         end if
@@ -4346,15 +4434,15 @@ contains
 
     call OrbitalEquiv_reduce(this%qInput, this%iEqOrbitals, this%orb, this%qInpRed(1:this%nIneqOrb))
 
-    if (allocated(this%multipoleInp%dipoleAtom)) then
+    if (allocated(this%multipoleIn%dipoleAtom)) then
       ! FIXME: Assumes we always mix all dipole moments
       this%qInpRed(this%nIneqOrb+1:this%nIneqOrb+this%nIneqDip) =&
-          & reshape(this%multipoleInp%dipoleAtom, [this%nIneqDip])
+          & reshape(this%multipoleIn%dipoleAtom, [this%nIneqDip])
     end if
-    if (allocated(this%multipoleInp%quadrupoleAtom)) then
+    if (allocated(this%multipoleIn%quadrupoleAtom)) then
       ! FIXME: Assumes we always mix all quadrupole moments
       this%qInpRed(this%nIneqOrb+this%nIneqDip+1:this%nIneqOrb+this%nIneqDip+this%nIneqQuad) =&
-          & reshape(this%multipoleInp%quadrupoleAtom, [this%nIneqQuad])
+          & reshape(this%multipoleIn%quadrupoleAtom, [this%nIneqQuad])
     end if
 
     if (allocated(this%onSiteElements)) then
@@ -5147,9 +5235,10 @@ contains
       if (withMpi) then
         call error("Linear response calc. does not work with MPI yet")
       end if
-      if (this%tLinRespZVect) then
-        allocate(this%rhoSqrReal(sqrHamSize, sqrHamSize, this%nSpin))
-      end if
+    end if
+
+    if (this%tLinRespZVect .or. this%isMultiPole) then
+      allocate(this%rhoSqrReal(sqrHamSize, sqrHamSize, this%nSpin))
     end if
 
     if (this%isLinResp .and. this%tPrintExcitedEigVecs) then
@@ -5760,6 +5849,10 @@ contains
 
     if (this%isRS_LinResp .and. hybridXcInp%hybridXcType == hybridXcFunc%hyb) then
       call error("Global hybrid functionals not currently implemented for linear response.")
+    end if
+
+    if (this%tQuadrupole) then
+      call error("DFTB quadrupoles currently unsupported for hybrid functionals.")
     end if
 
   end subroutine ensureHybridXcReqs

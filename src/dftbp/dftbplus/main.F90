@@ -35,6 +35,7 @@ module dftbp_dftbplus_main
   use dftbp_dftb_hamiltonian, only : resetInternalPotentials, addChargePotentials,&
       & getSccHamiltonian, mergeExternalPotentials, resetExternalPotentials,&
       & addBlockChargePotentials, constrainSccHamiltonian
+  use dftbp_dftb_multipole, only : TDftbMultiPole
   use dftbp_dftb_nonscc, only : TNonSccDiff, buildS, buildH0
   use dftbp_dftb_onsitecorrection, only : Onsblock_expand, onsBlock_reduce, addOnsShift
   use dftbp_dftb_orbitalequiv, only : OrbitalEquiv_expand, orbitalEquiv_reduce
@@ -302,7 +303,7 @@ contains
       if (tWriteCharges) then
         call writeCharges(fCharges, this%tWriteChrgAscii, this%orb, this%qInput, this%qBlockIn,&
             & this%qiBlockIn, this%densityMatrix, this%tRealHS, size(this%iAtInCentralRegion),&
-            & multipoles=this%multipoleInp, coeffsAndShifts=this%supercellFoldingMatrix)
+            & multipoles=this%multipoleIn, coeffsAndShifts=this%supercellFoldingMatrix)
       end if
 
       if (this%tDipole.and.allocated(this%derivDriver)) then
@@ -374,7 +375,7 @@ contains
         call writeDetailedOut7(this%fdDetailedOut%unit,&
             & this%isGeoOpt .or. allocated(this%geoOpt), tGeomEnd, this%tMd, this%tDerivs,&
             & this%eField, this%dipoleMoment, this%deltaDftb, this%eFieldScaling,&
-            & this%dipoleMessage)
+            & this%dipoleMessage, this%quadrupoleMoment)
       end if
 
       call writeFinalDriverStatus(this%isGeoOpt .or. allocated(this%geoOpt), tGeomEnd, this%tMd,&
@@ -751,7 +752,7 @@ contains
       call getChargePerShell(q, this%orb, this%species, this%chargePerShell)
 
       call addChargePotentials(env, this%scc, this%tblite, updateScc, q, this%q0,&
-          & this%chargePerShell, this%orb, this%multipoleInp, this%species, this%neighbourList,&
+          & this%chargePerShell, this%orb, this%multipoleIn, this%species, this%neighbourList,&
           & this%img2CentCell, this%spinW, this%solvation, this%thirdOrd, this%dispersion,&
           & this%potential)
 
@@ -946,7 +947,7 @@ contains
             & this%qInput, this%qInpRed, sccErrorQ, tConverged, this%dftbU, this%qBlockOut,&
             & this%iEqBlockDftbU, this%qBlockIn, this%qiBlockOut, this%iEqBlockDftbULS,&
             & this%species0, this%qiBlockIn, this%iEqBlockOnSite, this%iEqBlockOnSiteLS,&
-            & this%nIneqDip, this%nIneqQuad, this%multipoleOut, this%multipoleInp)
+            & this%nIneqDip, this%nIneqQuad, this%multipoleOut, this%multipoleIn)
       else
         if (this%tRealHS) then
           call getNextInputDensityReal(env, this%parallelKS, this%SSqrReal, this%ints,&
@@ -993,7 +994,7 @@ contains
       if (tWriteSccRestart) then
         call writeCharges(fCharges, this%tWriteChrgAscii, this%orb, this%qInput, this%qBlockIn,&
             & this%qiBlockIn, this%densityMatrix, this%tRealHS, size(this%iAtInCentralRegion),&
-            & coeffsAndShifts=this%supercellFoldingMatrix, multipoles=this%multipoleInp)
+            & coeffsAndShifts=this%supercellFoldingMatrix, multipoles=this%multipoleIn)
       end if
 
     end if
@@ -1040,7 +1041,8 @@ contains
           & this%dispersion, allocated(this%eField), this%tPeriodic, this%nSpin, this%tSpin,&
           & this%tSpinOrbit, this%tSccCalc, allocated(this%onSiteElements),&
           & this%iAtInCentralRegion, this%electronicSolver, allocated(this%halogenXCorrection),&
-          & this%isHybridXc, allocated(this%thirdOrd), allocated(this%solvation))
+          & this%isHybridXc, allocated(this%thirdOrd), allocated(this%solvation),&
+          & allocated(this%quadrupoleMoment))
     end if
 
   end subroutine sccLoopWriting
@@ -1336,7 +1338,8 @@ contains
                 & this%extPressure, this%cellVol, this%tAtomicEnergy, this%dispersion,&
                 & this%tPeriodic, this%tSccCalc, this%invLatVec, this%kPoint,&
                 & this%iAtInCentralRegion, this%electronicSolver, this%reks,&
-                & allocated(this%thirdOrd), this%isHybridXc, qNetAtom=this%qNetAtom)
+                & allocated(this%thirdOrd), this%isHybridXc, qNetAtom=this%qNetAtom,&
+                & isDftbMultiPole=allocated(this%quadrupoleMoment))
           end if
           if (this%tWriteBandDat) then
             call writeBandOut(bandOut, this%eigen, this%filling, this%kWeight)
@@ -1511,7 +1514,7 @@ contains
             & this%extPressure, this%cellVol, this%tAtomicEnergy, this%dispersion, this%tPeriodic,&
             & this%tSccCalc, this%invLatVec, this%kPoint, this%iAtInCentralRegion,&
             & this%electronicSolver, this%reks, allocated(this%thirdOrd), this%isHybridXc,&
-            & qNetAtom=this%qNetAtom)
+            & qNetAtom=this%qNetAtom, isDftbMultiPole=allocated(this%quadrupoleMoment))
       else
         call writeDetailedOut1(this%fdDetailedOut%unit, this%iDistribFn, this%nGeoSteps,&
             & iGeoStep, this%tMD, this%tDerivs, this%tCoordOpt, this%tLatOpt, iLatGeoStep,&
@@ -1528,7 +1531,8 @@ contains
             & this%dispersion, allocated(this%eField), this%tPeriodic, this%nSpin, this%tSpin,&
             & this%tSpinOrbit, this%tSccCalc, allocated(this%onSiteElements),&
             & this%iAtInCentralRegion, this%electronicSolver, allocated(this%halogenXCorrection),&
-            & this%isHybridXc, allocated(this%thirdOrd), allocated(this%solvation))
+            & this%isHybridXc, allocated(this%thirdOrd), allocated(this%solvation),&
+            & allocated(this%quadrupoleMoment))
       end if
     end if
 
@@ -1940,7 +1944,7 @@ contains
             & this%dftbEnergy(this%deltaDftb%iDeterminant), this%energiesCasida, this%latVec,&
             & this%derivs, this%totalStress, this%cellVol, this%intPressure, this%extPressure,&
             & tempIon, this%qOutput, this%q0, this%dipoleMoment, this%eFieldScaling,&
-            & this%dipoleMessage)
+            & this%dipoleMessage, this%quadrupoleMoment)
         call writeCurrentGeometry(this%geoOutFile, this%pCoord0Out, .false., .true., .true.,&
             & this%tFracCoord, this%tPeriodic, this%tHelical, this%tPrintMulliken, this%species0,&
             & this%speciesName, this%latVec, this%origin, iGeoStep, iLatGeoStep, this%nSpin,&

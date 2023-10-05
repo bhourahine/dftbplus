@@ -3212,7 +3212,7 @@ contains
   subroutine writeDetailedOut3(fd, qInput, qOutput, energy, species, tDFTBU, tPrintMulliken, Ef,&
       & pressure, cellVol, tAtomicEnergy, dispersion, isExtField, tPeriodic, nSpin, tSpin,&
       & tSpinOrbit, tScc, tOnSite, iAtInCentralRegion, electronicSolver, tHalogenX,&
-      & tHybridXc, t3rd, tSolv)
+      & tHybridXc, t3rd, tSolv, isDftbMultiPole)
 
     !> File ID
     integer, intent(in) :: fd
@@ -3289,6 +3289,9 @@ contains
     !> Is this a solvation model used?
     logical, intent(in) :: tSolv
 
+    !> Are there energy contributions up to quadrupole in the DFTB model?
+    logical, intent(in) :: isDftbMultiPole
+
     real(dp), allocatable :: qInputUpDown(:,:,:), qOutputUpDown(:,:,:)
     integer :: nSpinHams
     integer :: iAt, iSpin, ii
@@ -3354,6 +3357,22 @@ contains
       if (tHybridXc) then
         write(fd, format2U) 'Energy Fock', energy%Efock, 'H', energy%Efock * Hartree__eV, 'eV'
       end if
+
+      if (isDftbMultiPole) then
+        write(fd, format2U) 'Energy Monopole-Dipole', energy%EMultiPoleMD, 'H',&
+            & energy%EMultiPoleMD * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Dipole-Dipole', energy%EMultiPoleDD, 'H',&
+            & energy%EMultiPoleDD * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Monopole-Quadrupole', energy%EMultiPoleMQ, 'H',&
+            & energy%EMultiPoleMQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Dipole-Quadrupole', energy%EMultiPoleDQ, 'H',&
+            & energy%EMultiPoleDQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Quadrupole-Quadrupole', energy%EMultiPoleQQ, 'H',&
+            & energy%EMultiPoleQQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Multipole', energy%EMultiPole, 'H',&
+            & energy%EMultiPole * Hartree__eV, 'eV'
+      end if
+
       if (tDFTBU) then
         write(fd, format2U) 'Energy DFTB+U', energy%Edftbu, 'H', energy%Edftbu * Hartree__eV, 'eV'
       end if
@@ -3693,7 +3712,7 @@ contains
 
   !> Seventh group of data for detailed.out
   subroutine writeDetailedOut7(fd, tGeoOpt, tGeomEnd, tMd, tDerivs, eField, dipoleMoment,&
-      & deltaDftb, eFieldScaling, dipoleMessage)
+      & deltaDftb, eFieldScaling, dipoleMessage, quadrupoleMoment)
 
     !> File ID
     integer, intent(in) :: fd
@@ -3724,6 +3743,9 @@ contains
 
     !> Optional extra message about dipole moments
     character(*), intent(in) :: dipoleMessage
+
+    !> quadrupole moment, if available
+    real(dp), intent(in), allocatable :: quadrupoleMoment(:,:)
 
     if (allocated(dipoleMoment)) then
       if (len(trim(dipoleMessage))>0) then
@@ -3774,6 +3796,24 @@ contains
             & ' Debye'
         write(fd, *)
       end if
+    end if
+
+    if (allocated(quadrupoleMoment)) then
+      write(fd, "(A)") ' Traceless Quadrupole moment in au'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY',&
+          & quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ',&
+          & quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
+      write(fd, "(A)") ' Traceless Quadrupole moment in Debye*Ang'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX',&
+          & quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY',&
+          & quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ',&
+          & quadrupoleMoment(3,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY',&
+          & quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ',&
+          & quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ',&
+          & quadrupoleMoment(2,3) * au__Debye * Bohr__AA
+      write(fd, *)
     end if
 
     if (allocated(eField)) then
@@ -3951,7 +3991,8 @@ contains
   !> Second group of output data during molecular dynamics
   subroutine writeMdOut2(fd, isPeriodic, printForces, hasStress, withBarostat, isLinResp, eField,&
       & fixEf, printMulliken, energy, energiesCasida, latVec, derivs, totalStress, cellVol,&
-      & cellPressure, pressure, tempIon, qOutput, q0, dipoleMoment, eFieldScaling, dipoleMessage)
+      & cellPressure, pressure, tempIon, qOutput, q0, dipoleMoment, eFieldScaling, dipoleMessage,&
+      & quadrupolemoment)
 
     !> File ID
     integer, intent(in) :: fd
@@ -4021,6 +4062,9 @@ contains
 
     !> Optional extra message about dipole moments
     character(*), intent(in) :: dipoleMessage
+
+    !> quadrupole moment, if available
+    real(dp), intent(in), allocatable :: quadrupoleMoment(:,:)
 
     integer :: ii
     character(lc) :: strTmp
@@ -4094,6 +4138,24 @@ contains
           & eFieldScaling%scaledSoluteDipole(dipoleMoment(:,ii)), "au"
       write(fd, "(A, 3F14.8, 1X, A)") "Dipole moment:",&
           & eFieldScaling%scaledSoluteDipole(dipoleMoment(:,ii)) * au__Debye, "Debye"
+    end if
+
+    if (allocated(quadrupoleMoment)) then
+      write(fd, "(A)") ' Traceless Quadrupole moment in au'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY',&
+          & quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ',&
+          & quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
+      write(fd, "(A)") ' Traceless Quadrupole moment in Debye*Ang'
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX',&
+          & quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY',&
+          & quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ',&
+          & quadrupoleMoment(3,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY',&
+          & quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ',&
+          & quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ',&
+          & quadrupoleMoment(2,3) * au__Debye * Bohr__AA
+      write(fd, *)
     end if
 
   end subroutine writeMdOut2
@@ -5505,7 +5567,7 @@ contains
       & tCoordOpt, tLatOpt, iLatGeoStep, iSccIter, energy, diffElec, sccErrorQ,&
       & indMovedAtom, coord0Out, q0, qOutput, orb, species, tPrintMulliken, pressure,&
       & cellVol, tAtomicEnergy, dispersion, tPeriodic, tScc, invLatVec, kPoints,&
-      & iAtInCentralRegion, electronicSolver, reks, t3rd, isHybridXc, qNetAtom)
+      & iAtInCentralRegion, electronicSolver, reks, t3rd, isHybridXc, qNetAtom, isDftbMultiPole)
 
     !> File ID
     integer, intent(in) :: fd
@@ -5594,17 +5656,20 @@ contains
     !> Electronic solver information
     type(TElectronicSolver), intent(in) :: electronicSolver
 
-    !> Third order DFTB
-    logical, intent(in) :: t3rd
+    !> data type for REKS
+    type(TReksCalc), intent(in) :: reks
 
     !> Whether to run a range separated calculation
     logical, intent(in) :: isHybridXc
 
+    !> Third order DFTB
+    logical, intent(in) :: t3rd
+
     !> Onsite mulliken population per atom
     real(dp), intent(in), optional :: qNetAtom(:)
 
-    !> data type for REKS
-    type(TReksCalc), intent(in) :: reks
+    !> Are there energy contributions up to quadrupole in the DFTB model?
+    logical, intent(in) :: isDftbMultiPole
 
     integer :: nAtom, nKPoint, nMovedAtom
     integer :: ang, iAt, iSpin, iK, iSp, iSh, ii, kk
@@ -5782,6 +5847,22 @@ contains
       if (isHybridXc) then
         write(fd, format2U) 'Energy Fock', energy%Efock, 'H', energy%Efock * Hartree__eV, 'eV'
       end if
+
+      if (isDftbMultiPole) then
+        write(fd, format2U) 'Energy Monopole-Dipole', energy%EMultiPoleMD, 'H',&
+            & energy%EMultiPoleMD * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Dipole-Dipole', energy%EMultiPoleDD, 'H',&
+            & energy%EMultiPoleDD * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Monopole-Quadrupole', energy%EMultiPoleMQ, 'H',&
+            & energy%EMultiPoleMQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Dipole-Quadrupole', energy%EMultiPoleDQ, 'H',&
+            & energy%EMultiPoleDQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Quadrupole-Quadrupole', energy%EMultiPoleQQ, 'H',&
+            & energy%EMultiPoleQQ * Hartree__eV, 'eV'
+        write(fd, format2U) 'Energy Multipole', energy%EMultiPole, 'H',&
+            & energy%EMultiPole * Hartree__eV, 'eV'
+      end if
+
     end if
 
     write(fd, format2U) 'Total Electronic energy', energy%Eelec, 'H', &
