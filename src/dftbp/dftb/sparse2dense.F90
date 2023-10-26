@@ -8,8 +8,7 @@
 #:include 'common.fypp'
 
 !> Contains subroutines for packing/unpacking Hamiltonian-like matrices between the square and
-!> 1-dimensional representations
-!>
+!! 1-dimensional representations
 module dftbp_dftb_sparse2dense
   use dftbp_common_accuracy, only : dp
   use dftbp_common_constants, only : pi, imag
@@ -25,7 +24,6 @@ module dftbp_dftb_sparse2dense
 
   private
   public :: unpackHS, packHS, iPackHS, packErho, unpackDQ
-  public :: blockSymmetrizeHS, blockHermitianHS, symmetrizeHS, hermitianSquareMatrix
   public :: packHSPauli, packHSPauliImag, unpackHPauli, unpackSPauli
   public :: unpackHelicalHS, packHelicalHS
   public :: getSparseDescriptor
@@ -90,31 +88,10 @@ module dftbp_dftb_sparse2dense
   end interface packErho
 
 
-  !> Symmetrize the square matrix except the on-site blocks
-  interface blockSymmetrizeHS
-    module procedure blockSymmetrizeHS_real
-    module procedure blockSymmetrizeHS_cmplx
-  end interface blockSymmetrizeHS
-
-
-  !> Hermitian the square matrix except the on-site blocks
-  interface blockHermitianHS
-    module procedure blockSymmetrizeHS_real
-    module procedure blockHermitianHS_cmplx
-  end interface blockHermitianHS
-
-
-  !> Symmetrize the square matrix including the on-site blocks
-  interface symmetrizeHS
-    module procedure symmetrizeHS_real
-  end interface symmetrizeHS
-
-
 contains
 
   !> Unpacks sparse matrix to square form (complex version) Note the non on-site blocks are only
-  !> filled in the lower triangle part of the matrix. To fill the matrix completely, apply the
-  !> blockSymmetrizeHS subroutine.
+  !! filled in the lower triangle part of the matrix.
   subroutine unpackHS_cmplx_kpts(square, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
       & iAtomStart, iSparseStart, img2CentCell)
 
@@ -194,9 +171,7 @@ contains
 
 
   !> Unpacks sparse matrix to square form (real version for Gamma point)
-  !>
-  !> Note: The non on-site blocks are only filled in the lower triangle part of the matrix. To fill
-  !> the matrix completely, apply the blockSymmetrizeHS subroutine.
+  !! Note: The non on-site blocks are only filled in the lower triangle part of the matrix.
   subroutine unpackHS_real(square, orig, iNeighbour, nNeighbourSK, iAtomStart, iSparseStart,&
       & img2CentCell)
 
@@ -256,8 +231,7 @@ contains
 
 
   !> Unpacks sparse matrix to square form (complex version) for helical geometries. Note the non
-  !> on-site blocks are only filled in the lower triangle part of the matrix. To fill the matrix
-  !> completely, apply the blockSymmetrizeHS subroutine.
+  !! on-site blocks are only filled in the lower triangle part of the matrix.
   subroutine unpackHSHelical_cmplx(square, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
       & cellVec, iAtomStart, iSparseStart, img2CentCell, orb, species, coord)
 
@@ -345,9 +319,7 @@ contains
 
 
   !> Unpacks sparse matrix to square form (real version for Gamma point) for helical geometry
-  !>
-  !> Note: The non on-site blocks are only filled in the lower triangle part of the matrix. To fill
-  !> the matrix completely, apply the blockSymmetrizeHS subroutine.
+  !! Note: The non on-site blocks are only filled in the lower triangle part of the matrix.
   subroutine unpackHSHelical_real(square, orig, iNeighbour, nNeighbourSK, iAtomStart, iSparseStart,&
       & img2CentCell, orb, species, coord)
 
@@ -416,7 +388,7 @@ contains
   end subroutine unpackHSHelical_real
 
 
-  !> Unpacks sparse matrix to square form (complex version)
+  !> Unpacks sparse dipole/quadrupole matrix to square form (complex version)
   subroutine unpackDQ_cmplx_kpts(square, origBra, origKet, kPoint, iNeighbour, nNeighbourSK,&
       & iCellVec, cellVec, iAtomStart, iSparseStart, img2CentCell)
 
@@ -505,7 +477,7 @@ contains
   end subroutine unpackDQ_cmplx_kpts
 
 
-  !> Unpacks sparse matrix to square form (real version for Gamma point)
+  !> Unpacks sparse dipole/quadrupole matrix to square form (real version for Gamma point)
   subroutine unpackDQ_real(square, origBra, origKet, iNeighbour, nNeighbourSK, iAtomStart,&
       & iSparseStart, img2CentCell)
 
@@ -575,9 +547,7 @@ contains
 
 
   !> Unpacks sparse matrices to square form (2 component version for k-points)
-  !>
-  !> Note: The non on-site blocks are only filled in the lower triangle part of the matrix. To fill
-  !> the matrix completely, apply the blockSymmetrizeHS subroutine.
+  !! Note: The non on-site blocks are only filled in the lower triangle part of the matrix.
   subroutine unpackHPauli(ham, kPoint, iNeighbour, nNeighbourSK, iSparseStart, iAtomStart,&
       & img2CentCell, iCellVec, cellVec, HSqrCplx, iHam)
 
@@ -704,9 +674,7 @@ contains
 
 
   !> Unpacks sparse overlap matrices to square form (2 component version for k-points)
-  !>
-  !> Note: The non on-site blocks are only filled in the lower triangle part of the matrix. To fill
-  !> the matrix completely, apply the blockSymmetrizeHS subroutine.
+  !! Note: The non on-site blocks are only filled in the lower triangle part of the matrix.
   subroutine unpackSPauli(over, kPoint, iNeighbour, nNeighbourSK, iAtomStart, iSparseStart,&
       & img2CentCell, iCellVec, cellVec, SSqrCplx)
 
@@ -1899,128 +1867,6 @@ contains
   end subroutine packHSPauliERho_kpts
 
 
-  !> Symmetrize a square matrix leaving the on-site atomic blocks alone.  (Complex version)
-  subroutine blockSymmetrizeHS_cmplx(square, iAtomStart)
-
-    !> Square form matrix.
-    complex(dp), intent(inout) :: square(:, :)
-
-    !> Returns the offset array for each atom.
-    integer, intent(in) :: iAtomStart(:)
-
-    integer :: nAtom, iAtom, iStart, iEnd, mOrb
-
-    nAtom = size(iAtomStart, dim=1) - 1
-    mOrb = iAtomStart(nAtom+1) - 1
-
-    @:ASSERT(nAtom > 0)
-    @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT((size(square, dim=1) == 2*mOrb) .or. (size(square, dim=1) == mOrb))
-    @:ASSERT(size(square, dim=1) == mOrb)
-
-    do iAtom = 1, nAtom
-      iStart = iAtomStart(iAtom)
-      iEnd = iAtomStart(iAtom+1) - 1
-      square(iStart:iEnd, iEnd+1:mOrb) = transpose(square(iEnd+1:mOrb, iStart:iEnd))
-    end do
-
-  end subroutine blockSymmetrizeHS_cmplx
-
-
-  !> Symmetrize a square matrix leaving the on-site atomic blocks alone. (Complex version)
-  subroutine blockHermitianHS_cmplx(square, iAtomStart)
-
-    !> Square form matrix.
-    complex(dp), intent(inout) :: square(:, :)
-
-    !> Returns the offset array for each atom.
-    integer, intent(in) :: iAtomStart(:)
-
-    integer :: nAtom, iAtom, iStart, iEnd, mOrb
-
-    nAtom = size(iAtomStart, dim=1) - 1
-    mOrb = iAtomStart(nAtom+1) - 1
-
-    @:ASSERT(nAtom > 0)
-    @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT((size(square, dim=1) == mOrb) .or. (size(square, dim=1) == 2*mOrb))
-    @:ASSERT(size(square, dim=1) == mOrb .or. size(square, dim=1) == 2*mOrb)
-
-    do iAtom = 1, nAtom
-      iStart = iAtomStart(iAtom)
-      iEnd = iAtomStart(iAtom+1) - 1
-      square(iStart:iEnd, iEnd+1:mOrb) = transpose(conjg(square(iEnd+1:mOrb, iStart:iEnd)))
-    end do
-
-    if (size(square, dim=1) == 2*mOrb) then
-      ! 2 component matrix
-      do iAtom = 1, nAtom
-        iStart = iAtomStart(iAtom) + mOrb
-        iEnd = iAtomStart(iAtom+1) + mOrb - 1
-        square(iStart:iEnd, iEnd+1:) = transpose(conjg(square(iEnd+1:, iStart:iEnd)))
-      end do
-    end if
-
-  end subroutine blockHermitianHS_cmplx
-
-
-  !> Symmetrize a square matrix leaving the on-site atomic blocks alone.  (Real version)
-  subroutine blockSymmetrizeHS_real(square, iAtomStart)
-
-    !> Square form matrix.
-    real(dp), intent(inout) :: square(:, :)
-
-    !> Returns the offset array for each atom.
-    integer, intent(in) :: iAtomStart(:)
-
-    integer :: nAtom, iAtom, iStart, iEnd, mOrb
-
-    nAtom = size(iAtomStart) - 1
-    mOrb = iAtomStart(nAtom+1) - 1
-
-    @:ASSERT(nAtom > 0)
-    @:ASSERT(size(square, dim=1) == size(square, dim=2))
-    @:ASSERT(size(square, dim=1) == mOrb)
-
-    do iAtom = 1, nAtom
-      iStart = iAtomStart(iAtom)
-      iEnd = iAtomStart(iAtom+1) - 1
-      square(iStart:iEnd, iEnd+1:mOrb) = transpose(square(iEnd+1:mOrb, iStart:iEnd))
-    end do
-
-  end subroutine blockSymmetrizeHS_real
-
-
-  !> Copy lower triangle to upper for a square matrix. (Real version)
-  subroutine symmetrizeHS_real(matrix)
-
-    !> matrix to symmetrize
-    real(dp), intent(inout) :: matrix(:,:)
-    integer :: ii, matSize
-
-    matSize = size(matrix, dim = 1)
-    do ii = 1, matSize - 1
-      matrix(ii, ii + 1 : matSize) = matrix(ii + 1 : matSize, ii)
-    end do
-
-  end subroutine symmetrizeHS_real
-
-
-  !> copy lower triangle to upper for a square matrix
-  subroutine hermitianSquareMatrix(matrix)
-
-    !> matrix to symmetrize
-    complex(dp), intent(inout) :: matrix(:,:)
-    integer :: ii, matSize
-
-    matSize = size(matrix, dim = 1)
-    do ii = 1, matSize - 1
-      matrix(ii, ii + 1 : matSize) = conjg(matrix(ii + 1 : matSize, ii))
-    end do
-
-  end subroutine hermitianSquareMatrix
-
-
 #:if WITH_SCALAPACK
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!! Scalapack routines
@@ -2028,9 +1874,7 @@ contains
 
 
   !> Unpacks sparse H or S into dense (real, blacs).
-  !>
-  !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
-  !>
+  !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   subroutine unpackHSRealBlacs(myBlacs, orig, iNeighbour, nNeighbourSK, iSparseStart, img2CentCell,&
       & desc, square)
 
@@ -2095,9 +1939,7 @@ contains
 
 
   !> Unpacks sparse H into distributed dense matrix (complex)
-  !>
-  !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
-  !>
+  !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   subroutine unpackHSCplxBlacs(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
       & iSparseStart, img2CentCell, desc, square)
 
@@ -2182,9 +2024,7 @@ contains
 
 
   !> Unpacks sparse Hamiltonian to square form (Pauli-type Hamiltonian).
-  !>
-  !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
-  !>
+  !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   subroutine unpackHPauliBlacs(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
       & iSparseStart, img2CentCell, mOrb, desc, square, iorig)
 
@@ -2240,10 +2080,8 @@ contains
 
 
   !> Helper routine for unpacking into Pauli-type Hamiltonians.
-  !!
   !! The routine creates both triangle of the 2x2 Pauli Hamiltonian
   !! 1*orig(:, 1) + sigma1*orig(:, 2) + sigma2*orig(:, 3) + sigma3*orig(:, 4).
-  !!
   subroutine unpackHPauliBlacsHelper(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
       & cellVec, iSparseStart, img2CentCell, mOrb, imagPrefac, hermPrefac, desc, square)
 
@@ -2367,9 +2205,7 @@ contains
 
 
   !> Unpacking the overlap for Pauli-type matrices.
-  !>
-  !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
-  !>
+  !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   subroutine unpackSPauliBlacs(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
       & iSparseStart, img2CentCell, mOrb, desc, square)
 
@@ -2970,9 +2806,7 @@ contains
 
 
   !> Unpacks sparse H or S into dense (real, blacs) for helical geometry.
-  !>
-  !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
-  !>
+  !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   subroutine unpackHSHelicalRealBlacs(myBlacs, orig, iNeighbour, nNeighbourSK, iSparseStart,&
       & img2CentCell, orb, species, coord, desc, square)
 
@@ -3046,9 +2880,7 @@ contains
 
 
   !> Unpacks sparse H into distributed dense matrix (complex) for helical geometry
-  !>
-  !> Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
-  !>
+  !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   subroutine unpackHSHelicalCplxBlacs(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
       & cellVec, iSparseStart, img2CentCell, orb, species, coord, desc, square)
 

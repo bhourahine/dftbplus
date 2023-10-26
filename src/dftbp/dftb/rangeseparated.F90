@@ -15,9 +15,9 @@ module dftbp_dftb_rangeseparated
   use dftbp_common_globalenv, only : stdOut
   use dftbp_dftb_nonscc, only : TNonSccDiff
   use dftbp_dftb_slakocont, only : TSlakoCont
-  use dftbp_dftb_sparse2dense, only : blockSymmetrizeHS, symmetrizeHS, hermitianSquareMatrix
   use dftbp_io_message, only : error
   use dftbp_math_blasroutines, only : gemm
+  use dftbp_math_matrixoperations, only : blockTriangleCopyHS, triangleCopySquareMatrix
   use dftbp_math_sorting, only : index_heap_sort
   use dftbp_type_commontypes, only : TOrbitals
   implicit none
@@ -396,9 +396,9 @@ contains
       allocate(testOvr(nAtom, nAtom))
       allocate(ovrInd(nAtom, nAtom))
       tmpOvr(:,:) = overlap
-      call blockSymmetrizeHS(tmpOvr, iSquare)
+      call blockTriangleCopyHS(tmpOvr, iSquare)
       tmpDRho(:,:) = deltaRho
-      call symmetrizeHS(tmpDRho)
+      call triangleCopySquareMatrix(tmpDRho)
       tmpDHam(:,:) = 0.0_dp
       call checkAndInitScreening(this, matrixSize, tmpDRho)
       tmpDDRho(:,:) = tmpDRho - this%dRhoPrev
@@ -560,7 +560,7 @@ contains
 
     call allocateAndInit(tmpHH, tmpDRho)
     call evaluateHamiltonian()
-    call symmetrizeHS(tmpHH)
+    call triangleCopySquareMatrix(tmpHH)
     HH(:,:) = HH + tmpHH
     this%lrEnergy = this%lrEnergy + evaluateEnergy(tmpHH, tmpDRho)
 
@@ -579,7 +579,7 @@ contains
       tmpHH(:,:) = 0.0_dp
       allocate(tmpDRho(size(densSqr, dim=1), size(densSqr, dim=1)))
       tmpDRho(:,:) = densSqr
-      call symmetrizeHS(tmpDRho)
+      call triangleCopySquareMatrix(tmpDRho)
 
     end subroutine allocateAndInit
 
@@ -816,11 +816,11 @@ contains
       nAtom = size(this%lrGammaEval,dim=1)
 
       !! Symmetrize Hamiltonian, overlap, density matrices
-      call hermitianSquareMatrix(HH)
+      call triangleCopySquareMatrix(HH)
       Smat(:,:) = overlap
-      call hermitianSquareMatrix(Smat)
+      call triangleCopySquareMatrix(Smat)
       Dmat(:,:) = densSqr
-      call hermitianSquareMatrix(Dmat)
+      call triangleCopySquareMatrix(Dmat)
 
       ! Get long-range gamma variable
       LrGammaAO(:,:) = 0.0_dp
@@ -965,11 +965,11 @@ contains
       nAtom = size(this%lrGammaEval,dim=1)
 
       ! Symmetrize Hamiltonian, overlap, density matrices
-      call symmetrizeHS(HH)
+      call triangleCopySquareMatrix(HH)
       Smat(:,:) = overlap
-      call symmetrizeHS(Smat)
+      call triangleCopySquareMatrix(Smat)
       Dmat(:,:) = densSqr
-      call symmetrizeHS(Dmat)
+      call triangleCopySquareMatrix(Dmat)
 
       ! Get long-range gamma variable
       LrGammaAO(:,:) = 0.0_dp
@@ -1488,9 +1488,9 @@ contains
       allocate(tmpderiv(3, size(gradients, dim = 2)))
       tmpOvr = ovrlapMat
       tmpRho = deltaRho
-      call symmetrizeHS(tmpOvr)
+      call triangleCopySquareMatrix(tmpOvr)
       do iSpin = 1, size(deltaRho, dim = 3)
-        call symmetrizeHS(tmpRho(:,:,iSpin))
+        call triangleCopySquareMatrix(tmpRho(:,:,iSpin))
       enddo
       ! precompute the gamma derivatives
       gammaPrimeTmp = 0.0_dp
@@ -1538,8 +1538,8 @@ contains
     allocate(tmpDRho(size(deltaRho, dim = 1), size(deltaRho, dim = 1)))
     tmpOvr = ovrlap
     tmpDRho = deltaRho
-    call symmetrizeHS(tmpOvr)
-    call symmetrizeHS(tmpDRho)
+    call triangleCopySquareMatrix(tmpOvr)
+    call triangleCopySquareMatrix(tmpDRho)
 
     energy = 0.0_dp
     do iAt1 = 1, nAtom

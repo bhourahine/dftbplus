@@ -26,10 +26,11 @@ module dftbp_reks_reksinterface
   use dftbp_dftb_repulsive_repulsive, only : TRepulsive
   use dftbp_dftb_scc, only : TScc
   use dftbp_dftb_slakocont, only : TSlakoCont
-  use dftbp_dftb_sparse2dense, only : packHS, unpackHS, blockSymmetrizeHS
+  use dftbp_dftb_sparse2dense, only : packHS, unpackHS
   use dftbp_dftb_stress, only : getBlockStress
   use dftbp_elecsolvers_elecsolvers, only : TElectronicSolver
   use dftbp_io_taggedoutput, only : TTaggedWriter, tagLabels
+  use dftbp_math_matrixoperations, only : blockTriangleCopyHS
   use dftbp_reks_rekscommon, only : getTwoIndices
   use dftbp_reks_rekscpeqn, only : cggrad
   use dftbp_reks_reksen, only : adjustEigenval, solveSecularEqn
@@ -198,7 +199,7 @@ module dftbp_reks_reksinterface
             call unpackHS(rhoL, this%rhoSpL(:,1,tmpL), neighbourList%iNeighbour, &
                 & nNeighbourSK, denseDesc%iAtomStart, iSparseStart, img2CentCell)
             call env%globalTimer%stopTimer(globalTimers%sparseToDense)
-            call blockSymmetrizeHS(rhoL, denseDesc%iAtomStart)
+            call blockTriangleCopyHS(rhoL, denseDesc%iAtomStart)
           end if
 
         end if
