@@ -31,15 +31,14 @@ module dftbp_dftb_populations
   implicit none
 
   private
-  public :: mulliken, skewMulliken, denseMulliken, denseSubtractDensityOfAtoms
-  public :: getChargePerShell, denseBlockMulliken
-  public :: getOnsitePopulation, getAtomicMultipolePopulation
+  public :: mulliken, skewMulliken, denseMulliken, denseSubtractDensityOfAtoms, getChargePerShell
+  public :: denseBlockMulliken, getOnsitePopulation, getAtomicMultipolePopulation
   public :: denseSubtractDensityOfAtoms_nospin_real_nonperiodic_reks
   public :: denseSubtractDensityOfAtoms_spin_real_nonperiodic_reks
+  public :: modifiedMullikenOrbital
 #:if WITH_SCALAPACK
   public :: denseMulliken_real_blacs
 #:endif
-
 
   !> Provides an interface to calculate Mulliken populations, either dual basis atomic block,
   !> orbitally resolved or atom resolved
@@ -139,7 +138,7 @@ contains
     !> Computational environment settings
     type(TEnvironment), intent(in) :: env
 
-    !> The charge per orbital
+    !> The charge per atomic orbital
     real(dp), intent(inout) :: qq(:,:)
 
     !> Overlap matrix in packed format
@@ -1283,6 +1282,98 @@ contains
     end do
 
   end subroutine getAtomicMultipolePopulation
+
+
+  !> Calculate the modified Mulliken populations for each orbital in the system
+  !! Bickelhaupt et al. Organometallics 1996, 15, 13, 2923 (1996) doi: 10.1021/om950966x
+  subroutine modifiedMullikenOrbital(env, qq, over, rho, orb, iNeighbour, nNeighbourSK,&
+      & img2CentCell, iPair)
+
+    !> Computational environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> The charge per atomic orbital
+    real(dp), intent(inout) :: qq(:,:)
+
+    !> Overlap matrix in packed format
+    real(dp), intent(in) :: over(:)
+
+    !> Density matrix in Packed format
+    real(dp), intent(in) :: rho(:)
+
+    !> Information about the orbitals.
+    type(TOrbitals), intent(in) :: orb
+
+    !> Number of neighbours of each real atom (central cell)
+    integer, intent(in) :: iNeighbour(0:,:)
+
+    !> List of neighbours for each atom, starting at 0 for itself
+    integer, intent(in) :: nNeighbourSK(:)
+
+    !> indexing array to convert images of atoms back into their number in the central cell
+    integer, intent(in) :: img2CentCell(:)
+
+    !> indexing array for the Hamiltonian
+    integer, intent(in) :: iPair(0:,:)
+
+    integer :: iOrig, iIter, iNeigh, nAtom, iAtom1, iAtom2, iAtom2f, nOrb1, nOrb2, iOrb, jOrb
+    integer, allocatable :: iterIndices(:)
+    real(dp) :: sqrTmp(orb%mOrb,orb%mOrb), mulTmp(orb%mOrb**2), partition
+
+    ! net (on-site) populations
+    real(dp), allocatable :: q(:,:)
+
+    nAtom = size(orb%nOrbAtom)
+
+    @:ASSERT(all(shape(qq) == (/orb%mOrb, nAtom/)))
+    @:ASSERT(size(over) == size(rho))
+    allocate(q(orb%mOrb, nAtom), source=0.0_dp)
+
+    call getOnsitePopulation(rho, orb, iPair, qq)
+
+    ! Net populations
+    do iAtom1 = 1, nAtom
+      nOrb1 = orb%nOrbAtom(iAtom1)
+      iOrig = iPair(0,iAtom1)
+      do iOrb = 1, nOrb1
+        q(iOrb,iAtom1) = rho(iOrig + (iOrb-1) * nOrb1 + iOrb)
+      end do
+    end do
+
+    ! technically nNeigh -1, but will live with a small load imbalance:
+    call distributeRangeWithWorkload(env, 1, nAtom, nNeighbourSK, iterIndices)
+
+    do iIter = 1, size(iterIndices)
+      iAtom1 = iterIndices(iIter)
+      nOrb1 = orb%nOrbAtom(iAtom1)
+      do iNeigh = 0, nNeighbourSK(iAtom1)
+        sqrTmp(:,:) = 0.0_dp
+        mulTmp(:) = 0.0_dp
+        iAtom2 = iNeighbour(iNeigh, iAtom1)
+        iAtom2f = img2CentCell(iAtom2)
+        nOrb2 = orb%nOrbAtom(iAtom2f)
+        iOrig = iPair(iNeigh,iAtom1) + 1
+        mulTmp(1:nOrb1*nOrb2) = over(iOrig:iOrig+nOrb1*nOrb2-1) * rho(iOrig:iOrig+nOrb1*nOrb2-1)
+        sqrTmp(1:nOrb2,1:nOrb1) = reshape(mulTmp(1:nOrb1*nOrb2), (/nOrb2,nOrb1/))
+        if (iAtom1 == iAtom2f) then
+          qq(:nOrb1,iAtom1) = qq(:nOrb1,iAtom1) + sum(sqrTmp(1:nOrb2,1:nOrb1), dim=1)
+        else
+          do iOrb = 1, nOrb1
+            do jOrb = 1, nOrb2
+              if (q(iOrb, iAtom1) < epsilon(0.0_dp) .and. q(jOrb, iAtom2f) < epsilon(0.0_dp)) cycle
+              partition = q(iOrb, iAtom1) / (q(iOrb, iAtom1) + q(jOrb, iAtom2f))
+              qq(iOrb, iAtom1) = qq(iOrb,iAtom1) + 2.0_dp * partition * sqrTmp(jOrb,iOrb)
+              partition = 1.0_dp - partition
+              qq(jOrb, iAtom2f) = qq(jOrb,iAtom2f) + 2.0_dp * partition * sqrTmp(jOrb,iOrb)
+            end do
+          end do
+        end if
+      end do
+    end do
+
+    call assembleChunks(env, qq)
+
+  end subroutine modifiedMullikenOrbital
 
 
 end module dftbp_dftb_populations

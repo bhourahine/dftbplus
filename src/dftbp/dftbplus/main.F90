@@ -44,7 +44,7 @@ module dftbp_dftbplus_main
   use dftbp_dftb_populations, only : getChargePerShell, denseSubtractDensityOfAtoms, mulliken,&
       & denseMulliken, denseBlockMulliken, skewMulliken, getOnsitePopulation, &
       & getAtomicMultipolePopulation, denseSubtractDensityOfAtoms_nospin_real_nonperiodic_reks,&
-      & denseSubtractDensityOfAtoms_spin_real_nonperiodic_reks
+      & denseSubtractDensityOfAtoms_spin_real_nonperiodic_reks, modifiedMullikenOrbital
 #:if WITH_SCALAPACK
   use dftbp_dftb_populations, only : denseMulliken_real_blacs
 #:endif
@@ -4139,6 +4139,12 @@ contains
     type(TMultipole), intent(inout), optional :: multipoles
 
     integer :: iSpin
+
+    qOrb(:,:,:) = 0.0_dp
+    do iSpin = 1, size(rhoPrim, dim=2)
+      call modifiedMullikenOrbital(env, qOrb(:,:,iSpin), ints%overlap, rhoPrim(:,iSpin), orb,&
+          & neighbourList%iNeighbour, nNeighbourSK, img2CentCell, iSparseStart)
+    end do
 
     qOrb(:,:,:) = 0.0_dp
     do iSpin = 1, size(rhoPrim, dim=2)
