@@ -57,10 +57,9 @@ module dftbp_dftbplus_main
   use dftbp_dftb_scc, only : TScc
   use dftbp_dftb_shift, only : addShift, addAtomicMultipoleShift
   use dftbp_dftb_slakocont, only : TSlakoCont
-  use dftbp_dftb_sparse2dense, only : unpackHPauli, unpackHS, blockSymmetrizeHS, packHS,&
-      & blockSymmetrizeHS, packHS, symmetrizeHS, unpackHelicalHS, packerho, blockHermitianHS,&
-      & packHSPauli, packHelicalHS, packHSPauliImag, iPackHS, unpackSPauli, getSparseDescriptor,&
-      & hermitianSquareMatrix
+  use dftbp_dftb_sparse2dense, only : unpackHPauli, unpackHS, packHS, packHS, unpackHelicalHS,&
+      & packerho, packHSPauli, packHelicalHS, packHSPauliImag, iPackHS, unpackSPauli,&
+      & getSparseDescriptor
   use dftbp_dftb_spin, only : ud2qm, qm2ud
   use dftbp_dftb_spinorbit, only : addOnsiteSpinOrbitHam, getOnsiteSpinOrbitEnergy
   use dftbp_dftb_stress, only : getkineticstress, getBlockStress, getBlockiStress, getNonSCCStress
@@ -97,6 +96,7 @@ module dftbp_dftbplus_main
   use dftbp_math_angmomentum, only : getLOnsite, getLDual
   use dftbp_math_blasroutines, only : hemm, symm
   use dftbp_math_lapackroutines, only : hermatinv, matinv, symmatinv
+  use dftbp_math_matrixoperations, only : triangleCopySquareMatrix
   use dftbp_math_simplealgebra, only : determinant33, derivDeterminant33
   use dftbp_md_mdcommon, only : TMdCommon, evalKE, evalKT
   use dftbp_md_mdintegrator, only : TMdIntegrator, next, rescale
@@ -1600,7 +1600,7 @@ contains
     if (allocated(this%ppRPA)) then
       call unpackHS(this%SSqrReal, this%ints%overlap, this%neighbourList%iNeighbour,&
           & this%nNeighbourSK, this%denseDesc%iAtomStart, this%iSparseStart, this%img2CentCell)
-      call blockSymmetrizeHS(this%SSqrReal, this%denseDesc%iAtomStart)
+      call triangleCopySquareMatrix(this%SSqrReal)
       if (withMpi) then
         call error("pp-RPA calc. does not work with MPI yet")
       end if
@@ -3792,7 +3792,7 @@ contains
     #:endif
       if (allocated(hybridXc)) then
         ! Store square density matrix P(iKS), since currently needed for q0 substraction
-        call hermitianSquareMatrix(work)
+        call triangleCopySquareMatrix(work)
         densityMatrix%deltaRhoOutCplx(:,:, iKS) = work
       end if
     end do
@@ -5090,15 +5090,15 @@ contains
     dQAtom(:,:) = sum(qOutput(:,:,:) - q0(:,:,:), dim=1)
     call unpackHS(work, ints%overlap, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
         & iSparseStart, img2CentCell)
-    call blockSymmetrizeHS(work, denseDesc%iAtomStart)
+    call triangleCopySquareMatrix(work)
     if (allocated(rhoSqrReal)) then
       do iSpin = 1, nSpin
-        call blockSymmetrizeHS(rhoSqrReal(:,:,iSpin), denseDesc%iAtomStart)
+        call triangleCopySquareMatrix(rhoSqrReal(:,:,iSpin))
       end do
     end if
     if (tForces .and. allocated(hybridXc)) then
       do iSpin = 1, nSpin
-        call blockSymmetrizeHS(deltaRhoOut(:,:, iSpin), denseDesc%iAtomStart)
+        call triangleCopySquareMatrix(deltaRhoOut(:,:, iSpin))
       end do
     end if
     if (tWriteAutotest) then
@@ -5720,7 +5720,7 @@ contains
           call unpackHS(work, ints%hamiltonian(:,iS), neighbourlist%iNeighbour, nNeighbourSK,&
               & denseDesc%iAtomStart, iSparseStart, img2CentCell)
         end if
-        call blockSymmetrizeHS(work, denseDesc%iAtomStart)
+        call triangleCopySquareMatrix(work)
         call makeDensityMatrix(work2, eigvecsReal(:,:,iKS), filling(:,1,iS))
         ! D H
         call symm(eigvecsReal(:,:,iKS), "L", work2, work)
@@ -5766,7 +5766,7 @@ contains
           call unpackHS(work2, ints%hamiltonian(:,iS), neighbourlist%iNeighbour, nNeighbourSK,&
               & denseDesc%iAtomStart, iSparseStart, img2CentCell)
         end if
-        call blocksymmetrizeHS(work2, denseDesc%iAtomStart)
+        call triangleCopySquareMatrix(work2)
         call symm(eigvecsReal(:,:,iKS), "L", work, work2)
         if (tHelical) then
           call unpackHelicalHS(work, ints%overlap, neighbourlist%iNeighbour, nNeighbourSK,&
@@ -5938,7 +5938,7 @@ contains
           call unpackHS(work, ints%hamiltonian(:,iS), kPoint(:,iK), neighbourlist%iNeighbour,&
               & nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
         end if
-        call blockHermitianHS(work, denseDesc%iAtomStart)
+        call triangleCopySquareMatrix(work)
         call hemm(eigvecsCplx(:,:,iKS), "L", work2, work)
         call hemm(work, "R", work2, eigvecsCplx(:,:,iKS), alpha=(0.5_dp, 0.0_dp))
       #:endif
@@ -5984,7 +5984,7 @@ contains
           call unpackHS(work2, ints%hamiltonian(:,iS), kPoint(:,iK), neighbourlist%iNeighbour,&
               & nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
         end if
-        call blockHermitianHS(work2, denseDesc%iAtomStart)
+        call triangleCopySquareMatrix(work2)
         call hemm(eigvecsCplx(:,:,iKS), "L", work, work2)
         if  (tHelical) then
           call unpackHelicalHS(work, ints%overlap, kPoint(:,iK), neighbourlist%iNeighbour,&
@@ -7426,7 +7426,7 @@ contains
     call env%globalTimer%stopTimer(globalTimers%sparseToDense)
 
     reks%overSqr(:,:) = SSqrReal
-    call blockSymmetrizeHS(reks%overSqr, denseDesc%iAtomStart)
+    call triangleCopySquareMatrix(reks%overSqr)
 
     if (iGeoStep == 0) then
 
@@ -7629,10 +7629,10 @@ contains
       end if
 
       if (reks%tForces) then
-        call symmetrizeHS(reks%rhoSqrL(:,:,1,iL))
+        call triangleCopySquareMatrix(reks%rhoSqrL(:,:,1,iL))
       end if
       if (reks%isHybridXc) then
-        call symmetrizeHS(reks%deltaRhoSqrL(:,:,1,iL))
+        call triangleCopySquareMatrix(reks%deltaRhoSqrL(:,:,1,iL))
         call denseSubtractDensityOfAtoms_spin_real_nonperiodic_reks(q0, denseDesc%iAtomStart,&
             & reks%deltaRhoSqrL(:,:,:,iL), 1)
       end if
@@ -7955,7 +7955,7 @@ contains
         call unpackHS(reks%hamSqrL(:,:,1,iL), tmpHamSp(:,1), neighbourList%iNeighbour, &
             & nNeighbourSK, denseDesc%iAtomStart, iSparseStart, img2CentCell)
         call env%globalTimer%stopTimer(globalTimers%sparseToDense)
-        call blockSymmetrizeHS(reks%hamSqrL(:,:,1,iL), denseDesc%iAtomStart)
+        call triangleCopySquareMatrix(reks%hamSqrL(:,:,1,iL))
       else
         ! reks%hamSpL has (my_qm) component
         reks%hamSpL(:,1,iL) = tmpHamSp(:,1)
