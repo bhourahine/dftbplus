@@ -2566,6 +2566,46 @@ contains
 
   end subroutine localSizeCasidaVectors
 
+
+  !> Build indexing for the distributed eigenvector matrix component locations
+  !!
+  !! Note, could evaluate localEigShape in place without storage or communication using indxg2p and
+  !! numroc instead. Likewise remote parts of localEigIndx can be found with indxl2g, numroc and
+  !! desc.
+  subroutine localMatrixPartIndexing(env, desc, localEigShape, localEigIndx, grndEigVecs)
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> BLACS matrix descriptor
+    integer, intent(in) :: desc(DLEN_)
+
+    !> Local shapes of each piece of the BLACS matrix ([niLoc,njLoc],procs)
+    integer, intent(out) :: localEigShape(:,0:)
+
+    !> Global elements stored locally ([iGlob,jGlob],iloc,jloc)
+    integer, intent(out) :: localEigIndx(:,:,:)
+
+    !> Local part of the eigenvectors
+    real(dp), intent(in) :: grndEigVecs(:,:,:)
+
+    integer :: iLoc, iGlb, jLoc, jGlb
+
+    localEigShape(:, env%mpi%globalComm%rank) = [size(grndEigVecs,dim=1), size(grndEigVecs,dim=2)]
+    call mpifx_allreduceip(env%mpi%globalComm, localEigShape, MPI_SUM)
+
+    do jLoc = 1, size(grndEigVecs, dim=2)
+      jGlb = scalafx_indxl2g(jLoc, desc(NB_), env%blacs%orbitalGrid%mycol, desc(CSRC_),&
+          & env%blacs%orbitalGrid%ncol)
+      do iLoc = 1, size(grndEigVecs, dim=1)
+        iGlb = scalafx_indxl2g(iLoc, desc(MB_), env%blacs%orbitalGrid%myrow, desc(RSRC_),&
+            & env%blacs%orbitalGrid%nrow)
+        localEigIndx(:, iLoc, jLoc) =  [iGlb, jGlb]
+      enddo
+    enddo
+
+  end subroutine localMatrixPartIndexing
+
 #:endif
-  
+
 end module dftbp_timedep_linrespcommon

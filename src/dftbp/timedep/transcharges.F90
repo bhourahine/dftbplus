@@ -79,7 +79,8 @@ contains
 
   !> initialise the cache/on-the fly transition charge evaluator
   subroutine TTransCharges_init(this, env, denseDesc, sTimesGrndEigVecs, grndEigVecs, nOrb, nTrans,&
-      & nMatUp, nXooUD, nXvvUD, getia, getij, getab, win, tStoreOccVir, tStoreSame, tFirstCall)
+      & nMatUp, nXooUD, nXvvUD, getia, getij, getab, win, tStoreOccVir, tStoreSame, localEigShape,&
+      & localEigIndx, tFirstCall)
 
     !> Instance
     type(TTransCharges), intent(out) :: this
@@ -112,16 +113,12 @@ contains
     integer, intent(in) :: nXvvUD(:)
 
     !> should occ-vir transitions be stored?
-    !> this is sufficient for single-point TD-DFTB
+    !! This is sufficient for single-point TD-DFTB
     logical, intent(in) :: tStoreOccVir
 
     !> should also occ-occ and vir-vir transitions be stored?
-    !> required for excited state forces and TD-LC-DFTB
+    !! Required for excited state forces and TD-LC-DFTB
     logical, intent(in) :: tStoreSame
-
-    !> If tFirstCall = .false. recompute only occ-vir charges for
-    !> new transition list with different size
-    logical, intent(in) :: tFirstCall
 
     !> index array for occ-vir single particle excitations
     integer, intent(in) :: getia(:,:)
@@ -134,6 +131,16 @@ contains
 
     !> index array for single particle excitations that are included
     integer, intent(in) :: win(:)
+
+    !> Dummy variable for serial, local shapes of each piece of the BLACS matrix for MPI
+    integer, intent(in), allocatable :: localEigShape(:,:)
+
+    !> Dummy variable for serial, global elements that are stored locally for MPI
+    integer, intent(in), allocatable :: localEigIndx(:,:,:)
+
+    !> If tFirstCall = .false. recompute only occ-vir charges for
+    !> new transition list with different size
+    logical, intent(in) :: tFirstCall
 
     integer :: ia, ii, jj, ij, kk, ab, aa, bb, ss
     logical :: updwn
@@ -155,7 +162,7 @@ contains
   #:if WITH_SCALAPACK
 
     nSpin = size(grndEigVecs, dim=3)
-     
+
     if (tStoreSame) then
 
       @:ASSERT(tStoreOccVir)

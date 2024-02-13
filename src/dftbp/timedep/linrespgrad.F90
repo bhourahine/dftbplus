@@ -42,7 +42,8 @@ module dftbp_timedep_linrespgrad
   
 #:if WITH_SCALAPACK
 
-  use dftbp_timedep_linrespcommon, only : actionAplusB_MPI, getExcSpin_MPI, localSizeCasidaVectors
+  use dftbp_timedep_linrespcommon, only : actionAplusB_MPI, getExcSpin_MPI, localSizeCasidaVectors,&
+      & localMatrixPartIndexing
   use dftbp_extlibs_scalapackfx, only : pblasfx_psymm
   use dftbp_extlibs_mpifx, only : MPI_SUM, mpifx_allreduceip
   use dftbp_math_scalafxext, only : distrib2replicated
@@ -227,9 +228,14 @@ contains
     
     integer :: iam, nProcs
     integer, allocatable :: locSize(:), vOffset(:)
+    ! globally replicated copy of the whole matrix
     real(dp), allocatable :: eigVecGlb(:,:,:), ovrXevGlb(:,:,:)
 
-  #:endif      
+  #:endif
+
+    ! For MPI, elements that are stored locally, as need to communicate this to other
+    ! processes. Dummy matrices if in serial
+    integer, allocatable :: localEigShape(:,:), localEigIndx(:,:,:)
 
     !> Common block of ARPACK variables
     common /debug/ logfil, ndigit, mgetv0,&
@@ -493,7 +499,7 @@ contains
     ! First call to initialize charges for all occ-vir transitions
     call TTransCharges_init(transChrg, env, denseDesc, ovrXev, grndEigVecs, norb, nxov,&
         & nxov_ud(1), nxoo_ud, nxvv_ud, getIA, getIJ, getAB, win, this%tCacheChargesOccVir,&
-        & this%tCacheChargesSame, .true.)
+        & this%tCacheChargesSame, localEigShape, localEigIndx, .true.)
 
     ! dipole strength of transitions between K-S states
     call calcTransitionDipoles(coord0, win, norb, nSpin, nxov_ud(1), getIA, transChrg, env, &
@@ -560,7 +566,7 @@ contains
       call env%globalTimer%startTimer(globalTimers%lrTransCharges)
       call TTransCharges_init(transChrg, env, denseDesc, ovrXev, grndEigVecs, norb, nxov_rd,&
         & nxov_ud(1), nxoo_ud, nxvv_ud, getIA, getIJ, getAB, win, this%tCacheChargesOccVir,&
-        & this%tCacheChargesSame, .false.)
+        & this%tCacheChargesSame, localEigShape, localEigIndx, .false.)
       call env%globalTimer%stopTimer(globalTimers%lrTransCharges)
     end if
 
@@ -571,8 +577,12 @@ contains
     allocate(locSize(nProcs))
     allocate(vOffSet(nProcs))
     call localSizeCasidaVectors(nProcs, nxov_rd, locSize, vOffSet)
+    allocate(localEigShape(2,0:nProcs-1), source=0)
+    allocate(localEigIndx(2, size(grndEigVecs, dim=1), size(grndEigVecs, dim=2)))
+    call localMatrixPartIndexing(env, denseDesc%blacsOrbSqr, localEigShape, localEigIndx,&
+        & grndEigVecs)
 
-  #:endif   
+  #:endif
 
     if (this%writeXplusY) then
       call openfile(fdXPlusY, XplusYOut, mode="w")
