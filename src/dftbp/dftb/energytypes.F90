@@ -203,6 +203,7 @@ contains
     allocate(this%atomOnSite(nAtom))
     allocate(this%atomHalogenX(nAtom))
     allocate(this%atom3rd(nAtom))
+    allocate(this%atomMultiPole(nAtom))
     allocate(this%atomSolv(nAtom))
     allocate(this%atomTotal(nAtom))
     this%atomRep(:) = 0.0_dp

@@ -3851,6 +3851,7 @@ contains
 
   end subroutine writeDetailedOut7
 
+
   !> Eighth group of data for detailed.out (Born effective charges)
   subroutine writeDetailedOut8(fd, born)
 

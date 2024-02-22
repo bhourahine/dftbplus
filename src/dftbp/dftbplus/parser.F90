@@ -1811,7 +1811,8 @@ contains
           call getChild(value1, 'AtomOnsiteScalings', child2, requested=.false.)
           if (associated(child2)) then
             do iSp1 = 1, geo%nSpecies
-              call getChildValue(child2, trim(geo%speciesNames(iSp1)), ctrl%atomicOnsiteScaling(iSp1), 1.0_dp)
+              call getChildValue(child2, trim(geo%speciesNames(iSp1)),&
+                  & ctrl%atomicOnsiteScaling(iSp1), 1.0_dp)
             end do
           end if
 

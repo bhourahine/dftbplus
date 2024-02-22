@@ -2754,72 +2754,75 @@ contains
           call getHybridXcCutOff_cluster(this%cutOff, input%ctrl%hybridXcInp%cutoffRed)
         end if
       end if
+    end if
 
-      if (this%isMultiPole) then
-        ! Initialize multipole module
-        @:ASSERT(this%tSccCalc)
-        this%multiPoleInp%orb => this%orb
-        this%multiPoleInp%nOrb = this%nOrb
-        this%multiPoleInp%nSpin = this%nSpin
-        this%multiPoleInp%nSpecies = this%nType
+    if (this%isMultiPole) then
+      ! Initialize multipole module
+      @:ASSERT(this%tSccCalc)
+      this%multiPoleInp%orb => this%orb
+      this%multiPoleInp%nOrb = this%nOrb
+      this%multiPoleInp%nSpin = this%nSpin
+      this%multiPoleInp%nSpecies = this%nType
 
-        allocate(this%multiPoleInp%atomicDIntgrlScaling(this%nType))
-        allocate(this%multiPoleInp%atomicQIntgrlScaling(this%nType))
-        allocate(this%multiPoleInp%atomicOnsiteScaling(this%nType))
-        allocate(this%multiPoleInp%atomicSXPxIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicPxXDxxyyIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicPxXDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicPyYDxxyyIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicPzZDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicSXXSIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicPxXXPxIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicPyXXPyIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicSXXDxxyyIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicSXXDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicSYYDxxyyIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicSZZDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDxyXXDxyIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDyzXXDyzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDxxyyXXDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDzzXXDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDxxyyYYDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDzzZZDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDxzXZDzzIntgrl(this%nType))
-        allocate(this%multiPoleInp%atomicDyzYZDxxyyIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDIntgrlScaling(this%nType))
+      allocate(this%multiPoleInp%atomicQIntgrlScaling(this%nType))
+      allocate(this%multiPoleInp%atomicOnsiteScaling(this%nType))
+      allocate(this%multiPoleInp%atomicSXPxIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicPxXDxxyyIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicPxXDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicPyYDxxyyIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicPzZDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicSXXSIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicPxXXPxIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicPyXXPyIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicSXXDxxyyIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicSXXDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicSYYDxxyyIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicSZZDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDxyXXDxyIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDyzXXDyzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDxxyyXXDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDzzXXDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDxxyyYYDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDzzZZDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDxzXZDzzIntgrl(this%nType))
+      allocate(this%multiPoleInp%atomicDyzYZDxxyyIntgrl(this%nType))
 
-        this%multiPoleInp%atomicDIntgrlScaling(:) = input%ctrl%atomicDIntgrlScaling(:)
-        this%multiPoleInp%atomicQIntgrlScaling(:) = input%ctrl%atomicQIntgrlScaling(:)
-        this%multiPoleInp%atomicOnsiteScaling(:) = input%ctrl%atomicOnsiteScaling(:)
-        this%multiPoleInp%atomicSXPxIntgrl(:) = input%ctrl%atomicSXPxIntgrl(:)
-        this%multiPoleInp%atomicPxXDxxyyIntgrl(:) = input%ctrl%atomicPxXDxxyyIntgrl(:)
-        this%multiPoleInp%atomicPxXDzzIntgrl(:) = input%ctrl%atomicPxXDzzIntgrl(:)
-        this%multiPoleInp%atomicPyYDxxyyIntgrl(:) = input%ctrl%atomicPyYDxxyyIntgrl(:)
-        this%multiPoleInp%atomicPzZDzzIntgrl(:) = input%ctrl%atomicPzZDzzIntgrl(:)
-        this%multiPoleInp%atomicSXXSIntgrl(:) = input%ctrl%atomicSXXSIntgrl(:)
-        this%multiPoleInp%atomicPxXXPxIntgrl(:) = input%ctrl%atomicPxXXPxIntgrl(:)
-        this%multiPoleInp%atomicPyXXPyIntgrl(:) = input%ctrl%atomicPyXXPyIntgrl(:)
-        this%multiPoleInp%atomicSXXDxxyyIntgrl(:) = input%ctrl%atomicSXXDxxyyIntgrl(:)
-        this%multiPoleInp%atomicSXXDzzIntgrl(:) = input%ctrl%atomicSXXDzzIntgrl(:)
-        this%multiPoleInp%atomicSYYDxxyyIntgrl(:) = input%ctrl%atomicSYYDxxyyIntgrl(:)
-        this%multiPoleInp%atomicSZZDzzIntgrl(:) = input%ctrl%atomicSZZDzzIntgrl(:)
-        this%multiPoleInp%atomicDxyXXDxyIntgrl(:) = input%ctrl%atomicDxyXXDxyIntgrl(:)
-        this%multiPoleInp%atomicDyzXXDyzIntgrl(:) = input%ctrl%atomicDyzXXDyzIntgrl(:)
-        this%multiPoleInp%atomicDxxyyXXDzzIntgrl(:) = input%ctrl%atomicDxxyyXXDzzIntgrl(:)
-        this%multiPoleInp%atomicDzzXXDzzIntgrl(:) = input%ctrl%atomicDzzXXDzzIntgrl(:)
-        this%multiPoleInp%atomicDxxyyYYDzzIntgrl(:) = input%ctrl%atomicDxxyyYYDzzIntgrl(:)
-        this%multiPoleInp%atomicDzzZZDzzIntgrl(:) = input%ctrl%atomicDzzZZDzzIntgrl(:)
-        this%multiPoleInp%atomicDxzXZDzzIntgrl(:) = input%ctrl%atomicDxzXZDzzIntgrl(:)
-        this%multiPoleInp%atomicDyzYZDxxyyIntgrl(:) = input%ctrl%atomicDyzYZDxxyyIntgrl(:)
+      this%multiPoleInp%atomicDIntgrlScaling(:) = input%ctrl%atomicDIntgrlScaling
+      this%multiPoleInp%atomicQIntgrlScaling(:) = input%ctrl%atomicQIntgrlScaling
+      this%multiPoleInp%atomicOnsiteScaling(:) = input%ctrl%atomicOnsiteScaling
+      this%multiPoleInp%atomicSXPxIntgrl(:) = input%ctrl%atomicSXPxIntgrl
+      this%multiPoleInp%atomicPxXDxxyyIntgrl(:) = input%ctrl%atomicPxXDxxyyIntgrl
+      this%multiPoleInp%atomicPxXDzzIntgrl(:) = input%ctrl%atomicPxXDzzIntgrl
+      this%multiPoleInp%atomicPyYDxxyyIntgrl(:) = input%ctrl%atomicPyYDxxyyIntgrl
+      this%multiPoleInp%atomicPzZDzzIntgrl(:) = input%ctrl%atomicPzZDzzIntgrl
+      this%multiPoleInp%atomicSXXSIntgrl(:) = input%ctrl%atomicSXXSIntgrl
+      this%multiPoleInp%atomicPxXXPxIntgrl(:) = input%ctrl%atomicPxXXPxIntgrl
+      this%multiPoleInp%atomicPyXXPyIntgrl(:) = input%ctrl%atomicPyXXPyIntgrl
+      this%multiPoleInp%atomicSXXDxxyyIntgrl(:) = input%ctrl%atomicSXXDxxyyIntgrl
+      this%multiPoleInp%atomicSXXDzzIntgrl(:) = input%ctrl%atomicSXXDzzIntgrl
+      this%multiPoleInp%atomicSYYDxxyyIntgrl(:) = input%ctrl%atomicSYYDxxyyIntgrl
+      this%multiPoleInp%atomicSZZDzzIntgrl(:) = input%ctrl%atomicSZZDzzIntgrl
+      this%multiPoleInp%atomicDxyXXDxyIntgrl(:) = input%ctrl%atomicDxyXXDxyIntgrl
+      this%multiPoleInp%atomicDyzXXDyzIntgrl(:) = input%ctrl%atomicDyzXXDyzIntgrl
+      this%multiPoleInp%atomicDxxyyXXDzzIntgrl(:) = input%ctrl%atomicDxxyyXXDzzIntgrl
+      this%multiPoleInp%atomicDzzXXDzzIntgrl(:) = input%ctrl%atomicDzzXXDzzIntgrl
+      this%multiPoleInp%atomicDxxyyYYDzzIntgrl(:) = input%ctrl%atomicDxxyyYYDzzIntgrl
+      this%multiPoleInp%atomicDzzZZDzzIntgrl(:) = input%ctrl%atomicDzzZZDzzIntgrl
+      this%multiPoleInp%atomicDxzXZDzzIntgrl(:) = input%ctrl%atomicDxzXZDzzIntgrl
+      this%multiPoleInp%atomicDyzYZDxxyyIntgrl(:) = input%ctrl%atomicDyzYZDxxyyIntgrl
 
-        allocate(this%multiPoleInp%hubbU(size(hubbU, dim=2)))
-        this%multiPoleInp%hubbU = hubbU(1,:)
-        allocate(this%multiPoleInp%species(this%nAtom))
-        this%multiPoleInp%species(:) = input%geom%species(:)
-        allocate(this%multiPole)
-        call dftbMultiPole_init(this%multiPole, this%multiPoleInp)
-        allocate(this%quadrupoleMoment(3,3))
-        this%nMixElements = max(this%nOrb * this%nOrb * this%nSpin, this%nMixElements)
-      end if
+      allocate(this%multiPoleInp%hubbU(size(hubbU, dim=2)))
+      this%multiPoleInp%hubbU = hubbU(1,:)
+      allocate(this%multiPoleInp%species(this%nAtom))
+      this%multiPoleInp%species(:) = input%geom%species
+      allocate(this%multiPole)
+      call dftbMultiPole_init(this%multiPole, this%multiPoleInp)
+      allocate(this%quadrupoleMoment(3,3))
+      this%nMixElements = max(this%nOrb * this%nOrb * this%nSpin, this%nMixElements)
+    end if
+
+    if (this%isHybridXc .or. this%isMultiPole) then
 
     #:if WITH_SCALAPACK
       call scalafx_getlocalshape(env%blacs%orbitalGrid, this%denseDesc%blacsOrbSqr, nLocalRows,&
@@ -2829,12 +2832,8 @@ contains
       nLocalCols = this%denseDesc%fullSize
     #:endif
 
-    end if
-
-    if (this%isHybridXc .or. this%isMultiPole) then
       ! allocation is necessary to hint "initializeCharges" what information to extract
-      call reallocateHybridXc(this, nLocalRows, nLocalCols,&
-          & size(this%parallelKS%localKS, dim=2))
+      call reallocateHybridXc(this, nLocalRows, nLocalCols, size(this%parallelKS%localKS, dim=2))
     end if
 
     call this%initializeCharges(errStatus, input%ctrl%initialSpins, input%ctrl%initialCharges)
@@ -2893,6 +2892,8 @@ contains
       if (errStatus%hasError()) then
         call error(errStatus%message)
       end if
+    end if
+    if (this%isHybridXc) then
       ! now all information is present to properly allocate density matrices and associate pointers
       call reallocateHybridXc(this, nLocalRows, nLocalCols, size(this%parallelKS%localKS, dim=2))
       ! reset number of mixer elements, so that there is enough space for density matrices
@@ -6168,21 +6169,19 @@ contains
         & deallocate(this%densityMatrix%deltaRhoOutCplxHS)
 
     if (this%tRealHS) then
-      ! Prevent for deleting charges read in from file
+      ! Prevent for deleting charges that are read in from file
       if (.not. allocated(this%densityMatrix%deltaRhoIn)) then
         allocate(this%densityMatrix%deltaRhoIn(nLocalRows, nLocalCols, nLocalKS))
         this%densityMatrix%deltaRhoIn(:,:,:) = 0.0_dp
       end if
-      allocate(this%densityMatrix%deltaRhoOut(nLocalRows, nLocalCols, nLocalKS))
-      this%densityMatrix%deltaRhoOut(:,:,:) = 0.0_dp
+      allocate(this%densityMatrix%deltaRhoOut(nLocalRows, nLocalCols, nLocalKS), source=0.0_dp)
     elseif (this%tReadChrg .and. (.not. allocated(this%supercellFoldingDiag))) then
       ! in case of k-points and restart from file, we have to wait until charges.bin was read
       if (.not. allocated(this%densityMatrix%deltaRhoInCplxHS)) then
         allocate(this%densityMatrix%deltaRhoInCplxHS(0, 0, 0, 0, 0, 0))
         this%densityMatrix%deltaRhoInCplxHS(:,:,:,:,:,:) = 0.0_dp
       end if
-      allocate(this%densityMatrix%deltaRhoOutCplxHS(0, 0, 0, 0, 0, 0))
-      this%densityMatrix%deltaRhoOutCplxHS(:,:,:,:,:,:) = 0.0_dp
+      allocate(this%densityMatrix%deltaRhoOutCplxHS(0, 0, 0, 0, 0, 0), source=0.0_dp)
     else
       ! normal k-point case, without restart from file
       if (.not. allocated(this%densityMatrix%deltaRhoInCplxHS)) then
@@ -6193,15 +6192,13 @@ contains
       end if
         allocate(this%densityMatrix%deltaRhoOutCplxHS(this%nOrb, this%nOrb,&
             & this%supercellFoldingDiag(1), this%supercellFoldingDiag(2),&
-            & this%supercellFoldingDiag(3), this%nIndepSpin))
-        this%densityMatrix%deltaRhoOutCplxHS(:,:,:,:,:,:) = 0.0_dp
+            & this%supercellFoldingDiag(3), this%nIndepSpin), source=0.0_dp)
     end if
 
     if (.not. this%tRealHS) then
 
       allocate(this%densityMatrix%deltaRhoOutCplx(this%nOrb, this%nOrb,&
-          & size(this%parallelKS%localKS, dim=2)))
-      this%densityMatrix%deltaRhoOutCplx(:,:,:) = 0.0_dp
+          & size(this%parallelKS%localKS, dim=2)), source=cmplx(0,0,dp))
 
       ! Build spin/k-point composite index for all spins and k-points (global)
       iGlobalKS = 1

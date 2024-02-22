@@ -651,16 +651,13 @@ contains
   end subroutine updateCoords
 
 
-  subroutine updateDeltaDQAtom(this, deltaRho, over, iSquare, orb, overlap)
+  subroutine updateDeltaDQAtom(this, deltaRho, iSquare, orb, overlap)
 
     !> class instance
     class(TDftbMultiPole), intent(inout) :: this
 
     !> Square (unpacked) density matrix
     real(dp), dimension(:,:), target, intent(in) :: deltaRho
-
-    !> Sparse (packed) overlap matrix.
-    real(dp), dimension(:), intent(in) :: over
 
     !> Position of each atom in the rows/columns of the square matrices. Shape: (nAtoms)
     integer, dimension(:), intent(in) :: iSquare
@@ -875,12 +872,6 @@ contains
     call adjointLowerTriangle(tmpOvr)
     deltaHam(:,:) = 0.0_dp
 
-    !$OMP PARALLEL DEFAULT(SHARED) &
-    !$OMP PRIVATE(mu, mm, nu, nn, kappa, kk) &
-    !$OMP PRIVATE(iAtMu, iSpMu, nOrbMu, descMuiStart, descMuiEnd ) &
-    !$OMP PRIVATE(iAtNu, iSpNu, nOrbNu, descNuiStart, descNuiEnd ) &
-    !$OMP PRIVATE(tmp, tmpadS, tmpSad, tmpaQS, tmpSaQ)
-    !$OMP DO SCHEDULE(RUNTIME)
     loopAtMu: do iAtMu = 1, nAtoms
       iSpMu = this%species(iAtMu)
       nOrbMu = orb%nOrbSpecies(iSpMu)
@@ -954,8 +945,6 @@ contains
         end do loopmu
       end do loopAtNu
     end do loopAtMu
-    !$OMP END DO
-    !$OMP END PARALLEL
 
     hamiltonian(:,:) = hamiltonian + 0.5_dp * deltaHam
 
@@ -985,7 +974,6 @@ contains
     energyDQ = this%energyDQ
     energyQQ = this%energyQQ
     energyTT = this%energyTT
-
 
   end subroutine addMultiPoleEnergy
 
@@ -1030,13 +1018,12 @@ contains
       EnergyQQAtom(iAt1) = 0.5_dp * sum(this%pot22x2Atom(:,:,iAt1) * this%deltaQAtom(:,:,iAt1))
     end do
 
-    energyPerAtom(:) = EnergyMDAtom(:) + EnergyDDAtom(:)&
-        & + EnergyMQAtom(:) + EnergyDQAtom(:) + EnergyQQAtom(:)
-    this%energyMD = sum(EnergyMDAtom(:))
-    this%energyDD = sum(EnergyDDAtom(:))
-    this%energyMQ = sum(EnergyMQAtom(:))
-    this%energyDQ = sum(EnergyDQAtom(:))
-    this%energyQQ = sum(EnergyQQAtom(:))
+    energyPerAtom(:) = EnergyMDAtom + EnergyDDAtom + EnergyMQAtom + EnergyDQAtom + EnergyQQAtom
+    this%energyMD = sum(EnergyMDAtom)
+    this%energyDD = sum(EnergyDDAtom)
+    this%energyMQ = sum(EnergyMQAtom)
+    this%energyDQ = sum(EnergyDQAtom)
+    this%energyQQ = sum(EnergyQQAtom)
     this%energyTT = this%energyMD + this%energyDD + this%energyMQ  + this%energyDQ  + this%energyQQ
 
     deallocate(EnergyMDAtom)
