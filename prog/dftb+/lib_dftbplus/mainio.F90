@@ -3156,11 +3156,19 @@ contains
 
     if (allocated(quadrupoleMoment)) then
       write(fd, "(A)") ' Traceless Quadrupole moment in au'
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY', quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ', quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY',&
+          & quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ',&
+          & quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
       write(fd, "(A)") ' Traceless Quadrupole moment in Debye*Ang'
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY', quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ', quadrupoleMoment(3,3) * au__Debye * Bohr__AA
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ', quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ', quadrupoleMoment(2,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX',&
+          & quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY',&
+          & quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ',&
+          & quadrupoleMoment(3,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY',&
+          & quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ',&
+          & quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ',&
+          & quadrupoleMoment(2,3) * au__Debye * Bohr__AA
       write(fd, *)
     end if
 
@@ -3322,11 +3330,19 @@ contains
     end if
     if (allocated(quadrupoleMoment)) then
       write(fd, "(A)") ' Traceless Quadrupole moment (in au)'
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY', quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ', quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1), ' YY',&
+          & quadrupoleMoment(2,2), ' ZZ', quadrupoleMoment(3,3)
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2), ' XZ',&
+          & quadrupoleMoment(1,3), ' YZ', quadrupoleMoment(2,3)
       write(fd, "(A)") ' Traceless Quadrupole moment (in Debye)'
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX', quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY', quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ', quadrupoleMoment(3,3) * au__Debye * Bohr__AA
-      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY', quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ', quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ', quadrupoleMoment(2,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XX',&
+          & quadrupoleMoment(1,1) * au__Debye * Bohr__AA, ' YY',&
+          & quadrupoleMoment(2,2) * au__Debye * Bohr__AA, ' ZZ',&
+          & quadrupoleMoment(3,3) * au__Debye * Bohr__AA
+      write(fd, "(A, F14.8, A, F14.8, A, F14.8)") ' XY',&
+          & quadrupoleMoment(1,2) * au__Debye * Bohr__AA, ' XZ',&
+          & quadrupoleMoment(1,3) * au__Debye * Bohr__AA, ' YZ',&
+          & quadrupoleMoment(2,3) * au__Debye * Bohr__AA
     end if
 
   end subroutine writeMdOut2

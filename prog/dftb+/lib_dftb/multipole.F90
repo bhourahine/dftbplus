@@ -359,8 +359,10 @@ contains
 
    !> scaling atomic Intgrls
     do iSp1 = 1, this%nSpecies
-      this%atomicDIntgrl(:,:,:,iSp1) = inp%atomicDIntgrlScaling(iSp1) * this%atomicDIntgrl(:,:,:,iSp1)
-      this%atomicQIntgrl(:,:,:,:,iSp1) = inp%atomicQIntgrlScaling(iSp1) * this%atomicQIntgrl(:,:,:,:,iSp1)
+      this%atomicDIntgrl(:,:,:,iSp1) = inp%atomicDIntgrlScaling(iSp1)&
+          & * this%atomicDIntgrl(:,:,:,iSp1)
+      this%atomicQIntgrl(:,:,:,:,iSp1) = inp%atomicQIntgrlScaling(iSp1)&
+          & * this%atomicQIntgrl(:,:,:,:,iSp1)
     end do
 
    !> Remove Trace of atomicQIntgrl
@@ -368,7 +370,8 @@ contains
       nOrb1 = this%nOrbSpecies(iSp1)
       do mm = 1, nOrb1
         do nn = 1, nOrb1
-          tmpTrace = (this%atomicQIntgrl(1,1,mm,nn,iSp1) + this%atomicQIntgrl(2,2,mm,nn,iSp1) + this%atomicQIntgrl(3,3,mm,nn,iSp1)) / 3.0_dp
+          tmpTrace = (this%atomicQIntgrl(1,1,mm,nn,iSp1) + this%atomicQIntgrl(2,2,mm,nn,iSp1)&
+              & + this%atomicQIntgrl(3,3,mm,nn,iSp1)) / 3.0_dp
           do ii = 1, xyzLen
             this%atomicQIntgrl(ii,ii,mm,nn,iSp1) = this%atomicQIntgrl(ii,ii,mm,nn,iSp1) - tmpTrace
           end do
@@ -449,19 +452,28 @@ contains
 
     integer :: nAtoms, iAt1, iAt2, iSp1, iSp2, nOrb1, nOrb2, ii, jj, ll, mm, nn, kk
     real(dp) :: rab, u1, u2, coeffTerm1, coeffTerm2, coeffTerm3
-    real(dp) :: gammaPrime, gammaDoublePrime, gammaTriplePrime, gammaQuadruplePrime, gammaQuintuplePrime
+    real(dp) :: gammaPrime, gammaDoublePrime, gammaTriplePrime, gammaQuadruplePrime,&
+        & gammaQuintuplePrime
 
     real(dp) :: vRabx3(xyzLen), workVx3(xyzLen)
-    real(dp) :: mI3x3(xyzLen, xyzLen), mRRab3x3(xyzLen, xyzLen), workM3x3(xyzLen, xyzLen), workM3x3x3(xyzLen, xyzLen, xyzLen)
-    real(dp) :: mRoIab3x3x3(xyzLen, xyzLen, xyzLen), mIotRab3x3x3(xyzLen, xyzLen, xyzLen), mIoRab3x3x3(xyzLen, xyzLen, xyzLen)
+    real(dp) :: mI3x3(xyzLen, xyzLen), mRRab3x3(xyzLen, xyzLen), workM3x3(xyzLen, xyzLen),&
+        & workM3x3x3(xyzLen, xyzLen, xyzLen)
+    real(dp) :: mRoIab3x3x3(xyzLen, xyzLen, xyzLen), mIotRab3x3x3(xyzLen, xyzLen, xyzLen),&
+        & mIoRab3x3x3(xyzLen, xyzLen, xyzLen)
     real(dp) :: mRIotoRab3x3x3(xyzLen, xyzLen, xyzLen), mRRRab3x3x3(xyzLen, xyzLen, xyzLen)
 
-    real(dp) :: mI3x3otI3x3(xyzLen, xyzLen, xyzLen, xyzLen), mI3x3ohI3x3(xyzLen, xyzLen, xyzLen, xyzLen)
-    real(dp) :: mI3x3oI3x3(xyzLen, xyzLen, xyzLen, xyzLen), mI3x3otohoI3x3(xyzLen, xyzLen, xyzLen, xyzLen)
-    real(dp) :: workM3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen), f40Term1M3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen)
-    real(dp) :: f40Term3M3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen), f40Term2M3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen)
-    real(dp) :: workM3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen), f50Term1M3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen)
-    real(dp) :: f50Term3M3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen), f50Term2M3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen)
+    real(dp) :: mI3x3otI3x3(xyzLen, xyzLen, xyzLen, xyzLen),&
+        & mI3x3ohI3x3(xyzLen, xyzLen, xyzLen, xyzLen)
+    real(dp) :: mI3x3oI3x3(xyzLen, xyzLen, xyzLen, xyzLen), mI3x3otohoI3x3(xyzLen, xyzLen, xyzLen,&
+        & xyzLen)
+    real(dp) :: workM3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen),&
+        & f40Term1M3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen)
+    real(dp) :: f40Term3M3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen), f40Term2M3x3x3x3(xyzLen, xyzLen,&
+        & xyzLen, xyzLen)
+    real(dp) :: workM3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen),&
+        & f50Term1M3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen)
+    real(dp) :: f50Term3M3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen),&
+        & f50Term2M3x3x3x3x3(xyzLen, xyzLen, xyzLen, xyzLen, xyzLen)
 
     integer :: idtime
     real(dp) :: pTime, cTime
@@ -491,8 +503,8 @@ contains
 
     !$OMP PARALLEL DEFAULT(SHARED) &
     !$OMP PRIVATE(iAt1, iSp1, u1, iAt2, iSp2, u2, rab, vRabx3, workVx3) &
-    !$OMP PRIVATE(gammaPrime, gammaDoublePrime, gammaTriplePrime, gammaQuadruplePrime, gammaQuintuplePrime) &
-    !$OMP PRIVATE(coeffTerm1, coeffTerm2, coeffTerm3) &
+    !$OMP PRIVATE(gammaPrime, gammaDoublePrime, gammaTriplePrime, gammaQuadruplePrime) &
+    !$OMP PRIVATE(gammaQuintuplePrime,coeffTerm1, coeffTerm2, coeffTerm3) &
     !$OMP PRIVATE(workM3x3, workM3x3x3, mRRab3x3) &
     !$OMP PRIVATE(mRoIab3x3x3, mIotRab3x3x3, mIoRab3x3x3, mRIotoRab3x3x3, mRRRab3x3x3) &
     !$OMP PRIVATE(workM3x3x3x3, f40Term1M3x3x3x3, f40Term2M3x3x3x3, f40Term3M3x3x3x3) &
@@ -531,7 +543,8 @@ contains
         !> f30AB
         gammaTriplePrime = -6.0_dp / rab**4 - expGammaTriplePrime(rab, u1, u2)
         coeffTerm1 = gammaDoublePrime / rab**2 - gammaPrime / rab**3
-        coeffTerm2 = gammaTriplePrime / rab**3 - 3.0_dp * gammaDoublePrime / rab**4 + 3.0_dp * gammaPrime / rab**5
+        coeffTerm2 = gammaTriplePrime / rab**3 - 3.0_dp * gammaDoublePrime / rab**4&
+            & + 3.0_dp * gammaPrime / rab**5
         coeffTerm1 = coeffTerm1 / 6.0_dp 
         coeffTerm2 = coeffTerm2 / 6.0_dp
 
@@ -728,7 +741,8 @@ contains
     tmpVx3(:) = 0.0_dp
     tmpM3x3(:,:) = 0.0_dp
 
-    !$OMP PARALLEL PRIVATE(iAt1, iSp1, iStartOrb, iEndOrb, tmpVx3, tmpM3x3, mu, mm, nu, nn, dPSSdP) DEFAULT(SHARED)
+    !$OMP PARALLEL PRIVATE(iAt1, iSp1, iStartOrb, iEndOrb, tmpVx3, tmpM3x3, mu, mm, nu, nn, dPSSdP)&
+    !$OMP DEFAULT(SHARED)
     !$OMP DO SCHEDULE(RUNTIME)
     do iAt1 = 1, nAtoms
       iSp1 = this%species(iAt1)
@@ -792,8 +806,10 @@ contains
     !$OMP PARALLEL DO PRIVATE(iAt1, iAt2) DEFAULT(SHARED) SCHEDULE(RUNTIME)
     do iAt1 = 1, nAtoms
       do iAt2 = 1, nAtoms
-        this%pot10x0Atom(:,iAt1) = this%pot10x0Atom(:,iAt1) + this%f10AB(:,iAt2,iAt1) * this%deltaMAtom(iAt2)
-        this%pot20x0Atom(:,:,iAt1) = this%pot20x0Atom(:,:,iAt1) + this%f20AB(:,:,iAt2,iAt1) * this%deltaMAtom(iAt2)
+        this%pot10x0Atom(:,iAt1) = this%pot10x0Atom(:,iAt1)&
+            & + this%f10AB(:,iAt2,iAt1) * this%deltaMAtom(iAt2)
+        this%pot20x0Atom(:,:,iAt1) = this%pot20x0Atom(:,:,iAt1)&
+            & + this%f20AB(:,:,iAt2,iAt1) * this%deltaMAtom(iAt2)
       end do
     end do
     !$OMP END PARALLEL DO
@@ -813,13 +829,18 @@ contains
         if ((this%onDQOCharges(1, iSp2) == 0) .and. (this%onDQOCharges(2, iSp2) == 0)) then
           cycle
         end if
-        this%pot10x1Atom(iAt1) = this%pot10x1Atom(iAt1) + sum(this%f10AB(:,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
-        this%pot20x2Atom(iAt1) = this%pot20x2Atom(iAt1) + sum(this%f20AB(:,:,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
+        this%pot10x1Atom(iAt1) = this%pot10x1Atom(iAt1)&
+            & + sum(this%f10AB(:,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
+        this%pot20x2Atom(iAt1) = this%pot20x2Atom(iAt1)&
+            & + sum(this%f20AB(:,:,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
         do ii = 1, xyzLen
-          this%pot11x1Atom(ii,iAt1) = this%pot11x1Atom(ii,iAt1) - 2.0_dp * sum(this%f20AB(:,ii,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
-          this%pot21x2Atom(ii,iAt1) = this%pot21x2Atom(ii,iAt1) - 3.0_dp * sum(this%f30AB(:,:,ii,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
+          this%pot11x1Atom(ii,iAt1) = this%pot11x1Atom(ii,iAt1)&
+              & - 2.0_dp * sum(this%f20AB(:,ii,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
+          this%pot21x2Atom(ii,iAt1) = this%pot21x2Atom(ii,iAt1)&
+              & - 3.0_dp * sum(this%f30AB(:,:,ii,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
           do jj = 1, xyzLen
-            this%pot21x1Atom(jj,ii,iAt1) = this%pot21x1Atom(jj,ii,iAt1) - 3.0_dp * sum(this%f30AB(:,jj,ii,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
+            this%pot21x1Atom(jj,ii,iAt1) = this%pot21x1Atom(jj,ii,iAt1)&
+                & - 3.0_dp * sum(this%f30AB(:,jj,ii,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
           end do
         end do
       end do
@@ -843,7 +864,8 @@ contains
         end if
         do ii = 1, xyzLen
           do jj = 1, xyzLen
-            this%pot22x2Atom(jj,ii,iAt1) = this%pot22x2Atom(jj,ii,iAt1) + 6.0_dp * sum(this%f40AB(:,:,jj,ii,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
+            this%pot22x2Atom(jj,ii,iAt1) = this%pot22x2Atom(jj,ii,iAt1)&
+                & + 6.0_dp * sum(this%f40AB(:,:,jj,ii,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
           end do
         end do
       end do
@@ -973,7 +995,8 @@ contains
             end do
             
             !>add Monopole-Dipole contribution
-            deltaHam(mu,nu) = deltaHam(mu,nu) - (this%pot10x1Atom(iAtMu) + this%pot10x1Atom(iAtNu)) * tmpOvr(mu,nu)
+            deltaHam(mu,nu) = deltaHam(mu,nu)&
+                & - (this%pot10x1Atom(iAtMu) + this%pot10x1Atom(iAtNu)) * tmpOvr(mu,nu)
             deltaHam(mu,nu) = deltaHam(mu,nu) + sum(this%pot10x0Atom(:,iAtMu) * tmpadS(:)) &
                                             & + sum(this%pot10x0Atom(:,iAtNu) * tmpSad(:))
 
@@ -982,7 +1005,8 @@ contains
                                             & + sum(this%pot11x1Atom(:,iAtNu) * tmpSad(:))
 
             !>add Monopole-Quadrupole contribution
-            deltaHam(mu,nu) = deltaHam(mu,nu) + (this%pot20x2Atom(iAtMu) + this%pot20x2Atom(iAtNu)) * tmpOvr(mu,nu)
+            deltaHam(mu,nu) = deltaHam(mu,nu) + (this%pot20x2Atom(iAtMu)&
+                & + this%pot20x2Atom(iAtNu)) * tmpOvr(mu,nu)
             deltaHam(mu,nu) = deltaHam(mu,nu) + sum(this%pot20x0Atom(:,:,iAtMu) * tmpaQS(:,:)) &
                                             & + sum(this%pot20x0Atom(:,:,iAtNu) * tmpSaQ(:,:))
 
@@ -1014,7 +1038,8 @@ contains
 
 
   !> Add the MultiPole-Energy contribution to the total energy
-  subroutine addMultiPoleEnergy(this, energyPerAtom, energyMD, energyDD, energyMQ, energyDQ, energyQQ, energyTT)
+  subroutine addMultiPoleEnergy(this, energyPerAtom, energyMD, energyDD, energyMQ, energyDQ,&
+      & energyQQ, energyTT)
 
     !> RangeSep class instance
     class(TMultiPole), intent(inout) :: this
@@ -1095,7 +1120,8 @@ contains
       EnergyQQAtom(iAt1) = 0.5_dp * sum(this%pot22x2Atom(:,:,iAt1) * this%deltaQAtom(:,:,iAt1))
     end do
 
-    energyPerAtom(:) = EnergyMDAtom(:) + EnergyDDAtom(:) + EnergyMQAtom(:) + EnergyDQAtom(:) + EnergyQQAtom(:)
+    energyPerAtom(:) = EnergyMDAtom(:) + EnergyDDAtom(:) + EnergyMQAtom(:) + EnergyDQAtom(:)&
+        & + EnergyQQAtom(:)
     this%energyMD = sum(EnergyMDAtom(:))
     this%energyDD = sum(EnergyDDAtom(:))
     this%energyMQ = sum(EnergyMQAtom(:))
@@ -1114,8 +1140,8 @@ contains
  3001 format ((f13.9))
   end subroutine getEnergyPerAtom
 
-  subroutine addMultiPoleGradients(this, gradients, derivator, rhoSqr, skHamCont, skOverCont, coords,&
-      & species, orb, iSquare, ovrlapMat, iNeighbour, nNeighbourSK)
+  subroutine addMultiPoleGradients(this, gradients, derivator, rhoSqr, skHamCont, skOverCont,&
+      & coords, species, orb, iSquare, ovrlapMat, iNeighbour, nNeighbourSK)
 
     !> class instance
     class(TMultiPole), intent(inout) :: this
@@ -1202,7 +1228,8 @@ contains
       iSp1 = this%species(iAt1)
       do iAt2 = 1, nAtoms
         iSp2 = this%species(iAt2)
-        this%pot30x0Atom(:,:,:,iAt1) = this%pot30x0Atom(:,:,:,iAt1) + this%f30AB(:,:,:,iAt2,iAt1) * this%deltaMAtom(iAt2)
+        this%pot30x0Atom(:,:,:,iAt1) = this%pot30x0Atom(:,:,:,iAt1)&
+            & + this%f30AB(:,:,:,iAt2,iAt1) * this%deltaMAtom(iAt2)
         if ((this%onDQOCharges(1, iSp1) == 0 .and. this%onDQOCharges(2, iSp1) == 0 ) &
            & .or. (this%onDQOCharges(1, iSp2) == 0 .and. this%onDQOCharges(2, iSp2) == 0)) then
           cycle
@@ -1210,8 +1237,10 @@ contains
         do ii = 1, xyzLen
           do jj = 1, xyzLen
             do ll = 1, xyzLen
-              this%pot31x1Atom(ll,jj,ii,iAt1) = this%pot31x1Atom(ll,jj,ii,iAt1) - 4.0_dp * sum(this%f40AB(:,ll,jj,ii,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
-              this%pot32x2Atom(ll,jj,ii,iAt1) = this%pot32x2Atom(ll,jj,ii,iAt1) + 10.0_dp * sum(this%f50AB(:,:,ll,jj,ii,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
+              this%pot31x1Atom(ll,jj,ii,iAt1) = this%pot31x1Atom(ll,jj,ii,iAt1)&
+                  & - 4.0_dp * sum(this%f40AB(:,ll,jj,ii,iAt2,iAt1) * this%deltaDAtom(:,iAt2))
+              this%pot32x2Atom(ll,jj,ii,iAt1) = this%pot32x2Atom(ll,jj,ii,iAt1)&
+                  & + 10.0_dp * sum(this%f50AB(:,:,ll,jj,ii,iAt2,iAt1) * this%deltaQAtom(:,:,iAt2))
             end do
           end do
         end do
@@ -1238,17 +1267,23 @@ contains
       derivs(:,iAt1) = derivs(:,iAt1) - this%pot21x2Atom(:,iAt1) * this%deltaMAtom(iAt1)
       do ii = 1, xyzLen
         !> M-D contribution
-        derivs(ii,iAt1) = derivs(ii,iAt1) + 2.0_dp * sum(this%pot20x0Atom(:,ii,iAt1) * this%deltaDAtom(:,iAt1))
+        derivs(ii,iAt1) = derivs(ii,iAt1)&
+            & + 2.0_dp * sum(this%pot20x0Atom(:,ii,iAt1) * this%deltaDAtom(:,iAt1))
         !> D-D contribution
-        derivs(ii,iAt1) = derivs(ii,iAt1) + 2.0_dp * sum(this%pot21x1Atom(:,ii,iAt1) * this%deltaDAtom(:,iAt1))
+        derivs(ii,iAt1) = derivs(ii,iAt1)&
+            & + 2.0_dp * sum(this%pot21x1Atom(:,ii,iAt1) * this%deltaDAtom(:,iAt1))
         !> D-Q contribution
-        derivs(ii,iAt1) = derivs(ii,iAt1) + 2.0_dp * sum(this%pot22x2Atom(:,ii,iAt1) * this%deltaDAtom(:,iAt1))
+        derivs(ii,iAt1) = derivs(ii,iAt1)&
+            & + 2.0_dp * sum(this%pot22x2Atom(:,ii,iAt1) * this%deltaDAtom(:,iAt1))
         !> M-Q contribution
-        derivs(ii,iAt1) = derivs(ii,iAt1) + 3.0_dp * sum(this%pot30x0Atom(:,:,ii,iAt1) * this%deltaQAtom(:,:,iAt1))
+        derivs(ii,iAt1) = derivs(ii,iAt1)&
+            & + 3.0_dp * sum(this%pot30x0Atom(:,:,ii,iAt1) * this%deltaQAtom(:,:,iAt1))
         !> D-Q contribution
-        derivs(ii,iAt1) = derivs(ii,iAt1) + 3.0_dp * sum(this%pot31x1Atom(:,:,ii,iAt1) * this%deltaQAtom(:,:,iAt1))
+        derivs(ii,iAt1) = derivs(ii,iAt1)&
+            & + 3.0_dp * sum(this%pot31x1Atom(:,:,ii,iAt1) * this%deltaQAtom(:,:,iAt1))
         !> Q-Q contribution
-        derivs(ii,iAt1) = derivs(ii,iAt1) + 3.0_dp * sum(this%pot32x2Atom(:,:,ii,iAt1) * this%deltaQAtom(:,:,iAt1))
+        derivs(ii,iAt1) = derivs(ii,iAt1)&
+            & + 3.0_dp * sum(this%pot32x2Atom(:,:,ii,iAt1) * this%deltaQAtom(:,:,iAt1))
       end do
 
       tmpDeriv = 0.0_dp
@@ -1258,7 +1293,8 @@ contains
           cycle
         end if
 
-        tmp=maxval(abs(tmpOvr(iSquare(iAt1):iSquare(iAt1 + 1) - 1, iSquare(iAt2):iSquare(iAt2 + 1) - 1)))
+        tmp=maxval(abs(tmpOvr(iSquare(iAt1):iSquare(iAt1 + 1) - 1,&
+            & iSquare(iAt2):iSquare(iAt2 + 1) - 1)))
         if (tmp < tolZero) then
           cycle
         end if
@@ -1278,9 +1314,11 @@ contains
 
             tmpDerivMuNu = 0.0_dp
             !> M-D contribution
-            tmpDerivMuNu = tmpDerivMuNu - (this%pot10x1Atom(iAt1) + this%pot10x1Atom(iAt2)) * tmpRho(nu,mu)
+            tmpDerivMuNu = tmpDerivMuNu - (this%pot10x1Atom(iAt1)&
+                & + this%pot10x1Atom(iAt2)) * tmpRho(nu,mu)
             !> M-Q contribution
-            tmpDerivMuNu = tmpDerivMuNu + (this%pot20x2Atom(iAt1) + this%pot20x2Atom(iAt2)) * tmpRho(nu,mu)
+            tmpDerivMuNu = tmpDerivMuNu + (this%pot20x2Atom(iAt1)&
+                & + this%pot20x2Atom(iAt2)) * tmpRho(nu,mu)
 
             tmpVx3 = 0.0_dp
             tmpM3x3 = 0.0_dp
