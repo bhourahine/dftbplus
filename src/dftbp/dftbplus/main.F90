@@ -18,6 +18,7 @@ module dftbp_dftbplus_main
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
   use dftbp_common_status, only : TStatus
   use dftbp_dftb_densitymatrix, only : TDensityMatrix, transformDualSpaceToBvKRealSpace
+  use dftbp_derivs_matrixelements, only : momentumMatrix
   use dftbp_derivs_numderivs2, only : TNumderivs, next, getHessianMatrix, dipoleAdd, polAdd
   use dftbp_derivs_perturb, only : TResponse
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
@@ -3063,6 +3064,11 @@ contains
             & parallelKS, rhoPrim, SSqrReal, rhoSqrReal, densityMatrix%deltaRhoOut,&
             & hybridXc)
       else
+
+        call momentumMatrix(env, parallelKS, eigen, filling, eigvecsCplx, ints%hamiltonian,&
+            & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, kPoint, kWeight,&
+            & cellVec, iCellVec)
+
         call getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighbourList,&
             & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb,&
             & parallelKS, tHelical, species, coord, eigvecsCplx, rhoPrim, SSqrCplx,&
@@ -3809,6 +3815,7 @@ contains
   #:if WITH_SCALAPACK
     ! Add up and distribute density matrix contribution from each group
     call mpifx_allreduceip(env%mpi%globalComm, rhoPrim, MPI_SUM)
+
   #:endif
 
   end subroutine getDensityFromCplxEigvecs
