@@ -3064,11 +3064,13 @@ contains
             & parallelKS, rhoPrim, SSqrReal, rhoSqrReal, densityMatrix%deltaRhoOut,&
             & hybridXc)
       else
+      #:if not WITH_SCALAPACK
         if (.not.tHelical) then
           call momentumMatrix(env, parallelKS, eigen, filling, eigvecsCplx, ints%hamiltonian,&
-              & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, kPoint,&
-              & kWeight, cellVec, iCellVec)
+              & ints%overlap, neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell,&
+              & kPoint, kWeight, cellVec, iCellVec)
         end if
+      #:endif
         call getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighbourList,&
             & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb,&
             & parallelKS, tHelical, species, coord, eigvecsCplx, rhoPrim, SSqrCplx,&
