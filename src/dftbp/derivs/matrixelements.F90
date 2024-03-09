@@ -10,7 +10,7 @@
 !> Module for momentum matrix elements, see https://doi.org/10.1103/PhysRevB.98.115115
 module dftbp_derivs_matrixelements
   use dftbp_common_accuracy, only : dp
-  use dftbp_common_constants, only : Hartree__eV, imag
+  use dftbp_common_constants, only : Hartree__eV, imag, pi
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_file, only : TFileDescr, openFile, closeFile
   use dftbp_common_globalenv, only : stdOut
@@ -87,11 +87,10 @@ contains
 
     integer :: iK, nTransition, iKS, iS, iCart, nOrbs, nSpin, nKpts, nIndepHam, ii, jj
     real(dp) :: maxFill
-    complex(dp), allocatable :: dHamSqr(:,:), work(:,:)
+    complex(dp), allocatable :: dHamSqr(:,:), work(:,:), dipole(:,:), chi(:,:)
     integer, allocatable :: nFilled(:,:), nEmpty(:,:), indx(:)
     real(dp), allocatable :: transitionEgy(:)
-    complex(dp), allocatable :: dipole(:,:)
-    type(TFileDescr) :: fd1, fd2
+    type(TFileDescr) :: fd1
 
     nOrbs = size(eigVals,dim=1)
     nSpin = size(eigVals,dim=3)
@@ -114,6 +113,7 @@ contains
 
     allocate(transitionEgy(nTransition), source = 0.0_dp)
     allocate(dipole(nTransition, 3), source = cmplx(0,0,dp))
+    allocate(chi(3,nTransition), source = cmplx(0,0,dp))
     allocate(indx(nTransition))
 
  #:if WITH_SCALAPACK
@@ -158,31 +158,27 @@ contains
 
         call hemm(work, 'l', dHamSqr, eigVecsCplx(:,:,iKS))
 
-
         do ii = 1, nFilled(iS, iK)
           do jj = nEmpty(iS, iK), nOrbs
             nTransition = nTransition + 1
             dipole(nTransition, iCart) = dot_product(eigVecsCplx(:,jj,iKS), work(:,ii))
-            dipole(nTransition, iCart) = imag * kWeight(iK)&
-                & * (filling(ii,iK,iS) - filling(jj,iK,iS)) * dipole(nTransition, iCart)
+            chi(iCart, nTransition) = pi * kWeight(iK) * &
+                & (filling(ii,iK,iS) - filling(jj,iK,iS)) *&
+                & (dipole(nTransition, iCart))**2 / transitionEgy(nTransition)**2
           end do
         end do
-
       end do
 
     end do
 
     call openFile(fd1, "dielectric.dat", mode="w")
-    call openFile(fd2, "absorption.dat", mode="w")
 
     do ii = 1, nTransition
       jj = indx(ii)
-      write(fd1%unit,*)transitionEgy(jj) * Hartree__eV, sqrt(sum(real(dipole(jj,:),dp)**2))
-      write(fd2%unit,*)transitionEgy(jj) * Hartree__eV, sqrt(sum(aimag(dipole(jj,:))**2))
+      write(fd1%unit,*)transitionEgy(jj) * Hartree__eV, abs(sum(chi(:,jj)))/3.0_dp
     end do
 
     call closeFile(fd1)
-    call closeFile(fd2)
 
   #:endif
 

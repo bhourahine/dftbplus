@@ -3044,11 +3044,6 @@ contains
             & hybridXc, densityMatrix, nNeighbourCamSym, HSqrCplx, SSqrCplx, eigVecsCplx, eigen,&
             & errStatus)
         @:PROPAGATE_ERROR(errStatus)
-        if (.not.tHelical) then
-          call momentumMatrix(env, parallelKS, eigen, filling, eigvecsCplx, ints%hamiltonian,&
-              & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, kPoint,&
-              & kWeight, cellVec, iCellVec)
-        end if
       end if
     else
       call buildAndDiagDensePauliHam(env, denseDesc, ints, kPoint, neighbourList,&
@@ -3069,6 +3064,11 @@ contains
             & parallelKS, rhoPrim, SSqrReal, rhoSqrReal, densityMatrix%deltaRhoOut,&
             & hybridXc)
       else
+        if (.not.tHelical) then
+          call momentumMatrix(env, parallelKS, eigen, filling, eigvecsCplx, ints%hamiltonian,&
+              & neighbourList, nNeighbourSK, denseDesc, iSparseStart, img2CentCell, kPoint,&
+              & kWeight, cellVec, iCellVec)
+        end if
         call getDensityFromCplxEigvecs(env, denseDesc, filling, kPoint, kWeight, neighbourList,&
             & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb,&
             & parallelKS, tHelical, species, coord, eigvecsCplx, rhoPrim, SSqrCplx,&
