@@ -98,6 +98,8 @@ contains
     real(dp), allocatable :: transitionEgy(:)
     type(TFileDescr) :: fd1
 
+  #:if not WITH_SCALAPACK
+
     nOrbs = size(eigVals,dim=1)
     nSpin = size(eigVals,dim=3)
     nKpts = size(eigVals,dim=2)
@@ -190,6 +192,8 @@ contains
     end do
 
     call closeFile(fd1)
+
+  #:endif
 
   end subroutine momentumMatrix
 
