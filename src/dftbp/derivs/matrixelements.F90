@@ -115,7 +115,7 @@ contains
     allocate(indx(nTransition))
 
     ! largest number of transitions for any k-point
-    nTransition = minval(startingState)*(nOrbs-maxval(endingState)+1)
+    nTransition = maxval(startingState)*(nOrbs-minval(endingState)+1)
     allocate(dipole(nTransition, 3), source = cmplx(0,0,dp))
 
     allocate(work(nOrbs, nOrbs))
