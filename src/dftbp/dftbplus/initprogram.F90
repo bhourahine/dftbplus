@@ -3867,21 +3867,22 @@ contains
 
     if (allocated(this%apiCallBack)) then
       if (this%apiCallBack%isAsiChangingTheModel) then
-        if (allocated(this%scc)) then
-          ! as this needs assurances that the DM is being read by the external code, leading to
-          ! changes in the hamiltonian, otherwise SCC never converges.
-          call error("ASI callback with model modification enabled does not support self-consistent&
-              & calculations at present")
-        end if
+        !if (allocated(this%scc)) then
+        !  ! as this needs assurances that the DM is being read by the external code, leading to
+        !  ! changes in the hamiltonian, otherwise SCC never converges.
+        !  call error("ASI callback with model modification enabled does not support self-consistent&
+        !      & calculations at present")
+        !end if
+        !if (this%tMulliken) then
+        !  ! Is the overlap matrix is modified by ASI, this breaks
+        !  call error("ASI callback with model modification enabled does not support population&
+        !      & analysis at present")
+        !end if
         if (this%tForces) then
           ! Since if H and/or S is modified, the derivatives are not available via ASI at the
           ! moment.
           call error("ASI callback with model modification enabled does not support forces at&
               & present")
-        end if
-        if (this%tMulliken) then
-          call error("ASI callback with model modification enabled does not support population&
-              & analysis at present")
         end if
       end if
       if (allocated(this%reks)) then

@@ -526,7 +526,7 @@ end subroutine c_DftbPlusInput_final
   end function c_DftbPlus_nrOfLocalKS
 
 
-  !> Get (k-point,spin chanel) pairs in current process group, returns number of pairs
+  !> Get (k-point,spin chanel) pairs in current process group, returns pairs
   function c_DftbPlus_getLocalKS(handler, localKS) result(nLocalKS)&
       & bind(C, name='dftbp_get_local_ks')
 
