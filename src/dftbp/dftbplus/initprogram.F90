@@ -3915,11 +3915,6 @@ contains
           this%dangerousChanges%hamiltonian = .true.
           this%dangerousChanges%overlap = .true.
         end if
-        if (this%tMulliken) then
-          call warning("ASI callback with model modification enabled does not support Mulliken&
-              & population analysis at present")
-          this%dangerousChanges%overlap = .true.
-        end if
       end if
       if (all(this%densityMatrix%iDensityMatrixAlgorithm /= [densityMatrixTypes%fromEigenVecs,&
           & densityMatrixTypes%magma_fromEigenVecs])) then

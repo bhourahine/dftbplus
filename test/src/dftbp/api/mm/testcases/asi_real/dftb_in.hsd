@@ -1,0 +1,33 @@
+Geometry = GenFormat {
+ 3  C
+ O H
+    1  1    0.6707121861E+00   -0.7348057936E-12   -0.7709528431E-01
+    2  2    0.1646439070E+00    0.7831032416E+00   -0.3788683578E+00
+    3  2    0.1646439070E+00   -0.7831032416E+00   -0.3788683578E+00
+}
+
+Hamiltonian = DFTB{
+   MaxAngularMomentum = {
+      H = "s"
+      O = "p"
+   }
+   SCC = Yes
+   SCCTolerance = 1.0E-8
+   Filling = Fermi {Temperature [K] = 1000}
+   SlaterKosterFiles = Type2FileNames{
+      Prefix = "slakos/origin/mio-1-1/"
+      Separator = "-"
+      Suffix = ".skf"
+   }
+   ASI { AsiModifiesModel = Yes }
+}
+Options {
+   WriteResultsTag = Yes
+}
+ParserOptions {
+   ParserVersion = 12
+}
+Analysis {
+   CalculateForces = No
+   MullikenAnalysis = Yes
+}

@@ -23,9 +23,9 @@ if(WITH_C_EXECUTABLES)
   target_link_libraries(test_expdmhs dftbplus)
   set_target_properties(test_expdmhs PROPERTIES LINKER_LANGUAGE C)
 
-  add_executable(test_imp_ham test_imp_ham.c $<TARGET_OBJECTS:test_api_mm_utils>)
-  target_link_libraries(test_imp_ham dftbplus)
-  set_target_properties(test_imp_ham PROPERTIES LINKER_LANGUAGE C)
+  add_executable(test_asi test_asi.c $<TARGET_OBJECTS:test_api_mm_utils>)
+  target_link_libraries(test_asi dftbplus)
+  set_target_properties(test_asi PROPERTIES LINKER_LANGUAGE C)
 
   add_executable(test_fileinitc test_fileinitc.c $<TARGET_OBJECTS:test_api_mm_utils>)
   target_link_libraries(test_fileinitc dftbplus)

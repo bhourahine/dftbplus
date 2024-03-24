@@ -21,7 +21,8 @@ resetspecies_C2H6   #? MPI_PROCS <= 4
 treeinit            #? not WITH_MPI
 mpisubgrids         #? MPI_PROCS == 4
 expdmhs-si2         #? not WITH_MPI and defined('WITH_C_EXECUTABLES')
-imp_ham             #? not WITH_MPI and defined('WITH_C_EXECUTABLES')
+asi_real            #? not WITH_MPI and defined('WITH_C_EXECUTABLES')
+asi_cmplx           #? not WITH_MPI and defined('WITH_C_EXECUTABLES')
 mpiexpdmhs-o2       #? WITH_MPI and (MPI_PROCS % 2 == 0) and defined('WITH_C_EXECUTABLES') and MPI_PROCS <= 4
 mpiexpdmhs-si2      #? defined('WITH_C_EXECUTABLES') and MPI_PROCS == 4
 neighbour_list      #? not WITH_MPI
