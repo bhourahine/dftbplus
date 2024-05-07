@@ -282,14 +282,14 @@ contains
     ! Add exchange contribution for range separated calculations
     if (allocated(hybridXc) .and. .not. allocated(reks)) then
       if (tRealHS) then
-        call hybridXc%getHybridEnergy_real(env, energy%Efock)
+        call hybridXc%getHybridEnergy_real(env, energy%Efock, energy%atomFock)
       else
         if ((.not. present(densityMatrix)) .or. (.not. present(kWeights))) then
           @:RAISE_ERROR(errStatus, -1, "Missing expected array(s) for hybrid xc-functional&
               & calculation.")
         end if
         call hybridXc%getHybridEnergy_kpts(env, localKS, densityMatrix%iKiSToiGlobalKS, kWeights,&
-            & densityMatrix%deltaRhoOutCplx, energy%Efock)
+            & densityMatrix%deltaRhoOutCplx, energy%Efock, energy%atomFock)
       end if
     end if
 
@@ -355,7 +355,7 @@ contains
 
     energy%atomElec(:) = energy%atomNonSCC + energy%atomSCC + energy%atomSpin + energy%atomDftbu&
         & + energy%atomLS + energy%atomExt + energy%atom3rd + energy%atomOnSite &
-        & + energy%atomSolv
+        & + energy%atomSolv + energy%atomFock
     energy%atomTotal(:) = energy%atomElec + energy%atomRep + energy%atomDisp + energy%atomHalogenX
     energy%Etotal = energy%Eelec + energy%Erep + energy%eDisp + energy%eHalogenX
     energy%EMermin = energy%Etotal - sum(energy%TS)
@@ -365,7 +365,7 @@ contains
 
     ! Free energy of system, with contribution if attached to an electron reservoir
     ! negative sign due to electron charge
-    energy%EForceRelated = energy%EGibbs  - energy%NEf
+    energy%EForceRelated = energy%EGibbs - energy%NEf
 
   end subroutine sumEnergies
 

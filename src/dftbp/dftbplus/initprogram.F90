@@ -2902,14 +2902,12 @@ contains
     if (this%isHybridXc) then
       call THybridXcFunc_init(this%hybridXc, this%nAtom, this%species0, hubbU(1, :),&
           & input%ctrl%hybridXcInp%screeningThreshold, input%ctrl%hybridXcInp%omega,&
-          & input%ctrl%hybridXcInp%camAlpha, input%ctrl%hybridXcInp%camBeta,&
-          & this%tSpin, allocated(this%reks), input%ctrl%hybridXcInp%hybridXcAlg,&
+          & input%ctrl%hybridXcInp%camAlpha, input%ctrl%hybridXcInp%camBeta, this%tSpin,&
+          & allocated(this%reks), input%ctrl%hybridXcInp%hybridXcAlg,&
           & input%ctrl%hybridXcInp%hybridXcType, input%ctrl%hybridXcInp%gammaType, this%tPeriodic,&
-          & this%tRealHS, errStatus, coeffsDiag=this%supercellFoldingDiag,&
-          & gammaCutoff=this%cutOff%gammaCutoff,&
-          & gSummationCutoff=this%cutOff%gSummationCutoff,&
-          & wignerSeitzReduction=this%cutOff%wignerSeitzReduction,&
-          & latVecs=input%geom%latVecs)
+          & this%tRealHS, this%tAtomicEnergy, errStatus, coeffsDiag=this%supercellFoldingDiag,&
+          & gammaCutoff=this%cutOff%gammaCutoff, gSummationCutoff=this%cutOff%gSummationCutoff,&
+          & wignerSeitzReduction=this%cutOff%wignerSeitzReduction, latVecs=input%geom%latVecs)
       if (errStatus%hasError()) then
         call error(errStatus%message)
       end if
@@ -5843,8 +5841,9 @@ contains
       call error("Hybrid functionality currently does not yet support shell-resolved SCF.")
     end if
 
-    if (this%tAtomicEnergy) then
-      call error("Atomic resolved energies cannot be calculated with hybrid functionals at the&
+    if (this%boundaryCond%iBoundaryCondition /= boundaryConditions%cluster .and.&
+        & this%tAtomicEnergy) then
+      call error("Atom resolved energies cannot be calculated with hybrid functionals at the&
           & moment.")
     end if
 

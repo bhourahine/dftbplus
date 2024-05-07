@@ -32,7 +32,7 @@ module dftbp_dftb_energytypes
     !> spin energy
     real(dp) :: Espin = 0.0_dp
 
-    !> range-separation energy
+    !> hybrid functional energy
     real(dp) :: Efock = 0.0_dp
 
     !> spin orbit energy
@@ -121,6 +121,9 @@ module dftbp_dftb_energytypes
     !> atom resolved spin
     real(dp), allocatable :: atomSpin(:)
 
+    !> atom resolved hybrid functional energy
+    real(dp), allocatable :: atomFock(:)
+
     !> atom resolved spin orbit
     real(dp), allocatable :: atomLS(:)
 
@@ -184,6 +187,7 @@ contains
     allocate(this%atomNonSCC(nAtom))
     allocate(this%atomSCC(nAtom))
     allocate(this%atomSpin(nAtom))
+    allocate(this%atomFock(nAtom), source = 0.0_dp)
     allocate(this%atomLS(nAtom))
     allocate(this%atomDftbu(nAtom))
     allocate(this%atomExt(nAtom))

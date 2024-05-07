@@ -8062,7 +8062,7 @@ contains
     type(TStatus), intent(inout) :: errStatus
 
     real(dp), allocatable :: tmpHamSp(:,:)
-    real(dp), allocatable :: tmpEn(:)
+    real(dp), allocatable :: tmpEn(:), tmpAtEn(:)
 
     integer, pointer :: pSpecies0(:)
     integer :: sparseSize, nAtom, nSpin, iL, tmpL, rsL
@@ -8075,6 +8075,7 @@ contains
     allocate(tmpHamSp(sparseSize,1))
     if (reks%isHybridXc) then
       allocate(tmpEn(reks%Lmax))
+      allocate(tmpAtEn(nAtom))
     end if
 
     ! Calculate contribution to Hamiltonian except hybrid xc-functional part
@@ -8153,7 +8154,7 @@ contains
       #:endif
         @:PROPAGATE_ERROR(errStatus)
         ! Calculate the Fock-type exchange energy
-        call hybridXc%getHybridEnergy_real(env, tmpEn(iL))
+        call hybridXc%getHybridEnergy_real(env, tmpEn(iL), tmpAtEn)
       end do
     end if
 

@@ -3225,7 +3225,6 @@ contains
       call this%tblite%updateCoords(env, neighbourList, img2CentCell, coordAll,&
           & this%speciesAll)
     end if
-
     if (allocated(this%dispersion)) then
       call this%dispersion%updateCoords(env, neighbourList, img2CentCell, coordAll,&
           & this%speciesAll, errStatus)
@@ -3767,6 +3766,7 @@ contains
       energy%atomRep(:) = 0.0_dp
       energy%Erep = 0.0_dp
     end if
+
     if (allocated(this%dispersion)) then
       call calcDispersionEnergy(this%dispersion, energy%atomDisp, energy%eDisp, iAtInCentralRegion)
     else

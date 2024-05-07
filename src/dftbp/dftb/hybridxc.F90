@@ -204,6 +204,9 @@ module dftbp_dftb_hybridxc
     !> Total (long-range + full-range Hartree-Fock) CAM energy
     real(dp) :: camEnergy
 
+    !> Atom resolved camEnergy
+    real(dp), allocatable :: camAtomEnergy(:)
+
     !> Is this a spin restricted (false) or unrestricted (true) calculation?
     logical :: tSpin
 
@@ -381,8 +384,9 @@ contains
 
   !> Intitializes the range-separated hybrid DFTB module.
   subroutine THybridXcFunc_init(this, nAtom0, species0, hubbu, screeningThreshold, omega, camAlpha,&
-      & camBeta, tSpin, tREKS, hybridXcAlg, hybridXcType, gammaType, tPeriodic, tRealHS, errStatus,&
-      & gammaCutoff, gSummationCutoff, wignerSeitzReduction, coeffsDiag, latVecs)
+      & camBeta, tSpin, tREKS, hybridXcAlg, hybridXcType, gammaType, tPeriodic, tRealHS,&
+      & isEgyAtomResolved, errStatus, gammaCutoff, gSummationCutoff, wignerSeitzReduction,&
+      & coeffsDiag, latVecs)
 
     !> Class instance
     class(THybridXcFunc), intent(out), allocatable :: this
@@ -428,6 +432,9 @@ contains
 
     !> True, if overlap and Hamiltonian are real-valued
     logical, intent(in) :: tRealHS
+
+    !> Should atom resolved energy terms be evaluated?
+    logical, intent(in) :: isEgyAtomResolved
 
     !> Error status
     type(TStatus), intent(inout) :: errStatus
@@ -507,6 +514,9 @@ contains
     this%species0 = species0
 
     this%camEnergy = 0.0_dp
+    if (isEgyAtomResolved) then
+      allocate(this%camAtomEnergy(nAtom0), source = 0.0_dp)
+    end if
 
     if (present(gSummationCutoff)) this%gSummationCutoff = gSummationCutoff
     if (present(wignerSeitzReduction)) this%wignerSeitzReduction = wignerSeitzReduction
@@ -802,6 +812,7 @@ contains
       this%hPrev(:,:) = 0.0_dp
       this%dRhoPrev(:,:) = 0.0_dp
       this%camEnergy = 0.0_dp
+      if (allocated(this%camAtomEnergy)) this%camAtomEnergy(:) = 0.0_dp
     end if
 
   end subroutine updateCoords_cluster
@@ -875,6 +886,7 @@ contains
       this%hPrev(:,:) = 0.0_dp
       this%dRhoPrev(:,:) = 0.0_dp
       this%camEnergy = 0.0_dp
+      if (allocated(this%camAtomEnergy)) this%camAtomEnergy(:) = 0.0_dp
     end if
 
     ! pre-tabulate overlap estimates for neighbour-list based algorithms
@@ -989,6 +1001,7 @@ contains
       ! addCamHamiltonianNeighbour_kpts_ct :
       if (allocated(this%dRhoPrevCplxHS)) this%dRhoPrevCplxHS(:,:,:,:,:,:) = 0.0_dp
       this%camEnergy = 0.0_dp
+      if (allocated(this%camAtomEnergy)) this%camAtomEnergy(:) = 0.0_dp
     end if
 
     ! pre-tabulate overlap estimates for neighbour-list based algorithms
@@ -1612,6 +1625,9 @@ contains
     this%hprev(:,:) = this%hprev + tmpDHam
     hamiltonian(:,:) = hamiltonian + this%hprev
     this%camEnergy = this%camEnergy + evaluateEnergy_real(this%hprev, tmpDRho)
+    if (allocated(this%camAtomEnergy)) then
+      call evaluateAtomEnergy_real(this%hprev, tmpDRho, iSquare, this%camAtomEnergy)
+    end if
 
   contains
 
@@ -1817,6 +1833,9 @@ contains
 
     HSqrReal(:,:) = HSqrReal + tmpHH
     this%camEnergy = this%camEnergy + evaluateEnergy_real(tmpHH, tmpDRho)
+    if (allocated(this%camAtomEnergy)) then
+      call evaluateAtomEnergy_real(this%hprev, tmpDRho, iSquare, this%camAtomEnergy)
+    end if
 
   contains
 
@@ -2037,6 +2056,10 @@ contains
 
     ! Locally collect part of the energy, will sum over MPI rank later:
     this%camEnergy = this%camEnergy + evaluateEnergy_real(Hcam, densSqr)
+    if (allocated(this%camAtomEnergy)) then
+      call evaluateAtomEnergy_real_BLACS(Hcam, densSqr, denseDesc%blacsOrbSqr,&
+          & denseDesc%iAtomStart, this%camAtomEnergy)
+    end if
 
   contains
 
@@ -2096,11 +2119,8 @@ contains
       !> Symmetrized long-range Hamiltonian matrix
       real(dp), intent(inout) :: Hcam(:,:)
 
-      !!
-      real(dp), allocatable :: Hmat(:,:)
-
-      !!
-      real(dp), allocatable :: tmpMat(:,:)
+      !! Work matrices
+      real(dp), allocatable :: Hmat(:,:), tmpMat(:,:)
 
       !! Size of distributed matrices
       integer :: nRows, nCols
@@ -2135,6 +2155,35 @@ contains
       end if
 
     end subroutine evaluateHamiltonian
+
+
+    subroutine evaluateAtomEnergy_real_BLACS(ham, dm, desc, iAtomStart, energyAtoms)
+
+      !> Hamiltonian matrix
+      real(dp), intent(in) :: ham(:,:)
+
+      !> Density matrix
+      real(dp), intent(in) :: dm(:,:)
+
+      !> BLACS matrix descriptor
+      integer, intent(in) :: desc(:)
+
+      !> Atom offset for the square Ham
+      integer, intent(in) :: iAtomStart(:)
+
+      !> Resulting atomic energies due to CAM contribution
+      real(dp), intent(inout) :: energyAtoms(:)
+
+      integer :: iAt, ii, iOrb
+
+      do ii = 1, size(ham, dim=2)
+        iOrb = scalafx_indxl2g(ii, denseDesc%blacsOrbSqr(NB_), env%blacs%orbitalGrid%mycol,&
+            & denseDesc%blacsOrbSqr(CSRC_), env%blacs%orbitalGrid%ncol)
+        call bisection(iAt, iAtomStart, iOrb)
+        energyAtoms(iAt) = energyAtoms(iAt) + 0.5_dp * sum(ham(:, ii) * dm(:, ii))
+      end do
+
+    end subroutine evaluateAtomEnergy_real_BLACS
 
   end subroutine addCamHamiltonianMatrix_real_blacs
 
@@ -2190,6 +2239,9 @@ contains
 
     HH(:,:) = HH + Hcam
     this%camEnergy = this%camEnergy + evaluateEnergy_real(Hcam, Dmat)
+    if (allocated(this%camAtomEnergy)) then
+      call evaluateAtomEnergy_real(Hcam, Dmat, iSquare, this%camAtomEnergy)
+    end if
 
   contains
 
@@ -2265,8 +2317,8 @@ contains
       !> Symmetrized CAM Hamiltonian matrix
       real(dp), intent(out) :: Hcam(:,:)
 
-      real(dp), allocatable :: Hmat(:,:)
-      real(dp), allocatable :: tmpMat(:,:)
+      !! Work matrices
+      real(dp), allocatable :: Hmat(:,:), tmpMat(:,:)
 
       !! Number of orbitals in square matrices
       integer :: nOrb
@@ -2435,8 +2487,8 @@ contains
       !> Symmetrized CAM Hamiltonian matrix
       complex(dp), intent(out) :: Hcam(:,:)
 
-      complex(dp), allocatable :: Hmat(:,:)
-      complex(dp), allocatable :: tmpMat(:,:)
+      !! Work matrices
+      complex(dp), allocatable :: Hmat(:,:), tmpMat(:,:)
 
       !! Number of orbitals in square matrices
       integer :: nOrb
@@ -3453,7 +3505,7 @@ contains
 
 
   !> Returns the Fock-type exchange contribution to the total energy (real version).
-  subroutine getHybridEnergy_real(this, env, camEnergy)
+  subroutine getHybridEnergy_real(this, env, camEnergy, atomEnergy)
 
     !> Class instance
     class(THybridXcFunc), intent(inout) :: this
@@ -3464,21 +3516,33 @@ contains
     !> Total Fock-type exchange energy contribution
     real(dp), intent(out) :: camEnergy
 
+    !> Atom resolved energy
+    real(dp), intent(inout), allocatable :: atomEnergy(:)
+
   #:if WITH_MPI
     call mpifx_allreduceip(env%mpi%globalComm, this%camEnergy, MPI_SUM)
+    if (allocated(this%camAtomEnergy)) then
+      call mpifx_allreduceip(env%mpi%globalComm, this%camAtomEnergy, MPI_SUM)
+    end if
   #:endif
 
     camEnergy = this%camEnergy
+    if (allocated(this%camAtomEnergy)) then
+      atomEnergy(:) = this%camAtomEnergy
+    end if
 
     ! reset for next self-consistent iteration
     this%camEnergy = 0.0_dp
+    if (allocated(this%camAtomEnergy)) then
+      this%camAtomEnergy(:) = 0.0_dp
+    end if
 
   end subroutine getHybridEnergy_real
 
 
   !> Returns the Fock-type exchange contribution to the total energy (complex version).
   subroutine getHybridEnergy_kpts(this, env, localKS, iKiSToiGlobalKS, kWeights, deltaRhoOutCplx,&
-      & camEnergy)
+      & camEnergy, atomEnergy)
 
     !> Class instance
     class(THybridXcFunc), intent(inout) :: this
@@ -3501,6 +3565,9 @@ contains
 
     !> Total Fock-type exchange energy contribution
     real(dp), intent(out) :: camEnergy
+
+    !> Atom resolved energy
+    real(dp), intent(inout), allocatable :: atomEnergy(:)
 
     !! Spin and k-point indices
     integer :: iS, iK
@@ -3525,8 +3592,15 @@ contains
           & deltaRhoOutCplx(:,:, iDensMatKS))
     end do
 
+    if (allocated(this%camAtomEnergy)) then
+      atomEnergy(:) = 0.0_dp
+    end if
+
   #:if WITH_MPI
     call mpifx_allreduceip(env%mpi%globalComm, camEnergy, MPI_SUM)
+    if (allocated(this%camAtomEnergy)) then
+      call mpifx_allreduceip(env%mpi%globalComm, atomEnergy, MPI_SUM)
+    end if
   #:endif
 
   end subroutine getHybridEnergy_kpts
@@ -3567,6 +3641,35 @@ contains
     energy = 0.5_dp * real(sum(hamiltonian * conjg(densityMat)), dp)
 
   end function evaluateEnergy_cplx
+
+
+  !> Evaluates atom resolved energies from the Hamiltonian and density matrix, assuming Mulliken
+  !! equal division of off site elements between atoms.
+  pure subroutine evaluateAtomEnergy_real(hamiltonian, densityMat, iAtomStart, energyAtoms)
+
+    !> Hamiltonian matrix
+    real(dp), intent(in) :: hamiltonian(:,:)
+
+    !> Density matrix
+    real(dp), intent(in) :: densityMat(:,:)
+
+    !> Atom offset for the square Hamiltonian
+    integer, intent(in) :: iAtomStart(:)
+
+    !> Resulting atomic energies due to CAM contribution
+    real(dp), intent(inout) :: energyAtoms(:)
+
+    integer :: iAt, nAt, ii, jj
+
+    nAt = size(iAtomStart) - 1
+
+    do iAt = 1, nAt
+      ii = iAtomStart(iAt)
+      jj = iAtomStart(iAt +1) - 1
+      energyAtoms(iAt) = energyAtoms(iAt) + 0.5_dp * sum(hamiltonian(:,ii:jj)*densityMat(:,ii:jj))
+    end do
+
+  end subroutine evaluateAtomEnergy_real
 
 
   !> Returns the value of a polynomial of 5th degree at x (or its derivative).
