@@ -28,7 +28,8 @@ module dftbp_math_degeneracy
     !> Numerical tolerance for deciding degeneracy
     real(dp) :: tolerance
 
-    ! redundant variables (could test from size), but makes code simpler to read in a few places:
+    ! redundant variables (could test from array sizes), but makes code simpler to read in a few
+    ! places:
 
     !> Number of groups of degenerate orbitals
     integer :: nGrp
