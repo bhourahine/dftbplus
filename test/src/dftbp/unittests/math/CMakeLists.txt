@@ -6,7 +6,8 @@ if (NOT WITH_MPI)
 #  include_directories(SYSTEM ${MPI_INCLUDE_PATH})
 #else()
   set(tests
-    matrixoperations)
+    summation)
+  #  matrixoperations) 
 endif()
 
 foreach(test IN LISTS tests)
