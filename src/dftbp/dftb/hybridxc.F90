@@ -1552,11 +1552,11 @@ contains
             & symNeighbourList, nNeighbourCamSym, rCellVecs, cellVecs, denseDesc%iAtomStart, orb,&
             & kPoints, densityMatrix%iKiSToiGlobalKS, HSqrCplxCam, errStatus)
         @:PROPAGATE_ERROR(errStatus)
-    else
-      call addCamHamiltonianNeighbour_kpts_ct(this, env, densityMatrix%deltaRhoInCplxHS,&
-          & symNeighbourList, nNeighbourCamSym, cellVecs, denseDesc%iAtomStart, orb, kPoints,&
-          & densityMatrix%iKiSToiGlobalKS, HSqrCplxCam, errStatus)
-      @:PROPAGATE_ERROR(errStatus)
+      else
+        call addCamHamiltonianNeighbour_kpts_ct(this, env, densityMatrix%deltaRhoInCplxHS,&
+            & symNeighbourList, nNeighbourCamSym, cellVecs, denseDesc%iAtomStart, orb, kPoints,&
+            & densityMatrix%iKiSToiGlobalKS, HSqrCplxCam, errStatus)
+        @:PROPAGATE_ERROR(errStatus)
       end if
     case (hybridXcAlgo%matrixBased)
       call addCamHamiltonianMatrix_kpts(this, env, denseDesc, ints, densityMatrix, neighbourList,&
