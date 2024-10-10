@@ -16,10 +16,12 @@ module dftbp_derivs_matrixelements
   use dftbp_common_file, only : TFileDescr, openFile, closeFile
   use dftbp_common_globalenv, only : stdOut
   use dftbp_derivs_fillings, only : filledOrEmpty, nIndependentHam, maximumFillings
-  use dftbp_dftb_periodic, only : TNeighbourList
+  use dftbp_dftb_periodic, only : TNeighbourList, TSymNeighbourList
+  use dftbp_dftb_nonscc, only : buildS
+  use dftbp_dftb_slakocont, only : TSlakoCont
   use dftbp_math_sorting, only : index_heap_sort
   use dftbp_type_densedescr, only : TDenseDescr
-  use dftbp_type_parallelks, only : TParallelKS
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS
 #:if WITH_SCALAPACK
   use dftbp_dftb_sparse2dense, only : unpackHSdk
   use dftbp_extlibs_scalapackfx, only : CSRC_, DLEN_, MB_, NB_, RSRC_, pblasfx_phemm,&
@@ -93,9 +95,9 @@ contains
     integer :: iK, nTransition, iKS, iS, iCart, jCart, nOrbs, nSpin, nKpts, nIndepHam, ii, jj
     integer :: iTrans, jTrans, kTrans
     real(dp) :: maxFill
-    complex(dp), allocatable :: work(:,:), work2(:,:), dipole(:,:), chi(:,:,:)
+    complex(dp), allocatable :: work(:,:), work2(:,:), pMomentum(:,:)
     integer, allocatable :: startingState(:,:), endingState(:,:), indx(:)
-    real(dp), allocatable :: transitionEgy(:)
+    real(dp), allocatable :: transitionEgy(:), chi(:,:,:)
     type(TFileDescr) :: fd1
 
   #:if not WITH_SCALAPACK
@@ -111,12 +113,13 @@ contains
     ! Count total number of transitions at all k-points
     nTransition = sum(startingState*(nOrbs-endingState+1))
     allocate(transitionEgy(nTransition), source = 0.0_dp)
-    allocate(chi(3,3,nTransition), source = cmplx(0,0,dp))
+    allocate(chi(3,3,nTransition), source = 0.0_dp)
     allocate(indx(nTransition))
 
     ! largest number of transitions for any k-point
+    !nTransition = maxval(startingState*(nOrbs-endingState))+1
     nTransition = maxval(startingState)*(nOrbs-minval(endingState)+1)
-    allocate(dipole(nTransition, 3), source = cmplx(0,0,dp))
+    allocate(pMomentum(nTransition, 3), source = cmplx(0,0,dp))
 
     allocate(work(nOrbs, nOrbs))
     allocate(work2(nOrbs, nOrbs))
@@ -154,13 +157,13 @@ contains
         work2(:,:) = cmplx(0,0,dp)
         call unpackHSdk(work2, ham(:,iS), kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
             & iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
-        call hemm(work, 'l', work2, eigVecsCplx(:,:,iKS), beta=(1.0_dp,0.0_dp))
+        call hemm(work, 'l', work2, eigVecsCplx(:,:,iKS), beta=cmplx(1,0,dp))
 
         jTrans = 0
         do ii = 1, startingState(iS, iK)
           do jj = endingState(iS, iK), nOrbs
             jTrans = jTrans + 1
-            dipole(jTrans, iCart) = dot_product(eigVecsCplx(:,jj,iKS), work(:,ii))
+            pMomentum(jTrans, iCart) = dot_product(eigVecsCplx(:,jj,iKS), work(:,ii))
           end do
         end do
 
@@ -173,8 +176,8 @@ contains
           kTrans = iTrans + jTrans
           do iCart = 1, 3
             do jCart = 1, 3
-              chi(jCart, iCart, kTrans) = kweight(iK) * dipole(jTrans, iCart)&
-                  & * conjg(dipole(jTrans, jCart)) / (pi * transitionEgy(kTrans)**2)
+              chi(jCart, iCart, kTrans) = kweight(iK) * real(pMomentum(jTrans, iCart)&
+                  & * conjg(pMomentum(jTrans, jCart)), dp)
             end do
           end do
         end do
@@ -188,7 +191,7 @@ contains
 
     do ii = 1, nTransition
       jj = indx(ii)
-      write(fd1%unit, "(F10.6,E16.8)")transitionEgy(jj) * Hartree__eV, real(chi(1,1,jj))
+      write(fd1%unit, "(F10.6,E16.8)")transitionEgy(jj) * Hartree__eV, chi(1,1,jj)
     end do
 
     call closeFile(fd1)
@@ -198,25 +201,76 @@ contains
   end subroutine momentumMatrix
 
 
-!  !> Indexing for transition based on start and end transitions
-!  pure function indx2transition(iStart, iEnd, iKS, localKS, startingStates, endingStates, nOrbs)&
-!      & result(iTrans)
-!
-!    integer, intent(in) :: iStart, iEnd, iKS, nOrbs
-!    integer, intent(in) :: localKS(:,:), startingStates(:,:), endingStates(:,:)
-!
-!    integer :: iTrans, jKS, iS, iK
-!
-!    iTrans = 0
-!    do jKS = 1, iKS -1
-!      iK = localKS(1, jKS)
-!      iS = localKS(2, jKS)
-!      iTrans = iTrans + startingStates(iS,iK)*(nOrbs-endingStates(iS,iK)+1)
-!    end do
-!    iK = localKS(1, iKS)
-!    iS = localKS(2, iKS)
-!    iTrans = iTrans + (iStart-1) * (nOrbs-endingStates(iS, iK)+1) + iEnd - endingStates(iS, iK) + 1
-!
-!  end function indx2transition
+  !> Evaluate <0a|r|0b> matrix elements
+  subroutine approxAtomDipole(dab, over, nNeighbour, iNeighbour, iSparseStart, img2CentCell, orb,&
+      & species, coords)
+
+    !> On-site dipole matrix elements to second order in overlap
+    real(dp), intent(out) :: dab(:,:,:,:)
+
+    !> Overlap matrix
+    real(dp), intent(in) :: over(:)
+
+    !> Number of neighbours for overlap for each of the central cell atoms
+    integer, intent(in) :: nNeighbour(:)
+
+    !> Neighbour index
+    integer, intent(in) :: iNeighbour(0:,:)
+
+    !> Index array for location of atomic blocks in large sparse arrays
+    integer, allocatable, intent(inout) :: iSparseStart(:,:)
+
+    !> Image atoms to their equivalent in the central cell
+    integer, allocatable, intent(inout) :: img2CentCell(:)
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> Species-list of atoms
+    integer, intent(in) :: species(:)
+
+    !> List of all atomic coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    real(dp) :: tmp(orb%mOrb,orb%mOrb), tmpA(orb%mOrb,orb%mOrb), r(3), rpp(3)
+    integer :: nAtom0, iAt1, iAt2, iAt2f, iNeigh
+    integer :: iSp1, iSp2, nOrb1, nOrb2, iOrig, iCart
+
+    nAtom0 = size(nNeighbour)
+    @:ASSERT(all(shape(dab) == [orb%mOrb, orb%mOrb, nAtom0, 3]))
+    dab(:,:,:,:) = 0.0_dp
+
+    do iAt1 = 1, nAtom0
+      iSp1 = species(iAt1)
+      nOrb1 = orb%nOrbSpecies(iSp1)
+      do iNeigh = 1, nNeighbour(iAt1)
+        iAt2 = iNeighbour(iNeigh, iAt1)
+        iAt2f = img2CentCell(iAt2)
+        iSp2 = species(iAt2f)
+        nOrb2 = orb%nOrbSpecies(iSp2)
+        iOrig = iSparseStart(iNeigh, iAt1) + 1
+
+        tmp(:nOrb2, :nOrb1) = reshape(over(iOrig:iOrig+nOrb2*nOrb1-1), [nOrb2, nOrb1])
+
+        tmpA(:nOrb2,:nOrb2) = matmul(tmp(:nOrb2, :nOrb1), transpose(tmp(:nOrb2, :nOrb1)))
+        do iCart = 1, 3
+          dab(:nOrb2, :nOrb2, iAt2f, iCart) = dab(:nOrb2, :nOrb2, iAt2f, iCart)
+        end do
+
+        if (iAt1 /= iAt2f) then
+          ! other matrix triangle, and this is not a periodic image atom
+          tmpA(:nOrb1,:nOrb1) = matmul(transpose(tmp(:nOrb2, :nOrb1)), tmp(:nOrb2, :nOrb1))
+
+        end if
+
+        !dab(iOrig1+1:iOrig1+nOrb1+1, iOrig2+1:iOrig2+nOrb2+1) =
+        !matmul(tmp1,transpose(tmp2)) * ()
+
+      end do
+    end do
+
+    dab(:,:,:,:) = 0.125_dp * dab
+
+  end subroutine approxAtomDipole
 
 end module dftbp_derivs_matrixelements
