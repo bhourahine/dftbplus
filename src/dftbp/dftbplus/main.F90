@@ -17,7 +17,7 @@ module dftbp_dftbplus_main
   use dftbp_common_globalenv, only : stdOut, withMpi
   use dftbp_common_hamiltoniantypes, only : hamiltonianTypes
   use dftbp_common_status, only : TStatus
-  use dftbp_derivs_matrixelements, only : momentumMatrix
+  use dftbp_derivs_matrixelements, only : momentumMatrix, approxAtomDipole
   use dftbp_derivs_numderivs2, only : TNumderivs, next, getHessianMatrix, dipoleAdd, polAdd
   use dftbp_derivs_perturb, only : TResponse
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
@@ -3115,6 +3115,8 @@ contains
 
     call env%globalTimer%startTimer(globalTimers%densityMatrix)
     if (nSpin /= 4) then
+      call approxAtomDipole(ints%overlap, nNeighbourSK, neighbourList%iNeighbour, iSparseStart,&
+          & img2CentCell, orb, species, coord)
       if (tRealHS) then
         call getDensityFromRealEigvecs(env, denseDesc, filling(:,1,:), neighbourList, nNeighbourSK,&
             & iSparseStart, img2CentCell, orb, species, coord, tPeriodic, tHelical, eigVecsReal,&

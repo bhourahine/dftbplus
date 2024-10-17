@@ -1,6 +1,6 @@
 !--------------------------------------------------------------------------------------------------!
 !  DFTB+: general package for performing fast atomistic simulations                                !
-!  Copyright (C) 2006 - 2023  DFTB+ developers group                                               !
+!  Copyright (C) 2006 - 2024  DFTB+ developers group                                               !
 !                                                                                                  !
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
@@ -8,7 +8,7 @@
 #:include 'common.fypp'
 
 !> Module for momentum matrix elements, see doi:
-!! 10.1103/PhysRevB.63.201101 10.1103/PhysRevB.72.125105 10.1103/PhysRevB.98.115115
+!! 10.1103/PhysRevB.63.201101  10.1103/PhysRevB.98.115115
 module dftbp_derivs_matrixelements
   use dftbp_common_accuracy, only : dp
   use dftbp_common_constants, only : Hartree__eV, imag, pi
@@ -35,7 +35,7 @@ module dftbp_derivs_matrixelements
   implicit none
 
   private
-  public :: momentumMatrix
+  public :: momentumMatrix, approxAtomDipole
 
 contains
 
@@ -201,12 +201,13 @@ contains
   end subroutine momentumMatrix
 
 
-  !> Evaluate <0a|r|0b> matrix elements
-  subroutine approxAtomDipole(dab, over, nNeighbour, iNeighbour, iSparseStart, img2CentCell, orb,&
-      & species, coords)
+  !> Evaluate onsite dipole matrix elements using the approximation in Sandu PRB, doi:
+  !> 10.1103/PhysRevB.72.125105
+  subroutine approxAtomDipole(over, nNeighbour, iNeighbour, iSparseStart, img2CentCell, orb,&
+      & species, coord)
 
-    !> On-site dipole matrix elements to second order in overlap
-    real(dp), intent(out) :: dab(:,:,:,:)
+    !!> On-site dipole matrix elements to second order in overlap
+    !real(dp), intent(out) :: dab(:,:,:,:)
 
     !> Overlap matrix
     real(dp), intent(in) :: over(:)
@@ -218,10 +219,10 @@ contains
     integer, intent(in) :: iNeighbour(0:,:)
 
     !> Index array for location of atomic blocks in large sparse arrays
-    integer, allocatable, intent(inout) :: iSparseStart(:,:)
+    integer, intent(in) :: iSparseStart(0:,:)
 
     !> Image atoms to their equivalent in the central cell
-    integer, allocatable, intent(inout) :: img2CentCell(:)
+    integer, intent(in) :: img2CentCell(:)
 
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
@@ -230,11 +231,13 @@ contains
     integer, intent(in) :: species(:)
 
     !> List of all atomic coordinates
-    real(dp), intent(in) :: coords(:,:)
+    real(dp), intent(in) :: coord(:,:)
 
-    real(dp) :: tmp(orb%mOrb,orb%mOrb), tmpA(orb%mOrb,orb%mOrb), r(3), rpp(3)
+    real(dp) :: tmp(orb%mOrb,orb%mOrb), tmpA(orb%mOrb,orb%mOrb)
     integer :: nAtom0, iAt1, iAt2, iAt2f, iNeigh
     integer :: iSp1, iSp2, nOrb1, nOrb2, iOrig, iCart
+
+    real(dp) :: dab(orb%mOrb,orb%mOrb,size(nNeighbour),3)
 
     nAtom0 = size(nNeighbour)
     @:ASSERT(all(shape(dab) == [orb%mOrb, orb%mOrb, nAtom0, 3]))
@@ -243,7 +246,7 @@ contains
     do iAt1 = 1, nAtom0
       iSp1 = species(iAt1)
       nOrb1 = orb%nOrbSpecies(iSp1)
-      do iNeigh = 1, nNeighbour(iAt1)
+      do iNeigh = 0, nNeighbour(iAt1)
         iAt2 = iNeighbour(iNeigh, iAt1)
         iAt2f = img2CentCell(iAt2)
         iSp2 = species(iAt2f)
@@ -252,24 +255,34 @@ contains
 
         tmp(:nOrb2, :nOrb1) = reshape(over(iOrig:iOrig+nOrb2*nOrb1-1), [nOrb2, nOrb1])
 
-        tmpA(:nOrb2,:nOrb2) = matmul(tmp(:nOrb2, :nOrb1), transpose(tmp(:nOrb2, :nOrb1)))
+        tmpA(:nOrb1,:nOrb1) = matmul(transpose(tmp(:nOrb2, :nOrb1)), tmp(:nOrb2, :nOrb1))
         do iCart = 1, 3
-          dab(:nOrb2, :nOrb2, iAt2f, iCart) = dab(:nOrb2, :nOrb2, iAt2f, iCart)
+          dab(:nOrb1, :nOrb1, iAt1, iCart) = dab(:nOrb1, :nOrb1, iAt1, iCart)&
+              & +(coord(iCart, iAt2) - coord(iCart, iAt1)) * tmpA(:nOrb1,:nOrb1)
         end do
 
-        if (iAt1 /= iAt2f) then
-          ! other matrix triangle, and this is not a periodic image atom
-          tmpA(:nOrb1,:nOrb1) = matmul(transpose(tmp(:nOrb2, :nOrb1)), tmp(:nOrb2, :nOrb1))
-
-        end if
-
-        !dab(iOrig1+1:iOrig1+nOrb1+1, iOrig2+1:iOrig2+nOrb2+1) =
-        !matmul(tmp1,transpose(tmp2)) * ()
+        tmpA(:nOrb2,:nOrb2) = matmul(tmp(:nOrb2, :nOrb1), transpose(tmp(:nOrb2, :nOrb1)))
+        do iCart = 1, 3
+          dab(:nOrb2, :nOrb2, iAt2f, iCart) = dab(:nOrb2, :nOrb2, iAt2f, iCart)&
+              & +(coord(iCart, iAt1) - coord(iCart, iAt2)) * tmpA(:nOrb2,:nOrb2)
+        end do
 
       end do
     end do
 
-    dab(:,:,:,:) = 0.125_dp * dab
+    dab(:,:,:,:) = 0.25_dp * dab
+
+    do iAt1 = 1, nAtom0
+      iSp1 = species(iAt1)
+      nOrb1 = orb%nOrbSpecies(iSp1)
+      write(*,*)iAt1
+      do iCart = 1, 3
+        do iOrig = 1, nOrb1
+          write(*,*)dab(:nOrb1, iOrig, iAt1, iCart)
+        end do
+        write(*,*)
+      end do
+    end do
 
   end subroutine approxAtomDipole
 
