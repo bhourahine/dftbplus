@@ -35,9 +35,27 @@ module dftbp_derivs_matrixelements
   implicit none
 
   private
-  public :: momentumMatrix, approxAtomDipole
+  public :: imDielectric, momentumMatrix, approxAtomDipole
 
 contains
+
+
+  subroutine imDielectric(cellVol, filling, kWeight, pMatrixElements)
+
+    !> Unit cell volume
+    real(dp), intent(in) :: cellVol
+
+    !> Occupations of orbitals
+    real(dp), intent(in) :: filling(:,:,:)
+
+    !> Weights for k-points
+    real(dp), intent(in) :: kWeight(:)
+
+    complex(dp), intent(in) :: pMatrixElements(:,:)
+
+
+  end subroutine imDielectric
+
 
   !> Calculate momentum matrix elements
   subroutine momentumMatrix(env, parallelKS, eigvals, filling, eigVecsCplx, ham, over,&
@@ -96,7 +114,7 @@ contains
     integer :: iTrans, jTrans, kTrans
     real(dp) :: maxFill
     complex(dp), allocatable :: work(:,:), work2(:,:), pMomentum(:,:)
-    integer, allocatable :: startingState(:,:), endingState(:,:), indx(:)
+    integer, allocatable :: nFilled(:,:), nEmpty(:,:), indx(:)
     real(dp), allocatable :: transitionEgy(:), chi(:,:,:)
     type(TFileDescr) :: fd1
 
@@ -108,17 +126,17 @@ contains
 
     nIndepHam = nIndependentHam(nSpin)
     maxFill = maximumFillings(nSpin)
-    call filledOrEmpty(startingState, endingState, nIndepHam, nKpts, filling, nOrbs, maxFill)
+    call filledOrEmpty(nFilled, nEmpty, nIndepHam, nKpts, filling, nOrbs, maxFill)
 
     ! Count total number of transitions at all k-points
-    nTransition = sum(startingState*(nOrbs-endingState+1))
+    nTransition = sum(nFilled*(nOrbs-nEmpty+1))
     allocate(transitionEgy(nTransition), source = 0.0_dp)
     allocate(chi(3,3,nTransition), source = 0.0_dp)
     allocate(indx(nTransition))
 
     ! largest number of transitions for any k-point
-    !nTransition = maxval(startingState*(nOrbs-endingState))+1
-    nTransition = maxval(startingState)*(nOrbs-minval(endingState)+1)
+    !nTransition = maxval(nFilled*(nOrbs-nEmpty))+1
+    nTransition = maxval(nFilled)*(nOrbs-minval(nEmpty)+1)
     allocate(pMomentum(nTransition, 3), source = cmplx(0,0,dp))
 
     allocate(work(nOrbs, nOrbs))
@@ -128,8 +146,8 @@ contains
     nTransition = 0
     do iK = 1, nKpts
       do iS = 1, nIndepHam
-        do ii = 1, startingState(iS, iK)
-          do jj = endingState(iS, iK), nOrbs
+        do ii = 1, nFilled(iS, iK)
+          do jj = nEmpty(iS, iK), nOrbs
             nTransition = nTransition + 1
             transitionEgy(nTransition) = eigvals(jj, iK, iS) - eigvals(ii, iK, iS)
           end do
@@ -160,8 +178,8 @@ contains
         call hemm(work, 'l', work2, eigVecsCplx(:,:,iKS), beta=cmplx(1,0,dp))
 
         jTrans = 0
-        do ii = 1, startingState(iS, iK)
-          do jj = endingState(iS, iK), nOrbs
+        do ii = 1, nFilled(iS, iK)
+          do jj = nEmpty(iS, iK), nOrbs
             jTrans = jTrans + 1
             pMomentum(jTrans, iCart) = dot_product(eigVecsCplx(:,jj,iKS), work(:,ii))
           end do
@@ -170,8 +188,8 @@ contains
       end do
 
       jTrans = 0
-      do ii = 1, startingState(iS, iK)
-        do jj = endingState(iS, iK), nOrbs
+      do ii = 1, nFilled(iS, iK)
+        do jj = nEmpty(iS, iK), nOrbs
           jTrans = jTrans + 1
           kTrans = iTrans + jTrans
           do iCart = 1, 3
@@ -183,7 +201,7 @@ contains
         end do
       end do
 
-      iTrans = iTrans + startingState(iS,iK)*(nOrbs-endingState(iS,iK)+1)
+      iTrans = iTrans + nFilled(iS,iK)*(nOrbs-nEmpty(iS,iK)+1)
 
     end do
 
