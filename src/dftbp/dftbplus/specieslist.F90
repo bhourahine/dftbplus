@@ -12,9 +12,8 @@ module dftbp_dftbplus_specieslist
   use dftbp_common_accuracy, only : dp
   use dftbp_common_constants, only : elementSymbol
   use dftbp_common_unitconversion, only : TUnit
-  use dftbp_extlibs_xmlf90, only : fnode, string, char
+  use dftbp_extlibs_xmlf90, only : fnode, char
   use dftbp_io_hsdutils, only : getChildValue, getChild
-  use dftbp_io_hsdutils2, only : convertUnitHsd
   implicit none
 
   private
@@ -32,7 +31,7 @@ contains
 
 
   !> Read a list of real valued species data
-  subroutine readSpeciesListReal(node, speciesNames, array, default, conv, units)
+  subroutine readSpeciesListReal(node, speciesNames, array, default, conv)
 
     !> Node to process
     type(fnode), pointer :: node
@@ -43,49 +42,29 @@ contains
     !> Names of all species
     character(len=*), intent(in) :: speciesNames(:)
 
-    !> Data array to read
+    !> Optional default values of data array to be read
     real(dp), intent(in), optional :: default(:)
 
     !> Conversion factor
     real(dp), intent(in), optional :: conv
 
-    !> Conversion units if relevant to quantity
-    type(TUnit), intent(in), optional :: units(:)
-
     type(fnode), pointer :: child
-    type(string) :: modifier
     real(dp) :: fact, dummy
     integer :: iSp
 
-    if (present(conv)) then
-      fact = 1.0_dp / conv
-    else
-      fact = 1.0_dp
-    end if
-
-    if (present(units)) then
-      if (present(default)) then
-        do iSp = 1, size(speciesNames)
-          call getChildValue(node, speciesNames(iSp), array(iSp), default=default(iSp)*fact,&
-              & modifier=modifier, child=child)
-          call convertUnitHsd(char(modifier), units, child, array(iSp))
-        end do
+    if (present(default)) then
+      if (present(conv)) then
+        fact = 1.0_dp / conv
       else
-        do iSp = 1, size(speciesNames)
-          call getChildValue(node, speciesNames(iSp), array(iSp), modifier=modifier, child=child)
-          call convertUnitHsd(char(modifier), units, child, array(iSp))
-        end do
+        fact = 1.0_dp
       end if
+      do iSp = 1, size(speciesNames)
+        call getChildValue(node, speciesNames(iSp), array(iSp), default=default(iSp)*fact)
+      end do
     else
-      if (present(default)) then
-        do iSp = 1, size(speciesNames)
-          call getChildValue(node, speciesNames(iSp), array(iSp), default=default(iSp)*fact)
-        end do
-      else
-        do iSp = 1, size(speciesNames)
-          call getChildValue(node, speciesNames(iSp), array(iSp))
-        end do
-      end if
+      do iSp = 1, size(speciesNames)
+        call getChildValue(node, speciesNames(iSp), array(iSp))
+      end do
     end if
 
     if (present(conv)) then

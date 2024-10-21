@@ -201,7 +201,7 @@ contains
     case("unity")
       input%descreening(:) = 1.0_dp
     case("values")
-      call readSpeciesList(value1, geo%speciesNames, input%descreening, units=lengthUnits)
+      call readSpeciesList(value1, geo%speciesNames, input%descreening)
     end select
 
     call getChildValue(node, "Cutoff", input%rCutoff, 35.0_dp * AA__Bohr, &
@@ -298,7 +298,7 @@ contains
     call readReferenceState(node, solvent, temperature, shift, input%freeEnergyShift)
 
     call readVanDerWaalsRad(node, geo, input%vdwRad)
-    call getChildValue(node, "RadiiScaling", radScale)
+    call getChildValue(node, "RadiiScaling", radScale, 1.0_dp)
     input%vdwRad(:) = input%vdwRad * radScale
 
     call readAngularGrid(node, input%gridSize)
@@ -573,25 +573,21 @@ contains
     case("vanderwaalsradiid3")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusD3(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, &
-        & conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, conv=conv)
       deallocate(vdwRadDefault)
     case("vanderwaalsradiicosmo")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusCosmo(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, &
-        & conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, conv=conv)
       deallocate(vdwRadDefault)
     case("vanderwaalsradiibondi")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusBondi(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, &
-        & conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, conv=conv)
       deallocate(vdwRadDefault)
     case("values")
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, conv=conv, units=lengthUnits)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, conv=conv)
     end select
-    vdwRad(:) = vdwRad * conv
 
   end subroutine readVanDerWaalsRad
 
