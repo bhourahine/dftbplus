@@ -59,7 +59,8 @@ contains
         fact = 1.0_dp
       end if
       do iSp = 1, size(speciesNames)
-        call getChildValue(node, speciesNames(iSp), array(iSp), default=default(iSp)*fact)
+        call getChildValue(node, speciesNames(iSp), array(iSp), default=default(iSp)*fact,&
+            & isDefaultExported = .false.)
       end do
     else
       do iSp = 1, size(speciesNames)
@@ -95,7 +96,8 @@ contains
 
     if (present(default)) then
       do iSp = 1, size(speciesNames)
-        call getChildValue(node, speciesNames(iSp), array(iSp), default=default(iSp))
+        call getChildValue(node, speciesNames(iSp), array(iSp), default=default(iSp),&
+            & isDefaultExported = .false.)
       end do
     else
       do iSp = 1, size(speciesNames)

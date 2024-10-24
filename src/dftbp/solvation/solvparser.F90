@@ -196,8 +196,7 @@ contains
       if (.not.allocated(defaults)) then
         call detailedError(child, "No defaults available for descreening parameters")
       end if
-      call readSpeciesList(value1, geo%speciesNames, input%descreening, &
-          & defaults%descreening)
+      call readSpeciesList(value1, geo%speciesNames, input%descreening, defaults%descreening)
     case("unity")
       input%descreening(:) = 1.0_dp
     case("values")
@@ -248,8 +247,7 @@ contains
           else
             call detailedError(child, "No defaults available for hydrogen bond strengths")
           end if
-          call readSpeciesList(value1, geo%speciesNames, input%hBondPar, &
-              & defaults%hBondPar)
+          call readSpeciesList(value1, geo%speciesNames, input%hBondPar, defaults%hBondPar)
         case("values")
           call readSpeciesList(value1, geo%speciesNames, input%hBondPar)
         end select
@@ -393,8 +391,7 @@ contains
       if (.not.present(surfaceTensionDefault)) then
         call detailedError(child, "No defaults available for surface tension values")
       end if
-      call readSpeciesList(value1, geo%speciesNames, input%surfaceTension, &
-          & surfaceTensionDefault)
+      call readSpeciesList(value1, geo%speciesNames, input%surfaceTension, surfaceTensionDefault)
     case("values")
       call readSpeciesList(value1, geo%speciesNames, input%surfaceTension)
     end select
@@ -439,8 +436,8 @@ contains
     case("atomicradii")
       allocate(atomicRadDefault(geo%nSpecies))
       atomicRadDefault(:) = getAtomicRad(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, input%atomicRad, conv=conv, &
-        & default=atomicRadDefault)
+      call readSpeciesList(value1, geo%speciesNames, input%atomicRad, default=atomicRadDefault,&
+          & conv=conv)
       deallocate(atomicRadDefault)
     case("values")
       call readSpeciesList(value1, geo%speciesNames, input%atomicRad, conv=conv)
@@ -448,7 +445,6 @@ contains
     if (any(input%atomicRad <= 0.0_dp)) then
       call detailedError(value1, "Atomic radii must be positive for all species")
     end if
-    input%atomicRad(:) = input%atomicRad * conv
 
     call getChildValue(node, "Cutoff", input%rCutoff, 30.0_dp, &
         & modifier=modifier, child=field)
@@ -573,17 +569,17 @@ contains
     case("vanderwaalsradiid3")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusD3(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault, conv=conv)
       deallocate(vdwRadDefault)
     case("vanderwaalsradiicosmo")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusCosmo(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault, conv=conv)
       deallocate(vdwRadDefault)
     case("vanderwaalsradiibondi")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusBondi(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, vdwRadDefault, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault, conv=conv)
       deallocate(vdwRadDefault)
     case("values")
       call readSpeciesList(value1, geo%speciesNames, vdwRad, conv=conv)
