@@ -196,7 +196,8 @@ contains
       if (.not.allocated(defaults)) then
         call detailedError(child, "No defaults available for descreening parameters")
       end if
-      call readSpeciesList(value1, geo%speciesNames, input%descreening, defaults%descreening)
+      call readSpeciesList(value1, geo%speciesNames, input%descreening,&
+          & default=defaults%descreening)
     case("unity")
       input%descreening(:) = 1.0_dp
     case("values")
@@ -247,7 +248,7 @@ contains
           else
             call detailedError(child, "No defaults available for hydrogen bond strengths")
           end if
-          call readSpeciesList(value1, geo%speciesNames, input%hBondPar, defaults%hBondPar)
+          call readSpeciesList(value1, geo%speciesNames, input%hBondPar, default=defaults%hBondPar)
         case("values")
           call readSpeciesList(value1, geo%speciesNames, input%hBondPar)
         end select
@@ -391,7 +392,8 @@ contains
       if (.not.present(surfaceTensionDefault)) then
         call detailedError(child, "No defaults available for surface tension values")
       end if
-      call readSpeciesList(value1, geo%speciesNames, input%surfaceTension, surfaceTensionDefault)
+      call readSpeciesList(value1, geo%speciesNames, input%surfaceTension,&
+          & default=surfaceTensionDefault)
     case("values")
       call readSpeciesList(value1, geo%speciesNames, input%surfaceTension)
     end select
@@ -417,18 +419,14 @@ contains
 
     type(fnode), pointer :: value1, dummy, child, field
     type(string) :: buffer, modifier
-    real(dp) :: conv
     real(dp), allocatable :: atomicRadDefault(:)
 
     call getChildValue(node, "Alpha", input%alpha, 2.474_dp/AA__Bohr, &
       & modifier=modifier, child=field)
     call convertUnitHsd(char(modifier), inverseLengthUnits, field, input%alpha)
 
-    conv = 1.0_dp
     allocate(input%atomicRad(geo%nSpecies))
     call getChildValue(node, "Radii", value1, "AtomicRadii", child=child)
-    call getChild(value1, "", dummy, modifier=modifier)
-    call convertUnitHsd(char(modifier), lengthUnits, child, conv)
     call getNodeName(value1, buffer)
     select case(char(buffer))
     case default
@@ -437,10 +435,10 @@ contains
       allocate(atomicRadDefault(geo%nSpecies))
       atomicRadDefault(:) = getAtomicRad(geo%speciesNames)
       call readSpeciesList(value1, geo%speciesNames, input%atomicRad, default=atomicRadDefault,&
-          & conv=conv)
+          & units=lengthUnits)
       deallocate(atomicRadDefault)
     case("values")
-      call readSpeciesList(value1, geo%speciesNames, input%atomicRad, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, input%atomicRad, units=lengthUnits)
     end select
     if (any(input%atomicRad <= 0.0_dp)) then
       call detailedError(value1, "Atomic radii must be positive for all species")
@@ -554,14 +552,10 @@ contains
 
     type(string) :: buffer, modifier
     type(fnode), pointer :: child, value1, dummy
-    real(dp) :: conv
     real(dp), allocatable :: vdwRadDefault(:)
 
-    conv = 1.0_dp
     allocate(vdwRad(geo%nSpecies))
     call getChildValue(node, "Radii", value1, "vanDerWaalsRadiiD3", child=child)
-    call getChild(value1, "", dummy, modifier=modifier)
-    call convertUnitHsd(char(modifier), lengthUnits, child, conv)
     call getNodeName(value1, buffer)
     select case(char(buffer))
     case default
@@ -569,20 +563,23 @@ contains
     case("vanderwaalsradiid3")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusD3(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault,&
+          & units=lengthUnits)
       deallocate(vdwRadDefault)
     case("vanderwaalsradiicosmo")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusCosmo(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault,&
+          & units=lengthUnits)
       deallocate(vdwRadDefault)
     case("vanderwaalsradiibondi")
       allocate(vdwRadDefault(geo%nSpecies))
       vdwRadDefault(:) = getVanDerWaalsRadiusBondi(geo%speciesNames)
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, default=vdwRadDefault,&
+          & units=lengthUnits)
       deallocate(vdwRadDefault)
     case("values")
-      call readSpeciesList(value1, geo%speciesNames, vdwRad, conv=conv)
+      call readSpeciesList(value1, geo%speciesNames, vdwRad, units=lengthUnits)
     end select
 
   end subroutine readVanDerWaalsRad

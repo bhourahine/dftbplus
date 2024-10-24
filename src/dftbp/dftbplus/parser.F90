@@ -4399,7 +4399,7 @@ contains
     call getChild(node, "AtomicNumbers", child, requested=.false.)
     if (associated(child)) then
       allocate(input%izp(size(geo%speciesNames)))
-      call readSpeciesList(child, geo%speciesNames, input%izp, izpDefault)
+      call readSpeciesList(child, geo%speciesNames, input%izp, default=izpDefault)
       deallocate(izpDefault)
     else
       call move_alloc(izpDefault, input%izp)
@@ -4527,7 +4527,7 @@ contains
     call getChild(node, "AtomicNumbers", child, requested=.false.)
     if (associated(child)) then
       allocate(input%izp(size(geo%speciesNames)))
-      call readSpeciesList(child, geo%speciesNames, input%izp, izpDefault)
+      call readSpeciesList(child, geo%speciesNames, input%izp, default=izpDefault)
       deallocate(izpDefault)
     else
       call move_alloc(izpDefault, input%izp)
@@ -4594,7 +4594,7 @@ contains
     case default
       call detailedError(child, "Unknown method '"//char(buffer)//"' for chi")
     case ("defaults")
-      call readSpeciesList(value1, geo%speciesNames, input%chi, kChiDefault)
+      call readSpeciesList(value1, geo%speciesNames, input%chi, default=kChiDefault)
     case ("values")
       call readSpeciesList(value1, geo%speciesNames, input%chi)
     end select
@@ -4605,7 +4605,7 @@ contains
     case default
       call detailedError(child, "Unknown method '"//char(buffer)//"' for gam")
     case ("defaults")
-      call readSpeciesList(value1, geo%speciesNames, input%gam, kGamDefault)
+      call readSpeciesList(value1, geo%speciesNames, input%gam, default=kGamDefault)
     case ("values")
       call readSpeciesList(value1, geo%speciesNames, input%gam)
     end select
@@ -4616,7 +4616,7 @@ contains
     case default
       call detailedError(child, "Unknown method '"//char(buffer)//"' for kcn")
     case ("defaults")
-      call readSpeciesList(value1, geo%speciesNames, input%kcn, kKcnDefault)
+      call readSpeciesList(value1, geo%speciesNames, input%kcn, default=kKcnDefault)
     case ("values")
       call readSpeciesList(value1, geo%speciesNames, input%kcn)
     end select
@@ -4627,7 +4627,7 @@ contains
     case default
       call detailedError(child, "Unknown method '"//char(buffer)//"' for rad")
     case ("defaults")
-      call readSpeciesList(value1, geo%speciesNames, input%rad, kRadDefault)
+      call readSpeciesList(value1, geo%speciesNames, input%rad, default=kRadDefault)
     case ("values")
       call readSpeciesList(value1, geo%speciesNames, input%rad)
     end select
@@ -4700,7 +4700,7 @@ contains
       case("paulingen")
         allocate(kENDefault(geo%nSpecies))
         kENDefault(:) = getElectronegativity(geo%speciesNames)
-        call readSpeciesList(value2, geo%speciesNames, input%en, kENDefault)
+        call readSpeciesList(value2, geo%speciesNames, input%en, default=kENDefault)
         deallocate(kENDefault)
       case("values")
         call readSpeciesList(value2, geo%speciesNames, input%en)
@@ -4722,7 +4722,7 @@ contains
     case("covalentradiid3")
       allocate(kRadDefault(geo%nSpecies))
       kRadDefault(:) = getCovalentRadius(geo%speciesNames)
-      call readSpeciesList(value2, geo%speciesNames, input%covRad, kRadDefault)
+      call readSpeciesList(value2, geo%speciesNames, input%covRad, default=kRadDefault)
       deallocate(kRadDefault)
     case("values")
       call readSpeciesList(value2, geo%speciesNames, input%covRad)
