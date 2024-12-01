@@ -51,16 +51,19 @@ module dftbp_derivs_linearresponse
 contains
 
   !> Calculate the derivative of density matrix from derivative of hamiltonian at q=0, k=0
-  subroutine dRhoReal(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
-      & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eigVals, Ef, tempElec, orb,&
-      & dRhoSparse, dRhoSqr, hybridXc, over, nNeighbourCam, transform, species, dEi, dPsi, coord,&
-      & errStatus, omega, isHelical, eta)
+  subroutine dRhoReal(env, dHam, dOver, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
+      & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals, Ef, tempElec,&
+      & orb, dRhoSparse, dRhoSqr, hybridXc, over, nNeighbourCam, transform, species, dEi, dPsi,&
+      & coord, errStatus, omega, isHelical, eta)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
 
     !> Derivative of the hamiltonian
     real(dp), intent(in) :: dHam(:,:)
+
+    !> Derivative of the overlap, if relevant
+    real(dp), intent(in), allocatable :: dOver(:)
 
     !> List of neighbours for each atom
     type(TNeighbourList), intent(in) :: neighbourList
@@ -85,6 +88,9 @@ contains
 
     !> Ground state eigenvectors
     real(dp), intent(in) :: eigVecsReal(:,:,:)
+
+    !> Eigenvalue weighted eigenvectors
+    real(dp), intent(in), allocatable :: eCiReal(:,:,:)
 
     !> Eigenvalue of each level, kpoint and spin channel
     real(dp), intent(in) :: eigvals(:,:,:)
@@ -156,7 +162,7 @@ contains
     integer :: ii, iS, iK, iSignOmega
     logical :: isFreqDep
 
-    real(dp), allocatable :: workLocal(:, :)
+    real(dp), allocatable :: workLocal(:, :), work2Local(:,:), work4Local(:,:)
     complex(dp), allocatable :: cWorkLocal(:,:)
     real(dp), allocatable :: dRho(:,:)
     real(dp), allocatable :: eigVecsTransformed(:,:)
@@ -169,6 +175,8 @@ contains
 
     desc(:) = denseDesc%blacsOrbSqr
   #:endif
+
+    @:ASSERT(allocated(dOver) .eqv. allocated(eCiReal))
 
     if (present(isHelical)) then
       isHelical_ = isHelical
@@ -192,10 +200,12 @@ contains
       dPsi(:, :, iS) = 0.0_dp
     end if
 
-    allocate(workLocal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)))
-    workLocal(:,:) = 0.0_dp
-    allocate(dRho(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)))
-    dRho(:,:) = 0.0_dp
+    allocate(workLocal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
+    if (allocated(dOver)) then
+      allocate(work2Local(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
+
+    end if
+    allocate(dRho(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
 
     dRhoSparse(:) = 0.0_dp
 
@@ -214,9 +224,28 @@ contains
     call pblasfx_psymm(workLocal, denseDesc%blacsOrbSqr, eigVecsReal(:,:,iKS),&
         & denseDesc%blacsOrbSqr, dRho, denseDesc%blacsOrbSqr)
 
-    ! c_i times dH times c_i
+    if (allocated(dOver)) then
+      ! dS in square form
+      call unpackHSRealBlacs(env%blacs, dOver, neighbourList%iNeighbour, nNeighbourSK,&
+          & iSparseStart, img2CentCell, denseDesc, work2Local)
+
+      ! H' - e S' <c|
+      call pblasfx_psymm(work2Local, denseDesc%blacsOrbSqr, eCiReal(:,:,iKS),&
+          & denseDesc%blacsOrbSqr, dRho, denseDesc%blacsOrbSqr, alpha=-1.0_dp, beta=1.0_dp)
+    end if
+
+    ! |c> H' <c|
     call pblasfx_pgemm(eigVecsReal(:,:,iKS), denseDesc%blacsOrbSqr, dRho, denseDesc%blacsOrbSqr,&
         & workLocal, denseDesc%blacsOrbSqr, transa="T")
+
+    if (allocated(dOver)) then
+      ! |c> S' <c|, note not fully efficient, as could replace second operation with pointwise
+      ! product and sum along first index (distributed)
+      call pblasfx_psymm(work2Local, denseDesc%blacsOrbSqr, eigVecsReal(:,:,iKS),&
+          & denseDesc%blacsOrbSqr, work3local, denseDesc%blacsOrbSqr)
+      call pblasfx_pgemm(eigVecsReal(:,:,iKS), denseDesc%blacsOrbSqr, work3Local,&
+          & denseDesc%blacsOrbSqr, work4Local, denseDesc%blacsOrbSqr, transa="T")
+    end if
 
     eigvecsTransformed = eigVecsReal(:,:,iKS)
     call transform%generateUnitary(env, worklocal, eigvals(:,iK,iS), eigVecsTransformed, denseDesc,&
@@ -260,6 +289,11 @@ contains
           if (iGlob == jGlob) then
             !if (iGlob == jGlob) then workLocal(ii,jj) contains a derivative of an eigenvalue
             dEi(iGlob, iK, iS) = workLocal(ii,jj)
+          end if
+          if (iGlob == jGlob) then
+            workLocal(ii,jj) = -0.5_dp * work4Local(ii, jj)
+          else
+            workLocal(ii,jj) = workLocal(ii,jj) / (eigvals(jGlob,1,iS) - eigvals(iGlob,1,iS))
           end if
         end do
       end do
@@ -375,16 +409,26 @@ contains
       @:PROPAGATE_ERROR(errStatus)
     end if
 
-    ! form |c> H' <c|
+    ! form H' <c|
     call symm(workLocal, 'l', dRho, eigVecsReal(:,:,iS))
+
+    if (allocated(dOver)) then
+      ! include - e S' |c>
+      dRho(:,:) = 0.0_dp
+      call unpackHS(dRho, dOver, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+          & iSparseStart, img2CentCell)
+      call symm(workLocal, 'l', dRho, eCiReal(:,:,iS), alpha=-1.0_dp, beta=1.0_dp)
+    end if
+
+    ! form |c> H' <c| or |c> H' - e S' <c| depending on whether the overlap is changing
     workLocal(:,:) = matmul(transpose(eigVecsReal(:,:,iS)), workLocal)
 
-    ! orthogonalise degenerate states against perturbation, producing |c~> H' <c~|
+    ! orthogonalise degenerate states against the perturbation
     call transform%generateUnitary(workLocal, eigvals(:,iK,iS), errStatus)
     @:PROPAGATE_ERROR(errStatus)
     call transform%degenerateTransform(workLocal)
 
-    ! diagonal elements of workLocal are now derivatives of eigenvalues if needed
+    ! diagonal elements of workLocal are now derivatives of eigenvalues, if needed
     if (allocated(dEi)) then
       do ii = 1, nOrb
         dEi(ii, iK, iS) = workLocal(ii,ii)
@@ -601,6 +645,8 @@ contains
 
   #:else
 
+    ! evaluate the change in occupation at the Fermi energy due to a change in the chemical
+    ! potential for each eigenstate and build the resulting change in the density matrix
     do iFilled = nEmpty(iS, 1), nFilled(iS, 1)
       workReal(:, iFilled) = eigVecsReal(:, iFilled, iS) * &
           & deltamn(eigvals(iFilled, 1, iS), Ef(iS), tempElec) * dE_F(iS)
