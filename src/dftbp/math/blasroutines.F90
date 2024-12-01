@@ -1006,7 +1006,12 @@ contains
     if (present(n)) then
       in = n
     else
-      in = size(C,dim=2)
+      if (side == 'r' .or. side == 'R') then
+        in = size(A,dim=2)
+      else
+        in = size(B,dim=2)
+      end if
+      !in = size(C,dim=2)
     end if
     if (present(m)) then
       im = m

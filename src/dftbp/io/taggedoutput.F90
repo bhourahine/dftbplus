@@ -212,6 +212,9 @@ module dftbp_io_taggedoutput
     !> Static net charge (onsite) response with respect to potential at an atom
     character(lenLabel) :: dqnetdV = 'dqnetdV'
 
+    !> Derivatives of gross atomic charges wrt. x
+    character(lenLabel) :: dqdx = 'dqdx'
+
     !> two-electron addition/removal energies in ppRPA formalism
     character(lenLabel) :: egyppRPA = '2e_add-rem_energies'
 
