@@ -181,6 +181,7 @@ contains
     nSpin = size(ham,dim=2)
 
     if (isInputZero) then
+      ham(:,:) = 0.0_dp
       call distributeRangeWithWorkload(env, 1, nAtom, nNeighbour, iterIndices)
     else
       !> If input is not zero everywhere, we have to compute in serial here, otherwise
