@@ -434,8 +434,8 @@ contains
             & sccTol, isSccConvRequired, maxSccIter, pChrgMixer, nMixElements, nIneqMixElements,&
             & dqIn, dqOut(:,:,:,iCart), hybridXc, nNeighbourCam, sSqrReal, dRhoInSqr, dRhoOutSqr,&
             & dRhoIn, dRhoOut, nSpin, maxFill, spinW, thirdOrd, dftbU, iEqBlockDftbu, onsMEs,&
-            & iEqBlockOnSite, dqBlockIn, dqBlockOut, eigVals, transform, dEiTmp, dEfdETmp, Ef,&
-            & this%isEfFixed, dHam, idHam, dRho, idRho, tempElec, tMetallic, neFermi, nFilled,&
+            & iEqBlockOnSite, dqBlockIn, dqBlockOut, eigVals, transform, dEiTmp, dEfdETmp, filling,&
+            & Ef, this%isEfFixed, dHam, idHam, dRho, idRho, tempElec, tMetallic, neFermi, nFilled,&
             & nEmpty, kPoint, kWeight, cellVec, iCellVec, eigVecsReal, eigVecsCplx, dPsiReal,&
             & dPsiCmplx, coord, errStatus, omega(iOmega), dDipole=polarisability(:, iCart, iOmega),&
             & eta=this%eta)
@@ -775,10 +775,10 @@ contains
             & sccTol, isSccRequired, nIter, pChrgMixer, nMixElements, nIneqMixElements, dqIn,&
             & dqOut, hybridXc, nNeighbourCam, sSqrReal, dRhoInSqr, dRhoOutSqr, dRhoIn, dRhoOut,&
             & nSpin, maxFill, spinW, thirdOrd, dftbU, iEqBlockDftbu, onsMEs, iEqBlockOnSite,&
-            & dqBlockIn, dqBlockOut, eigVals, transform, dEi, dEf, Ef, this%isEfFixed, dHam, idHam,&
-            & dRho, idRho, tempElec, tMetallic, neFermi, nFilled, nEmpty, kPoint, kWeight, cellVec,&
-            & iCellVec, eigVecsReal, eigVecsCplx, dPsiReal, dPsiCmplx, coord, errStatus,&
-            & omega(iOmega), isHelical=isHelical, eta=this%eta)
+            & dqBlockIn, dqBlockOut, eigVals, transform, dEi, dEf, filling, Ef, this%isEfFixed,&
+            & dHam, idHam, dRho, idRho, tempElec, tMetallic, neFermi, nFilled, nEmpty, kPoint,&
+            & kWeight, cellVec, iCellVec, eigVecsReal, eigVecsCplx, dPsiReal, dPsiCmplx, coord,&
+            & errStatus, omega(iOmega), isHelical=isHelical, eta=this%eta)
           @:PROPAGATE_ERROR(errStatus)
 
       #:if WITH_SCALAPACK
@@ -871,9 +871,9 @@ contains
       & isSccConvRequired, maxSccIter, pChrgMixer, nMixElements, nIneqMixElements, dqIn, dqOut,&
       & hybridXc, nNeighbourCam, sSqrReal, dRhoInSqr, dRhoOutSqr, dRhoIn, dRhoOut, nSpin, maxFill,&
       & spinW, thirdOrd, dftbU, iEqBlockDftbu, onsMEs, iEqBlockOnSite, dqBlockIn, dqBlockOut,&
-      & eigVals, transform, dEi, dEf, Ef, isEfFixed, dHam, idHam, dRho, idRho, tempElec, tMetallic,&
-      & neFermi, nFilled, nEmpty, kPoint, kWeight, cellVec, iCellVec, eigVecsReal, eigVecsCplx,&
-      & dPsiReal, dPsiCmplx, coord, errStatus, omega, dDipole, isHelical, eta)
+      & eigVals, transform, dEi, dEf, filling, Ef, isEfFixed, dHam, idHam, dRho, idRho, tempElec,&
+      & tMetallic, neFermi, nFilled, nEmpty, kPoint, kWeight, cellVec, iCellVec, eigVecsReal,&
+      & eigVecsCplx, dPsiReal, dPsiCmplx, coord, errStatus, omega, dDipole, isHelical, eta)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -1008,6 +1008,9 @@ contains
     !> Electron temperature
     real(dp), intent(in) :: tempElec
 
+    !> Filling of levels
+    real(dp), intent(in) :: filling(:,:,:)
+
     !> Fermi level(s)
     real(dp), intent(in) :: Ef(:)
 
@@ -1093,7 +1096,10 @@ contains
     real(dp) :: dqDiffRed(nMixElements)
 
     real(dp), allocatable :: dqInBackup(:,:,:), dqBlockInBackup(:,:,:,:), dRhoInBackup(:)
-    real(dp) :: qnan
+    real(dp) :: quietNan
+
+    ! temporary dumy variables for perturbation routine, as overlap not changing
+    real(dp), allocatable :: dOver(:), eCiReal(:,:,:)
 
     tSccCalc = allocated(sccCalc)
 
@@ -1237,10 +1243,10 @@ contains
             dRhoOutSqr(:,:,iS) = dRhoInSqr(:,:,iS)
           end if
 
-          call dRhoReal(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
-              & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eigVals, Ef, tempElec,&
-              & orb, drho(:,iS), dRhoOutSqr, hybridXc, over, nNeighbourCam, transform(iKS),&
-              & species, dEi, dPsiReal, coord, errStatus, omega, isHelical, eta=eta)
+          call dRhoReal(env, dHam, dOver, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
+              & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals,&
+              & filling, Ef, tempElec, orb, drho(:,iS), dRhoOutSqr, hybridXc, over, nNeighbourCam,&
+              & transform(iKS), species, dEi, dPsiReal, coord, errStatus, omega, isHelical, eta=eta)
           if (errStatus%hasError()) then
             exit
           end if
@@ -1492,15 +1498,15 @@ contains
         @:RAISE_ERROR(errStatus, -1, "SCC in perturbation is NOT converged, maximal SCC&
             & iterations exceeded")
       else
-        qnan = ieee_value(1.0_dp, ieee_quiet_nan)
-        dRho(:,:) = qnan
-        dqOut(:,:,:) = qnan
-        if (allocated(idRho)) idRho(:,:) = qnan
-        if (allocated(dEi)) dEi(:,:,:) = qnan
-        if (allocated(dEf)) dEf(:) = qnan
-        if (allocated(dqBlockOut)) dqBlockOut(:,:,:,:) = qnan
-        if (allocated(dPsiReal)) dPsiReal(:,:,:) = qnan
-        if (allocated(dPsiCmplx)) dPsiCmplx(:,:,:,:) = qnan
+        quietNan = ieee_value(1.0_dp, ieee_quiet_nan)
+        dRho(:,:) = quietNan
+        dqOut(:,:,:) = quietNan
+        if (allocated(idRho)) idRho(:,:) = quietNan
+        if (allocated(dEi)) dEi(:,:,:) = quietNan
+        if (allocated(dEf)) dEf(:) = quietNan
+        if (allocated(dqBlockOut)) dqBlockOut(:,:,:,:) = quietNan
+        if (allocated(dPsiReal)) dPsiReal(:,:,:) = quietNan
+        if (allocated(dPsiCmplx)) dPsiCmplx(:,:,:,:) = quietNan
         ! restore back-ups of the input charges/density matrix in case the iteration fails
         dqIn(:,:,:) = dqInBackup
         if (allocated(dqBlockIn)) then
