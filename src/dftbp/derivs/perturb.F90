@@ -1093,7 +1093,10 @@ contains
     real(dp) :: dqDiffRed(nMixElements)
 
     real(dp), allocatable :: dqInBackup(:,:,:), dqBlockInBackup(:,:,:,:), dRhoInBackup(:)
-    real(dp) :: qnan
+    real(dp) :: quietNan
+
+    ! temporary dumy variables for perturbation routine, as overlap not changing
+    real(dp), allocatable :: dOver(:), eCiReal(:,:,:)
 
     tSccCalc = allocated(sccCalc)
 
@@ -1237,10 +1240,10 @@ contains
             dRhoOutSqr(:,:,iS) = dRhoInSqr(:,:,iS)
           end if
 
-          call dRhoReal(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
-              & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eigVals, Ef, tempElec,&
-              & orb, drho(:,iS), dRhoOutSqr, hybridXc, over, nNeighbourCam, transform(iKS),&
-              & species, dEi, dPsiReal, coord, errStatus, omega, isHelical, eta=eta)
+          call dRhoReal(env, dHam, dOver, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
+              & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals, Ef,&
+              & tempElec, orb, drho(:,iS), dRhoOutSqr, hybridXc, over, nNeighbourCam,&
+              & transform(iKS), species, dEi, dPsiReal, coord, errStatus, omega, isHelical, eta=eta)
           if (errStatus%hasError()) then
             exit
           end if
@@ -1492,15 +1495,15 @@ contains
         @:RAISE_ERROR(errStatus, -1, "SCC in perturbation is NOT converged, maximal SCC&
             & iterations exceeded")
       else
-        qnan = ieee_value(1.0_dp, ieee_quiet_nan)
-        dRho(:,:) = qnan
-        dqOut(:,:,:) = qnan
-        if (allocated(idRho)) idRho(:,:) = qnan
-        if (allocated(dEi)) dEi(:,:,:) = qnan
-        if (allocated(dEf)) dEf(:) = qnan
-        if (allocated(dqBlockOut)) dqBlockOut(:,:,:,:) = qnan
-        if (allocated(dPsiReal)) dPsiReal(:,:,:) = qnan
-        if (allocated(dPsiCmplx)) dPsiCmplx(:,:,:,:) = qnan
+        quietNan = ieee_value(1.0_dp, ieee_quiet_nan)
+        dRho(:,:) = quietNan
+        dqOut(:,:,:) = quietNan
+        if (allocated(idRho)) idRho(:,:) = quietNan
+        if (allocated(dEi)) dEi(:,:,:) = quietNan
+        if (allocated(dEf)) dEf(:) = quietNan
+        if (allocated(dqBlockOut)) dqBlockOut(:,:,:,:) = quietNan
+        if (allocated(dPsiReal)) dPsiReal(:,:,:) = quietNan
+        if (allocated(dPsiCmplx)) dPsiCmplx(:,:,:,:) = quietNan
         ! restore back-ups of the input charges/density matrix in case the iteration fails
         dqIn(:,:,:) = dqInBackup
         if (allocated(dqBlockIn)) then
