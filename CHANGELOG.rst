@@ -49,6 +49,8 @@ Added
   and support for the divide and conquer and relatively robust LAPACK
   solvers
 
+- Linear response derivatives for atom positions (DFTB1/DFTB2 only)
+
 
 Changed
 -------
@@ -60,6 +62,7 @@ Changed
 
 - Removes SCC keyword if using hybrid functionals (as these should always
   be SCC)
+
 
 Fixed
 -----

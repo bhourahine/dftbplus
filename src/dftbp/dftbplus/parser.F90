@@ -5238,12 +5238,15 @@ contains
       ! electric field polarisability of system
       call getChild(node, "Polarisability", child=child, requested=.false.)
       if (associated(child)) then
+        if (.not.allocated(ctrl%perturbInp)) allocate(ctrl%perturbInp)
         ctrl%perturbInp%isEPerturb = .true.
         call freqRanges(child, ctrl%perturbInp%dynEFreq)
       end if
 
+      ! Perturbation with respect to on-site potentials (related to Fukui charges)
       call getChild(node, "ResponseKernel", child=child, requested=.false.)
       if (associated(child)) then
+        if (.not.allocated(ctrl%perturbInp)) allocate(ctrl%perturbInp)
         ctrl%perturbInp%isRespKernelPert = .true.
         if (ctrl%tSCC) then
           call getChildValue(child, "RPA", ctrl%perturbInp%isRespKernelRPA, .false.)
@@ -5253,13 +5256,22 @@ contains
         call freqRanges(child, ctrl%perturbInp%dynKernelFreq)
       end if
 
+      ! Perturbation with respect to atom positions
+      call getChild(node, "CoordDerivatives", child=child, requested=.false.)
+      if (associated(child)) then
+        if (.not.allocated(ctrl%perturbInp)) allocate(ctrl%perturbInp)
+        ctrl%perturbInp%isAtomCoordPerturb = .true.
+      end if
+
       if (allocated(ctrl%perturbInp)) then
+
         call getChildValue(node, "PertubDegenTol", ctrl%perturbInp%tolDegenDFTBPT, 128.0_dp,&
             & child=child)
         if (ctrl%perturbInp%tolDegenDFTBPT < 1.0_dp) then
-          call detailedError(child, "Perturbation degeneracy tolerance must be above 1x")
+          call detailedError(child, "Perturbation degeneracy tolerance must be above x1 factor")
         end if
         ctrl%perturbInp%tolDegenDFTBPT = ctrl%perturbInp%tolDegenDFTBPT * epsilon(0.0_dp)
+
         isEtaNeeded = .false.
         if (allocated(ctrl%perturbInp%dynEFreq)) then
           if (any(ctrl%perturbInp%dynEFreq /= 0.0_dp)) then
@@ -5279,6 +5291,7 @@ contains
                 & small")
           end if
         end if
+
       end if
 
       if (allocated(ctrl%perturbInp)) then
