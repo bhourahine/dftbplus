@@ -52,9 +52,9 @@ contains
 
   !> Calculate the derivative of density matrix from derivative of hamiltonian at q=0, k=0
   subroutine dRhoReal(env, dHam, dOver, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
-      & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals, Ef, tempElec,&
-      & orb, dRhoSparse, dRhoSqr, hybridXc, over, nNeighbourCam, transform, species, dEi, dPsi,&
-      & coord, errStatus, omega, isHelical, eta)
+      & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals, filling, Ef,&
+      & tempElec, orb, dRhoSparse, dRhoSqr, hybridXc, over, nNeighbourCam, transform, species,&
+      & dEi, dPsi, coord, errStatus, omega, isHelical, eta)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -94,6 +94,9 @@ contains
 
     !> Eigenvalue of each level, kpoint and spin channel
     real(dp), intent(in) :: eigvals(:,:,:)
+
+    !> Filling
+    real(dp), intent(in) :: filling(:,:,:)
 
     !> Fermi level(s)
     real(dp), intent(in) :: Ef(:)
@@ -162,7 +165,7 @@ contains
     integer :: ii, iS, iK, iSignOmega
     logical :: isFreqDep
 
-    real(dp), allocatable :: workLocal(:, :), work2Local(:,:), work4Local(:,:)
+    real(dp), allocatable :: workLocal(:, :), work2Local(:,:), work3Local(:,:), work4Local(:,:)
     complex(dp), allocatable :: cWorkLocal(:,:)
     real(dp), allocatable :: dRho(:,:)
     real(dp), allocatable :: eigVecsTransformed(:,:)
@@ -203,7 +206,7 @@ contains
     allocate(workLocal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
     if (allocated(dOver)) then
       allocate(work2Local(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
-
+      allocate(work3Local(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
     end if
     allocate(dRho(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
 
@@ -504,6 +507,20 @@ contains
 
     end if
 
+    if (allocated(dOver)) then
+      ! include  - |c> S' <c|
+      do ii = 1, nFilled(iS, 1)
+        workLocal(:, ii) = filling(ii, 1, iS) * eigvecsTransformed(:,ii)
+      end do
+      call unpackHS(work2Local, dOver, neighbourList%iNeighbour, nNeighbourSK,&
+          & denseDesc%iAtomStart, iSparseStart, img2CentCell)
+      call symm(work3Local, 'l', work2Local, workLocal(:, :nFilled(iS, 1)))
+      dRho(:,:) = dRho(:,:) - 0.25_dp * matmul(work3Local(:, :nFilled(iS, 1)),&
+          & transpose(eigvecsTransformed(:,:nFilled(iS, 1))))&
+          & + matmul(eigvecsTransformed(:, :nFilled(iS, 1)),&
+          & transpose(work3Local(:,:nFilled(iS, 1))))
+    end if
+
     if (isHelical_) then
       call packHelicalHS(dRhoSparse, dRho, neighbourlist%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iSparseStart, img2CentCell, orb, species, coord)
@@ -519,7 +536,6 @@ contains
   #:endif
 
   end subroutine dRhoReal
-
 
 
   !> Calculate the change in the density matrix due to shift in the Fermi energy for real, q=0
