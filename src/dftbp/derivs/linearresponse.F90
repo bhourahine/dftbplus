@@ -293,11 +293,6 @@ contains
             !if (iGlob == jGlob) then workLocal(ii,jj) contains a derivative of an eigenvalue
             dEi(iGlob, iK, iS) = workLocal(ii,jj)
           end if
-          if (iGlob == jGlob) then
-            workLocal(ii,jj) = -0.5_dp * work4Local(ii, jj)
-          else
-            workLocal(ii,jj) = workLocal(ii,jj) / (eigvals(jGlob,1,iS) - eigvals(iGlob,1,iS))
-          end if
         end do
       end do
     end if
@@ -383,6 +378,12 @@ contains
       if (associated(dRhoSqr)) then
         dRhoSqr(:,:,iS) = dRho
       end if
+
+    end if
+
+    if (allocated(dOver)) then
+      ! include  - |c> S' <c|
+      dRho(:,:) = 0.0_dp
 
     end if
 
