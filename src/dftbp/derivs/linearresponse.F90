@@ -232,7 +232,7 @@ contains
       call unpackHSRealBlacs(env%blacs, dOver, neighbourList%iNeighbour, nNeighbourSK,&
           & iSparseStart, img2CentCell, denseDesc, work2Local)
 
-      ! H' - e S' <c|
+      ! H' - e S' |c>
       call pblasfx_psymm(work2Local, denseDesc%blacsOrbSqr, eCiReal(:,:,iKS),&
           & denseDesc%blacsOrbSqr, dRho, denseDesc%blacsOrbSqr, alpha=-1.0_dp, beta=1.0_dp)
     end if
@@ -242,7 +242,7 @@ contains
         & workLocal, denseDesc%blacsOrbSqr, transa="T")
 
     if (allocated(dOver)) then
-      ! |c> S' <c|, note not fully efficient, as could replace second operation with pointwise
+      ! <c| S' |c>, note not fully efficient, as could replace second operation with pointwise
       ! product and sum along first index (distributed)
       call pblasfx_psymm(work2Local, denseDesc%blacsOrbSqr, eigVecsReal(:,:,iKS),&
           & denseDesc%blacsOrbSqr, work3local, denseDesc%blacsOrbSqr)
@@ -307,8 +307,8 @@ contains
 
         ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
         ! the elements
-        call weightMatrix(env, desc, cWorkLocal, workLocal, nFilled, nEmpty, eigVals, tempElec, iS,&
-            & iK, Ef, iSignOmega * omega + eta)
+        call weightMatrix(env, desc, cWorkLocal, workLocal, nFilled, nEmpty, allocated(dOver),&
+            & eigVals, tempElec, iS, iK, Ef, iSignOmega * omega + eta)
 
         ! Derivatives of eigenvectors
         cWorkLocal2(:,:) = eigvecsTransformed
@@ -348,8 +348,8 @@ contains
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
       ! the elements
-      call weightMatrix(env, desc, workLocal, workLocal, nFilled, nEmpty, eigVals, tempElec, iS, 1,&
-          & Ef)
+      call weightMatrix(env, desc, workLocal, workLocal, nFilled, nEmpty, allocated(dOver),&
+          & eigVals, tempElec, iS, 1, Ef)
 
       ! Derivatives of eigenvectors
       call pblasfx_pgemm(eigvecsTransformed, denseDesc%blacsOrbSqr, workLocal,&
@@ -388,8 +388,8 @@ contains
     end if
 
   #:else
+    #! serial case
 
-    ! serial case
     nOrb = size(dRho, dim = 1)
 
     ! dH matrix in square form
@@ -413,18 +413,18 @@ contains
       @:PROPAGATE_ERROR(errStatus)
     end if
 
-    ! form H' <c|
+    ! form | H' |c>
     call symm(workLocal, 'l', dRho, eigVecsReal(:,:,iS))
 
     if (allocated(dOver)) then
-      ! include - e S' |c>
+      ! include | - e_i S' |c_i>
       dRho(:,:) = 0.0_dp
       call unpackHS(dRho, dOver, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
           & iSparseStart, img2CentCell)
       call symm(workLocal, 'l', dRho, eCiReal(:,:,iS), alpha=-1.0_dp, beta=1.0_dp)
     end if
 
-    ! form |c> H' <c| or |c> H' - e S' <c| depending on whether the overlap is changing
+    ! form <c| H' |c> or <c| H' - e S' |c> depending on whether the overlap is changing
     workLocal(:,:) = matmul(transpose(eigVecsReal(:,:,iS)), workLocal)
 
     ! orthogonalise degenerate states against the perturbation
@@ -445,6 +445,7 @@ contains
 
       allocate(cWorkLocal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)))
 
+      ! In casre of degeneracies
       eigvecsTransformed = eigVecsReal(:,:,iS)
       call transform%applyUnitary(eigvecsTransformed)
 
@@ -454,8 +455,8 @@ contains
 
         ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
         ! the elements at freqency omega
-        call weightMatrix(cWorkLocal, workLocal, nFilled, nEmpty, transform, eigVals, tempElec, iS,&
-            & 1, nOrb, Ef, iSignOmega * omega + eta)
+        call weightMatrix(cWorkLocal, workLocal, nFilled, nEmpty, allocated(dOver), transform,&
+            & eigVals, tempElec, iS, 1, nOrb, Ef, iSignOmega * omega + eta)
 
         ! calculate the derivatives of the eigenvectors
         cWorkLocal(:, :nFilled(iS, 1)) =&
@@ -479,12 +480,14 @@ contains
       dRho(:,:) = 0.5_dp * dRho + 0.5_dp * transpose(dRho)
 
     else
+      ! Frequency independent
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
       ! the elements
-      call weightMatrix(workLocal, workLocal, nFilled, nEmpty, transform, eigVals, tempElec, iS,&
-          & 1, nOrb, Ef)
+      call weightMatrix(workLocal, workLocal, nFilled, nEmpty, allocated(dOver), transform,&
+          & eigVals, tempElec, iS, 1, nOrb, Ef)
 
+      ! In case of degeneracies
       eigvecsTransformed = eigVecsReal(:,:,iS)
       call transform%applyUnitary(eigvecsTransformed)
 
@@ -917,8 +920,8 @@ contains
 
       do iSignOmega = -1, 1, 2 ! loop over positive and negative frequencies
 
-        call weightMatrix(env, desc, cWorkLocal, workLocal, nFilled, nEmpty, eigVals, tempElec, iS,&
-            & iK, Ef, iSignOmega * omega + eta)
+        call weightMatrix(env, desc, cWorkLocal, workLocal, nFilled, nEmpty, .false., eigVals,&
+            & tempElec, iS, iK, Ef, iSignOmega * omega + eta)
 
         ! Derivatives of eigenvectors
         cWorkLocal2(:,:) = eigvecsTransformed
@@ -954,8 +957,8 @@ contains
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
       ! the elements
-      call weightMatrix(env, desc, workLocal, workLocal, nFilled, nEmpty, eigVals, tempElec, iS,&
-          & iK, Ef)
+      call weightMatrix(env, desc, workLocal, workLocal, nFilled, nEmpty, .false., eigVals,&
+          & tempElec, iS, iK, Ef)
 
       ! Derivatives of eigenvectors
       call pblasfx_pgemm(eigvecsTransformed, denseDesc%blacsOrbSqr, workLocal,&
@@ -1030,8 +1033,8 @@ contains
 
         ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
         ! the elements at frequency omega
-        call weightMatrix(cWorkLocal, workLocal, nFilled, nEmpty, transform, eigVals, tempElec, iS,&
-            & iK, nOrb, Ef, iSignOmega * omega + eta)
+        call weightMatrix(cWorkLocal, workLocal, nFilled, nEmpty, .false., transform, eigVals,&
+            & tempElec, iS, iK, nOrb, Ef, iSignOmega * omega + eta)
 
         ! calculate the derivatives of the eigenvectors
         cWorkLocal(:, :nFilled(iS, iK)) =&
@@ -1056,8 +1059,8 @@ contains
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by
       ! weighting the elements
-      call weightMatrix(workLocal, workLocal, nFilled, nEmpty, transform, eigVals, tempElec, iS,&
-          & iK, nOrb, Ef)
+      call weightMatrix(workLocal, workLocal, nFilled, nEmpty, .false., transform, eigVals,&
+          & tempElec, iS, iK, nOrb, Ef)
 
       eigvecsTransformed = eigVecsCplx(:,:,iKS)
       call transform%applyUnitary(eigvecsTransformed)
@@ -1499,8 +1502,8 @@ contains
 
       do iSignOmega = -1, 1, 2 ! loop over positive and negative frequencies
 
-        call weightMatrix(env, desc, cWorkLocal2, cWorkLocal, nFilled, nEmpty, eigVals, tempElec,&
-            & iS, iK, Ef, iSignOmega * omega + eta)
+        call weightMatrix(env, desc, cWorkLocal2, cWorkLocal, nFilled, nEmpty, .false., eigVals,&
+            & tempElec, iS, iK, Ef, iSignOmega * omega + eta)
 
         ! Derivatives of eigenvectors
         call pblasfx_pgemm(eigvecsTransformed, denseDesc%blacsOrbSqr, cWorkLocal2,&
@@ -1526,8 +1529,8 @@ contains
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
       ! the elements
-      call weightMatrix(env, desc, cWorkLocal, cWorkLocal, nFilled, nEmpty, eigVals, tempElec, iS,&
-          & iK, Ef)
+      call weightMatrix(env, desc, cWorkLocal, cWorkLocal, nFilled, nEmpty, .false., eigVals,&
+          & tempElec, iS, iK, Ef)
 
       ! Derivatives of eigenvectors
       call pblasfx_pgemm(eigvecsTransformed, denseDesc%blacsOrbSqr, cWorkLocal,&
@@ -1587,8 +1590,8 @@ contains
 
         ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by
         ! weighting the elements at frequency omega
-        call weightMatrix(cWorkLocal2, cWorkLocal, nFilled, nEmpty, transform, eigVals, tempElec,&
-            & iS, iK, nOrb, Ef, iSignOmega * omega + eta)
+        call weightMatrix(cWorkLocal2, cWorkLocal, nFilled, nEmpty, .false., transform, eigVals,&
+            & tempElec, iS, iK, nOrb, Ef, iSignOmega * omega + eta)
 
         ! calculate the derivatives of the eigenvectors
         cWorkLocal2(:, :nFilled(iS, iK)) =&
@@ -1614,8 +1617,8 @@ contains
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by
       ! weighting the elements
-      call weightMatrix(cWorkLocal, cWorkLocal, nFilled, nEmpty, transform, eigVals, tempElec, iS,&
-          & iK, nOrb, Ef)
+      call weightMatrix(cWorkLocal, cWorkLocal, nFilled, nEmpty, .false., transform, eigVals,&
+          & tempElec, iS, iK, nOrb, Ef)
 
       eigvecsTransformed = eigVecsCplx(:,:,iKS)
       call transform%applyUnitary(eigvecsTransformed)
@@ -1847,9 +1850,9 @@ contains
 
   #:for SUFFIX, INVAR, OUTVAR in [('RR', 'real', 'real'), ('CC', 'complex', 'complex')]
 
-  !> Weight |c>H<c| by inverse of eigenvalue differences
-  subroutine static_${SUFFIX}$_weight(env, desc, workOut, workIn, nFilled, nEmpty, eigVals,&
-      & tempElec, iS, iK, Ef)
+  !> Weight <c|H|c> by inverse of eigenvalue differences
+  subroutine static_${SUFFIX}$_weight(env, desc, workOut, workIn, nFilled, nEmpty,&
+      & isDifferentiatingOver, eigVals, tempElec, iS, iK, Ef)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -1868,6 +1871,9 @@ contains
 
     !> First (partly) empty level in each spin channel
     integer, intent(in) :: nEmpty(:, :)
+
+    !> Is the overlap matrix also changing?
+    logical, intent(in) :: isDifferentiatingOver
 
     !> Eigenvalue of each level, kpoint and spin channel
     real(dp), intent(in) :: eigvals(:,:,:)
@@ -1897,7 +1903,7 @@ contains
       do ii = 1, size(workIn,dim=1)
         iGlob = scalafx_indxl2g(ii, desc(MB_), env%blacs%orbitalGrid%myrow, desc(RSRC_),&
             & env%blacs%orbitalGrid%nrow)
-        if (iGlob < nEmpty(iS, iK)) then
+        if (iGlob < nEmpty(iS, iK) .and. .not. isDifferentiatingOver) then
           workOut(ii, :) = 0.0_dp
           cycle
         end if
@@ -1920,8 +1926,8 @@ contains
   #:for SUFFIX, INVAR, OUTVAR in [('RC', 'real', 'complex'), ('CC', 'complex', 'complex')]
 
   !> Weight |c>H<c| by inverse of eigenvalue differences at finite frequency
-  subroutine dynamic_${SUFFIX}$_weight(env, desc, workOut, workIn, nFilled, nEmpty, eigVals,&
-      & tempElec, iS, iK, Ef, eta)
+  subroutine dynamic_${SUFFIX}$_weight(env, desc, workOut, workIn, nFilled, nEmpty,&
+      & isDifferentiatingOver, eigVals, tempElec, iS, iK, Ef, eta)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -1940,6 +1946,9 @@ contains
 
     !> First (partly) empty level in each spin channel
     integer, intent(in) :: nEmpty(:, :)
+
+    !> Is the overlap matrix also changing?
+    logical, intent(in) :: isDifferentiatingOver
 
     !> Eigenvalue of each level, kpoint and spin channel
     real(dp), intent(in) :: eigvals(:,:,:)
@@ -1972,7 +1981,7 @@ contains
       do ii = 1, size(workIn,dim=1)
         iGlob = scalafx_indxl2g(ii, desc(MB_), env%blacs%orbitalGrid%myrow, desc(RSRC_),&
             & env%blacs%orbitalGrid%nrow)
-        if (iGlob < nEmpty(iS, iK)) then
+        if (iGlob < nEmpty(iS, iK) .and. .not. isDifferentiatingOver) then
           workOut(ii, :) = 0.0_dp
           cycle
         end if
@@ -1997,8 +2006,8 @@ contains
   #:for SUFFIX, INVAR, OUTVAR in [('RR', 'real', 'real'), ('CC', 'complex', 'complex')]
 
   !> Weight |c>H<c| by inverse of eigenvalue differences
-  pure subroutine static_${SUFFIX}$_weight(workOut, workIn, nFilled, nEmpty, transform, eigVals,&
-      & tempElec, iS, iK, nLevels, Ef)
+  pure subroutine static_${SUFFIX}$_weight(workOut, workIn, nFilled, nEmpty, isDifferentiatingOver,&
+      & transform, eigVals, tempElec, iS, iK, nLevels, Ef)
 
     !> |c>H<c| / (ei-ej) matrix
     ${OUTVAR}$(dp), intent(inout) :: workOut(:, :)
@@ -2011,6 +2020,9 @@ contains
 
     !> First (partly) empty level in each spin channel
     integer, intent(in) :: nEmpty(:, :)
+
+    !> Is the overlap matrix also changing?
+    logical, intent(in) :: isDifferentiatingOver
 
     !> Transformation structure for degenerate orbitals
     type(TRotateDegen), intent(in) :: transform
@@ -2033,12 +2045,18 @@ contains
     !> Fermi level
     real(dp), intent(in) :: Ef(:)
 
-    integer :: iFilled, iEmpty
+    integer :: iFilled, iEmpty, iStart
+
+    if (isDifferentiatingOver) then
+      iStart = 1
+    else
+      iStart = nEmpty(iS, iK)
+    end if
 
     ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
     ! the elements
     do iFilled = 1, nFilled(iS, iK)
-      do iEmpty = nEmpty(iS, iK), nLevels
+      do iEmpty = iStart, nLevels
         if (.not.transform%degenerate(iFilled,iEmpty) .or. iEmpty == iFilled) then
           workOut(iEmpty, iFilled) = workIn(iEmpty, iFilled)&
               & * theta(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), tempElec)&
@@ -2057,8 +2075,8 @@ contains
   #:for SUFFIX, INVAR, OUTVAR in [('RC', 'real', 'complex'), ('CC', 'complex', 'complex')]
 
   !> Weight |c>H<c| by inverse of eigenvalue differences at finite frequency
-  pure subroutine dynamic_${SUFFIX}$_weight(workOut, workIn, nFilled, nEmpty, transform, eigVals,&
-      & tempElec, iS, iK, nLevels, Ef, eta)
+  pure subroutine dynamic_${SUFFIX}$_weight(workOut, workIn, nFilled, nEmpty,&
+      & isDifferentiatingOver, transform, eigVals, tempElec, iS, iK, nLevels, Ef, eta)
 
     !> |c>H<c| / (ei-ej) matrix
     ${OUTVAR}$(dp), intent(inout) :: workOut(:, :)
@@ -2071,6 +2089,9 @@ contains
 
     !> First (partly) empty level in each spin channel
     integer, intent(in) :: nEmpty(:, :)
+
+    !> Is the overlap matrix also changing?
+    logical, intent(in) :: isDifferentiatingOver
 
     !> Transformation structure for degenerate orbitals
     type(TRotateDegen), intent(in) :: transform
@@ -2096,19 +2117,25 @@ contains
     !> Fermi level
     real(dp), intent(in) :: Ef(:)
 
-    integer :: iFilled, iEmpty
+    integer :: iFilled, iEmpty, iStart
+
+    if (isDifferentiatingOver) then
+      iStart = 1
+    else
+      iStart = nEmpty(iS, iK)
+    end if
 
     ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
     ! the elements at frequency (plus imaginary constant) eta
     do iFilled = 1, nFilled(iS, iK)
-      do iEmpty = nEmpty(iS, iK), nLevels
+      do iEmpty = iStart, nLevels
         if (.not.transform%degenerate(iFilled,iEmpty) .or. iEmpty == iFilled) then
           workOut(iEmpty, iFilled) = workIn(iEmpty, iFilled)&
               & * theta(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), tempElec)&
               & * invDiff(eigvals(iFilled, iK, iS), eigvals(iEmpty, iK, iS), Ef(iS), tempElec,&
               & eta)
         else
-          ! rotation should already have set these elements to zero
+          ! Degeneracy rotation should already have set these elements to zero
           workOut(iEmpty, iFilled) = 0.0_dp
         end if
       end do
