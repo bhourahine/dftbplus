@@ -25,7 +25,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_derivs_numderivs2, only : TNumDerivs, create
   use dftbp_derivs_perturb, only : TResponse, TResponse_init, responseSolverTypes
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
-  use dftbp_dftb_boundarycond, only : boundaryConditions, TBoundaryConditions,&
+  use dftbp_common_boundarycond, only : boundaryConditions, TBoundaryConditions,&
       & TBoundaryConditions_init
   use dftbp_dftb_coulomb, only : TCoulombInput
   use dftbp_dftb_dense, only : buildSquaredAtomIndex
@@ -223,6 +223,12 @@ module dftbp_dftbplus_initprogram
 
     !> If the calculation is helical geometry
     logical :: tHelical
+
+    !> Boundary conditions
+    type(TBoundaryConditions) :: boundaryCond
+
+    !> Spin spirals built into periodic boundaries (if present)
+    real(dp), allocatable :: spinSpirals(:,:)
 
     !> Should central cell coordinates be output?
     logical :: tShowFoldedCoord
@@ -1140,9 +1146,6 @@ module dftbp_dftbplus_initprogram
     !> Atomic charge contribution in excited state
     real(dp), allocatable :: dQAtomEx(:)
 
-    !> Boundary condition
-    type(TBoundaryConditions) :: boundaryCond
-
     !> Whether the order of the atoms matter. Typically the case, when properties were specified
     !> based on atom numbers (e.g. custom occupations). In that case setting a different order
     !> of the atoms via the API is forbidden.
@@ -1392,10 +1395,20 @@ contains
       call error("Colinear spin polarization required for shared Ef over spin channels")
     end if
 
+    if (input%geom%tPeriodic .and. this%tSpin .and. this%t2Component) then
+      if (allocated(input%ctrl%spinSpirals)) then
+        call move_alloc(input%ctrl%spinSpirals, this%spinSpirals)
+      end if
+    else
+      if (allocated(input%ctrl%spinSpirals)) then
+        call error("Spin spirals only available for periodic noncolinear spin systems")
+      end if
+    end if
+
     call initGeometry_(input, this%nAtom, this%nType, this%tPeriodic, this%tHelical,&
         & this%boundaryCond, this%coord0, this%species0, this%tCoordsChanged, this%tLatticeChanged,&
         & this%latVec, this%origin, this%recVec, this%invLatVec, this%cellVol, this%recCellVol,&
-        & errStatus)
+        & this%spinSpirals, errStatus)
     if (errStatus%hasError()) call error(errStatus%message)
 
     ! Get species names and output file
@@ -6733,7 +6746,7 @@ contains
   !> Initializes the variables directly related to the user specified geometry.
   subroutine initGeometry_(input, nAtom, nType, tPeriodic, tHelical, boundaryCond, coord0,&
       & species0, tCoordsChanged, tLatticeChanged, latVec, origin, recVec, invLatVec, cellVol,&
-      & recCellVol, errStatus)
+      & recCellVol, spinSpiralQ, errStatus)
 
     !> Geometry input
     type(TInputData), intent(in) :: input
@@ -6783,6 +6796,9 @@ contains
     !> Volume of the reciprocal space unit cell
     real(dp), intent(out) :: recCellVol
 
+    !> If there is a periodic structure with spin spirals, these are the q vectors
+    real(dp), allocatable, intent(in) :: spinSpiralQ(:,:)
+
     !> Operation status, if an error needs to be returned
     type(TStatus), intent(inout) :: errStatus
 
@@ -6793,7 +6809,7 @@ contains
     tHelical = input%geom%tHelical
 
     if (tPeriodic) then
-      call TBoundaryConditions_init(boundaryCond, boundaryConditions%pbc3d, errStatus)
+      call TBoundaryConditions_init(boundaryCond, boundaryConditions%pbc3d, errStatus, spinSpiralQ)
     else if (tHelical) then
       call TBoundaryConditions_init(boundaryCond, boundaryConditions%helical, errStatus)
     else

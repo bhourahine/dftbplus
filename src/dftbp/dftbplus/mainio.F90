@@ -15,6 +15,7 @@
 !> Various I/O routines for the main program.
 module dftbp_dftbplus_mainio
   use dftbp_common_accuracy, only : dp, lc, mc, sc
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_common_constants, only : au__Debye, au__fs, au__pascal, au__V_m, Bohr__AA, Boltzmann,&
       & gfac, Hartree__eV, quaternionName, spinName
   use dftbp_common_environment, only : TEnvironment
@@ -2235,7 +2236,8 @@ contains
 
   !> Write XML format of derived results
   subroutine writeDetailedXml(runId, speciesName, species0, coord0Out, tPeriodic, tHelical, latVec,&
-      & origin, tRealHS, nKPoint, nSpin, nStates, nOrb, kPoint, kWeight, filling, occNatural)
+      & origin, boundaryConds, tRealHS, nKPoint, nSpin, nStates, nOrb, kPoint, kWeight, filling,&
+      & occNatural)
 
     !> Identifier for the run
     integer, intent(in) :: runId
@@ -2260,6 +2262,9 @@ contains
 
     !> Origin for periodic/helical coordinates
     real(dp), intent(in) :: origin(:)
+
+    !> Boundary conditions on the calculation
+    type(TBoundaryConditions), intent(in) :: boundaryConds
 
     !> Real Hamiltonian
     logical, intent(in) :: tRealHS
@@ -2293,8 +2298,6 @@ contains
     integer :: ii, jj, ll
     real(dp), pointer :: pOccNatural(:,:)
 
-
-
     call xml_OpenFile("detailed.xml", xf, indent=.true.)
     call xml_ADDXMLDeclaration(xf)
     call xml_NewElement(xf, "detailedout")
@@ -2313,6 +2316,10 @@ contains
     if (tPeriodic .or. tHelical) then
       call writeChildValue(xf, "latticevectors", latVec)
       call writeChildValue(xf, "coordinateorigin", origin)
+      if (allocated(boundaryConds%qSpin)) then
+        call writeChildValue(xf, "spinspiralq", boundaryConds%qSpin)
+        call writeChildValue(xf, "spinspiralvec", boundaryConds%qVec)
+      end if
     end if
     call xml_EndElement(xf, "geometry")
     call writeChildValue(xf, "real", tRealHS)
@@ -2345,6 +2352,7 @@ contains
     end if
     call xml_EndElement(xf, "detailedout")
     call xml_Close(xf)
+
   end subroutine writeDetailedXml
 
 

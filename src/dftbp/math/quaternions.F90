@@ -13,6 +13,7 @@ module dftbp_math_quaternions
 
   private
   public :: quaternionProduct, quaternionInvert, quaternionRotate, quaternionConstruct, rotate3
+  public :: rotationMatrix
 
 contains
 
@@ -55,7 +56,7 @@ contains
 
 
   !> Rotates a 3 vector using a quaternion
-  pure subroutine quaternionRotate(vec,quat)
+  pure subroutine quaternionRotate(vec, quat)
 
     !> Initial 3 vector, overwritten by result
     real(dp), intent(inout) :: vec(:)
@@ -80,7 +81,7 @@ contains
 
 
   !> Constructs a quaternion equivalent to rotation by an angle around an axis
-  pure subroutine quaternionConstruct(res,angle,axis)
+  pure subroutine quaternionConstruct(res, angle, axis)
 
     !> The quaternion
     real(dp), intent(out) :: res(:)
@@ -88,7 +89,7 @@ contains
     !> Angle of rotation
     real(dp), intent(in)  :: angle
 
-    !> 3 axis, does not require normalisation
+    !> 3 axis of rotation, does not require normalisation
     real(dp), intent(in)  :: axis(:)
 
     real(dp) :: norm(3)
@@ -102,7 +103,7 @@ contains
 
 
   !> Rotates a 3 vector by a specified angle around an axis
-  pure subroutine rotate3(x,angle,axis)
+  pure subroutine rotate3(x, angle, axis)
 
     !> Vector, overwritten when rotated
     real(dp), intent(inout) :: x(:)
@@ -119,5 +120,33 @@ contains
     call quaternionRotate(x,quat)
 
   end subroutine rotate3
+
+
+  !> 3D rotation matrix from a quaternion (Euler-Rodrigues formula)
+  pure function rotationMatrix(q) result(r)
+
+    !> Quaternion
+    real(dp), intent(in) :: q(0:3)
+
+    !> Resulting rotation matrix
+    real(dp) :: r(3,3)
+
+    integer :: ii
+
+    do ii = 1, 3
+      r(ii,ii) = q(0)**2 + q(ii)**2
+    end do
+    r(2,1) = q(1)*q(2)-q(0)*q(3)
+    r(3,1) = q(1)*q(3)+q(0)*q(2)
+    r(3,2) = q(2)*q(3)-q(0)*q(1)
+    r(1,2) = q(1)*q(2)+q(0)*q(3)
+    r(1,3) = q(1)*q(3)-q(0)*q(2)
+    r(2,3) = q(2)*q(3)+q(0)*q(1)
+    r(:,:) = 2.0_dp * r
+    do ii = 1, 3
+      r(ii,ii) = r(ii,ii) - 1.0_dp
+    end do
+
+  end function rotationMatrix
 
 end module dftbp_math_quaternions

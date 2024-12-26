@@ -10,14 +10,14 @@
 !> Contains the routines for initialising Waveplot.
 module waveplot_initwaveplot
   use dftbp_common_accuracy, only : dp
+  use dftbp_common_boundarycond, only : boundaryConditions, TBoundaryConditions,&
+      & TBoundaryConditions_init
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_file, only : TFileDescr, openFile, closeFile, setDefaultBinaryAccess
   use dftbp_common_globalenv, only : stdOut, tIoProc
   use dftbp_common_release, only : releaseYear
   use dftbp_common_status, only : TStatus
   use dftbp_common_unitconversion, only : lengthUnits
-  use dftbp_dftb_boundarycond, only : boundaryConditions, TBoundaryConditions,&
-      & TBoundaryConditions_init
   use dftbp_dftbplus_input_fileaccess, only : readBinaryAccessTypes
   use dftbp_extlibs_xmlf90, only : fnode, fNodeList, string, char, getLength, getItem1,&
       & getNodeName, destroyNode

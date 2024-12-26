@@ -9,12 +9,12 @@
 #:include 'error.fypp'
 
 !> Contains geometrical boundary condition information on the calculation
-module dftbp_dftb_boundarycond
+module dftbp_common_boundarycond
   use dftbp_common_accuracy, only : dp
   use dftbp_common_constants, only : pi
   use dftbp_common_status, only : TStatus
   use dftbp_math_angmomentum, only : rotateZ
-  use dftbp_math_quaternions, only : rotate3
+  use dftbp_math_quaternions, only : rotate3, rotationMatrix, quaternionConstruct
   use dftbp_math_simplealgebra, only : invert33
   use dftbp_type_commontypes, only : TOrbitals
   implicit none
@@ -50,9 +50,19 @@ module dftbp_dftb_boundarycond
   type(TBoundaryConditionEnum_), parameter :: boundaryConditions = TBoundaryConditionEnum_()
 
 
+  !> Boundary condition information
   type TBoundaryConditions
 
+    !> Spatial symmetry boundary conditions
     integer :: iBoundaryCondition = boundaryConditions%unknown
+
+    ! Boundary conditions on spin in space-filling structures
+
+    !> Momentum for spin spirals (nSpinWaves)
+    real(dp), allocatable :: qSpin(:)
+
+    !> Unit vectors for spin spiral directions: (3, nSpinWaves)
+    real(dp), allocatable :: qVec(:,:)
 
   contains
 
@@ -68,11 +78,16 @@ module dftbp_dftb_boundarycond
 
     procedure :: foldCoordsToCell
 
+    procedure :: foldOutSpinMatrix
+
+    procedure :: foldInSpinMatrix
+
   end type TBoundaryConditions
 
 contains
 
-  subroutine TBoundaryConditions_init(this, iBoundaryCondition, errStatus)
+  !> Initialise boundary conditions type instance
+  subroutine TBoundaryConditions_init(this, iBoundaryCondition, errStatus, spinSpiralQ)
 
     !> Instance
     type(TBoundaryConditions), intent(out) :: this
@@ -83,12 +98,30 @@ contains
     !> Status of routine
     type(TStatus), intent(out) :: errStatus
 
+    !> Optional q-vectors for any spin waves
+    real(dp), intent(in), optional :: spinSpiralQ(:,:)
+
+    integer :: nSpinSpiral
+
     if (.not. any([boundaryConditions%cluster, boundaryConditions%pbc3d,&
         & boundaryConditions%helical] == iBoundaryCondition)) then
       @:RAISE_ERROR(errStatus, -1, "Unknown boundary condition specified")
     end if
 
     this%iBoundaryCondition = iBoundaryCondition
+
+    if (present(spinSpiralQ)) then
+      if (this%iBoundaryCondition /= boundaryConditions%pbc3d) then
+        @:RAISE_ERROR(errStatus, -1, "Spin boundary conditions require a periodic geometry")
+      else
+        ! Note: could also be make to work with helical, PBC2d, ...
+        nSpinSpiral = size(spinSpiralQ, dim=2)
+        allocate(this%qSpin(nSpinSpiral))
+        allocate(this%qVec(3,nSpinSpiral))
+        this%qSpin(:) = norm2(spinSpiralQ, dim=1)
+        this%qVec(:,:) = spinSpiralQ / spread(this%qSpin, 1, 3)
+      end if
+    end if
 
   end subroutine TBoundaryConditions_init
 
@@ -257,10 +290,10 @@ contains
 
 
   !> Fold coordinates back in the central cell.
-  !>
-  !> Throw away the integer part of the relative coordinates of every atom. If the resulting
-  !> coordinate is very near to 1.0 (closer than 1e-12 in absolute length), fold it to 0.0 to make
-  !> the algorithm more predictable and independent of numerical noise.
+  !!
+  !! Throw away the integer part of the relative coordinates of every atom. If the resulting
+  !! coordinate is very near to 1.0 (closer than 1e-12 in absolute length), fold it to 0.0 to make
+  !! the algorithm more predictable and independent of numerical noise.
   subroutine foldCoordsToCell(this, coord, latVec)
 
     !> Instance
@@ -314,4 +347,81 @@ contains
 
   end subroutine foldCoordsToCell
 
-end module dftbp_dftb_boundarycond
+
+  !> Matrix to rotate spin vector of atom out of the orientation at the central cell location to
+  !! that of the image atom. Matrix is for right multiplication of data stord as (:,..,:nSpin)
+  function foldOutSpinMatrix(this, iAt, img2CentCell, coords)
+
+    !> Instance
+    class(TBoundaryConditions), intent(in) :: this
+
+    !> Atom number in extended coordinates
+    integer, intent(in) :: iAt
+
+    !> Mapping from image atoms to central cell equivalent
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Coordinates of all atoms
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Resulting rotation matrix in spin space
+    real(dp) :: foldOutSpinMatrix(3,3)
+
+    real(dp) :: vec(3), angle, mTmp(3,3), q(4)
+    integer :: ii
+
+    vec(:) = coords(:,iAt) - coords(:,img2CentCell(iAt))
+
+    foldOutSpinMatrix(:,:) = 0.0_dp
+    do ii = 1, 3
+      foldOutSpinMatrix(ii, ii) = 1.0_dp
+    end do
+    do ii = 1, size(this%qSpin)
+      angle = this%qSpin(ii) * dot_product(this%qVec(:,ii), vec)
+      call quaternionConstruct(q, angle, this%qVec(:,ii))
+      mTmp = rotationMatrix(q)
+      foldOutSpinMatrix = matmul(foldOutSpinMatrix, mTmp)
+    end do
+
+  end function foldOutSpinMatrix
+
+
+  !> Matrix to rotate spin vector of atom into the orientation in the central cell location.
+  !! Matrix is for right multiplication of data stord as (:,..,:nSpin)
+  function foldInSpinMatrix(this, iAt, img2CentCell, coords)
+
+    !> Instance
+    class(TBoundaryConditions), intent(in) :: this
+
+    !> Atom number for extended structure
+    integer, intent(in) :: iAt
+
+    !> Image atoms to their equivalent in the central cell
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Coordinates of all atoms
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Resulting rotation matrix in spin space
+    real(dp) :: foldInSpinMatrix(3,3)
+
+    real(dp) :: vec(3), angle, mTmp(3,3), q(4)
+    integer :: ii
+
+    vec(:) = coords(:,img2CentCell(iAt)) - coords(:,iAt)
+
+    foldInSpinMatrix(:,:) = 0.0_dp
+    do ii = 1, 3
+      foldInSpinMatrix(ii, ii) = 1.0_dp
+    end do
+    do ii = 1, size(this%qSpin)
+      angle = this%qSpin(ii) * dot_product(this%qVec(:,ii), vec)
+      call quaternionConstruct(q, angle, this%qVec(:,ii))
+      mTmp = rotationMatrix(q)
+      foldInSpinMatrix = matmul(mTmp, foldInSpinMatrix)
+    end do
+
+  end function foldInSpinMatrix
+
+
+end module dftbp_common_boundarycond

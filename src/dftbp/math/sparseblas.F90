@@ -15,7 +15,7 @@
 module dftbp_math_sparseblas
   use dftbp_common_accuracy, only : dp
   use dftbp_common_constants, only : imag, pi
-  use dftbp_dftb_boundarycond, only : TBoundaryConditions
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_type_commontypes, only : TOrbitals
 #:if WITH_SCALAPACK
   use dftbp_common_blacsenv, only : TBlacsEnv

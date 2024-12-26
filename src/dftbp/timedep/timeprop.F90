@@ -23,7 +23,7 @@ module dftbp_timedep_timeprop
   use dftbp_common_status, only : TStatus
   use dftbp_common_timer, only : TTimer
   use dftbp_dftb_bondpopulations, only : addPairWiseBondInfo
-  use dftbp_dftb_boundarycond, only : TBoundaryConditions
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_dftb_densitymatrix, only : TDensityMatrix
   use dftbp_dftb_dftbplusu, only : TDftbU
   use dftbp_dftb_dispersions, only : TDispersionIface
@@ -1361,7 +1361,7 @@ contains
   subroutine updateH(this, H1, ints, H0, speciesAll, qq, q0, coord, orb, potential,&
       & neighbourList, nNeighbourSK, iSquare, iSparseStart, img2CentCell, iStep, chargePerShell,&
       & spinW, env, tDualSpinOrbit, xi, thirdOrd, qBlock, dftbU, onSiteElements, refExtPot,&
-      & deltaRho, HSqrCplxCam, Ssqr, solvation, hybridXc, dispersion, rho, errStatus)
+      & deltaRho, HSqrCplxCam, Ssqr, solvation, hybridXc, dispersion, rho, boundaryCond, errStatus)
 
     !> ElecDynamics instance
     type(TElecDynamics) :: this
@@ -1462,6 +1462,9 @@ contains
     !> Density matrix
     complex(dp), intent(in) :: rho(:,:,:)
 
+    !> Boundary conditions on the calculation
+    type(TBoundaryConditions), intent(in) :: boundaryCond
+
     !> Error status
     type(TStatus), intent(inout) :: errStatus
 
@@ -1520,7 +1523,8 @@ contains
     potential%intShell = potential%intShell + potential%extShell
 
     call getSccHamiltonian(env, H0, ints, nNeighbourSK, neighbourList, speciesAll, orb,&
-        & iSparseStart, img2CentCell, potential, .false., ints%hamiltonian, iHam)
+        & iSparseStart, img2CentCell, potential, .false., ints%hamiltonian, iHam, coord,&
+        & boundarycond)
 
     ! Hack due to not using Pauli-type structure outside of this part of the routine
     if (this%nSpin == 2) then
@@ -4128,7 +4132,7 @@ contains
         & this%potential, neighbourList, nNeighbourSK, iSquare, iSparseStart, img2CentCell, 0,&
         & this%chargePerShell, spinW, env, tDualSpinOrbit, xi, thirdOrd, this%qBlock, dftbU,&
         & onSiteElements, refExtPot, this%deltaRho, this%HSqrCplxCam, this%Ssqr, solvation,&
-        & hybridXc, this%dispersion, this%trho, errStatus)
+        & hybridXc, this%dispersion, this%trho, boundaryCond, errStatus)
     @:PROPAGATE_ERROR(errStatus)
 
     if (this%tForces) then
@@ -4217,7 +4221,7 @@ contains
         & this%potential, neighbourList, nNeighbourSK, iSquare, iSparseStart, img2CentCell, 0,&
         & this%chargePerShell, spinW, env, tDualSpinOrbit, xi, thirdOrd, this%qBlock, dftbU,&
         & onSiteElements, refExtPot, this%deltaRho, this%HSqrCplxCam, this%Ssqr, solvation,&
-        & hybridXc, this%dispersion,this%rho, errStatus)
+        & hybridXc, this%dispersion,this%rho, boundaryCond, errStatus)
     @:PROPAGATE_ERROR(errStatus)
 
     if (this%tForces) then
@@ -4502,7 +4506,7 @@ contains
         & this%potential, neighbourList, nNeighbourSK, iSquare, iSparseStart, img2CentCell, iStep,&
         & this%chargePerShell, spinW, env, tDualSpinOrbit, xi, thirdOrd, this%qBlock, dftbU,&
         & onSiteElements, refExtPot, this%deltaRho, this%HSqrCplxCam, this%Ssqr, solvation,&
-        & hybridXc, this%dispersion,this%rho, errStatus)
+        & hybridXc, this%dispersion,this%rho, boundaryCond, errStatus)
     @:PROPAGATE_ERROR(errStatus)
 
     if (this%tForces) then

@@ -2,7 +2,8 @@ set(unit-test-prefix "${unit-test-prefix}/math")
 
 if (NOT WITH_MPI)
   set(tests
-    matrixops)
+    matrixops
+    quaternions)
 #else()
 #  set(tests
 #    matrixops_mpi)

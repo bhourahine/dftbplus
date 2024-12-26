@@ -11,7 +11,7 @@
 module dftbp_dftb_scc
   use dftbp_common_accuracy, only : dp
   use dftbp_common_environment, only : TEnvironment
-  use dftbp_dftb_boundarycond, only : boundaryConditions, TBoundaryConditions
+  use dftbp_common_boundarycond, only : boundaryConditions, TBoundaryConditions
   use dftbp_dftb_chargeconstr, only : TChrgConstr, TChrgConstr_init
   use dftbp_dftb_charges, only : getSummedCharges
   use dftbp_dftb_coulomb, only : TCoulombInput, TCoulomb, TCoulomb_init

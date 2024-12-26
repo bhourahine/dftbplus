@@ -11,6 +11,7 @@
 !> Update the SCC hamiltonian
 module dftbp_dftb_hamiltonian
   use dftbp_common_accuracy, only : dp, lc
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_status, only : TStatus
@@ -331,7 +332,7 @@ contains
 
   !> Returns the Hamiltonian for the given scc iteration
   subroutine getSccHamiltonian(env, H0, ints, nNeighbourSK, neighbourList, species, orb,&
-      & iSparseStart, img2CentCell, potential, isREKS, ham, iHam)
+      & iSparseStart, img2CentCell, potential, isREKS, ham, iHam, coords, boundaryConditions)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -372,6 +373,12 @@ contains
     !> Imaginary part of hamiltonian (if required, signalled by being allocated)
     real(dp), allocatable, intent(inout) :: iHam(:,:)
 
+    !> Central cell coordinates
+    real(dp), allocatable, intent(in) :: coords(:,:)
+
+    !> Boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
+
     integer :: nAtom
     real(dp), allocatable :: dipoleAtom(:,:)
 
@@ -382,7 +389,8 @@ contains
     end if
 
     call addShift(env, ham, ints%overlap, nNeighbourSK, neighbourList%iNeighbour, species, orb,&
-        & iSparseStart, nAtom, img2CentCell, potential%intBlock, .not. isREKS)
+        & iSparseStart, nAtom, img2CentCell, potential%intBlock, .not. isREKS, coords,&
+        & boundaryConditions)
 
     if (.not. isREKS) then
       ham(:,1) = ham(:,1) + h0
@@ -415,8 +423,9 @@ contains
 
     if (allocated(iHam)) then
       iHam(:,:) = 0.0_dp
-      call addShift(env, iHam, ints%overlap, nNeighbourSK, neighbourList%iNeighbour, species, orb,&
-          & iSparseStart, nAtom, img2CentCell, potential%iorbitalBlock, .true.)
+      call addShift(env, iHam, ints%overlap, nNeighbourSK, neighbourList%iNeighbour, species,&
+          & orb, iSparseStart, nAtom, img2CentCell, potential%iorbitalBlock, .not. isREKS,&
+          & coords, boundaryConditions)
     end if
 
   end subroutine getSccHamiltonian

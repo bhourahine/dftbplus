@@ -12,7 +12,7 @@ module dftbp_dftb_extcharges
   use dftbp_common_accuracy, only : dp
   use dftbp_common_constants, only : pi
   use dftbp_common_environment, only : TEnvironment
-  use dftbp_dftb_boundarycond, only : TBoundaryConditions
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_dftb_coulomb, only : TCoulomb
   implicit none
 

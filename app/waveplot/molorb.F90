@@ -11,8 +11,8 @@
 !! an equidistant grid.
 module waveplot_molorb
   use dftbp_common_accuracy, only : dp
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_common_constants, only : imag
-  use dftbp_dftb_boundarycond, only : TBoundaryConditions
   use dftbp_dftb_periodic, only : getCellTranslations
   use dftbp_math_simplealgebra, only : invert33
   use dftbp_type_typegeometry, only : TGeometry

@@ -1543,11 +1543,7 @@ contains
 
     ! Spin calculation
     if (ctrl%reksInp%reksAlg == reksTypes%noReks  .and. .not.ctrl%isNonAufbau) then
-    #:if WITH_TRANSPORT
-      call readSpinPolarisation(node, ctrl, geo, tp)
-    #:else
       call readSpinPolarisation(node, ctrl, geo)
-    #:endif
     end if
 
     ! temporararily removed until debugged
@@ -1923,11 +1919,7 @@ contains
 
     ! Spin calculation
     if (ctrl%reksInp%reksAlg == reksTypes%noReks .and. .not.ctrl%isNonAufbau .and. ctrl%tSCC) then
-    #:if WITH_TRANSPORT
-      call readSpinPolarisation(node, ctrl, geo, tp)
-    #:else
       call readSpinPolarisation(node, ctrl, geo)
-    #:endif
     end if
 
     ! temporararily removed until debugged
@@ -2281,11 +2273,7 @@ contains
 
 
   !> Spin calculation
-#:if WITH_TRANSPORT
-  subroutine readSpinPolarisation(node, ctrl, geo, tp)
-#:else
   subroutine readSpinPolarisation(node, ctrl, geo)
-#:endif
 
     !> Relevant node in input tree
     type(fnode), pointer :: node
@@ -2296,13 +2284,11 @@ contains
     !> Geometry structure to be filled
     type(TGeometry), intent(in) :: geo
 
-  #:if WITH_TRANSPORT
-    !> Transport parameters
-    type(TTransPar), intent(inout)  :: tp
-  #:endif
-
-    type(fnode), pointer :: value1, child
-    type(string) :: buffer
+    type(fnode), pointer :: value1, child, child2, child3
+    type(fnodeList), pointer :: children
+    type(string) :: buffer, modifier
+    real(dp) :: theta, vec(3)
+    integer :: ii
 
     call renameChildren(node, "SpinPolarization", "SpinPolarisation")
     call getChildValue(node, "SpinPolarisation", value1, "", child=child, &
@@ -2315,6 +2301,7 @@ contains
       ctrl%nrSpinPol = 0.0_dp
 
     case ("colinear", "collinear")
+
       ctrl%tSpin = .true.
       ctrl%t2Component = .false.
       call getChildValue(value1, 'UnpairedElectrons', ctrl%nrSpinPol, 0.0_dp)
@@ -2324,6 +2311,7 @@ contains
       end if
 
     case ("noncolinear", "noncollinear")
+
       ctrl%tSpin = .true.
       ctrl%t2Component = .true.
       if (.not. ctrl%tReadChrg) then
@@ -2331,10 +2319,36 @@ contains
       end if
 
     case default
+
       call getNodeHSDName(value1, buffer)
-      call detailedError(child, "Invalid spin polarisation type '" //&
-          & char(buffer) // "'")
+      call detailedError(child, "Invalid spin polarisation type '" // char(buffer) // "'")
+
     end select
+
+    if (ctrl%tSpin .and. ctrl%t2Component .and. geo%tPeriodic) then
+
+      call getChild(node, 'spiralspins', child, requested=.false.)
+      if (associated(child)) then
+
+        call getChildren(child, "spiral", children)
+        if (getLength(children) > 0) then
+          allocate(ctrl%spinSpirals(3, getLength(children)), source=0.0_dp)
+          do ii = 1, getLength(children)
+            call getItem1(children, ii, child2)
+            call getChildValue(child2, "angle", theta, modifier=modifier, child=child3)
+            call convertUnitHsd(char(modifier), angularUnits, child3, theta)
+            write(*,*)'HERE', theta
+            call getChildValue(child2, "vector", vec, modifier=modifier, child=child3)
+            call convertUnitHsd(char(modifier), lengthUnits, child3, vec)
+            ctrl%spinSpirals(: ,ii) = theta * vec / norm2(vec)
+          end do
+        end if
+
+        call destroyNodeList(children)
+
+      end if
+
+    end if
 
   end subroutine readSpinPolarisation
 

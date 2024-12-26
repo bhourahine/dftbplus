@@ -13,7 +13,7 @@ module dftbp_dftb_forces
   use dftbp_common_constants, only : pi
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_schedule, only : distributeRangeWithWorkload, assembleChunks
-  use dftbp_dftb_boundarycond, only : zAxis
+  use dftbp_common_boundarycond, only : zAxis
   use dftbp_dftb_nonscc, only : TNonSccDiff
   use dftbp_dftb_scc, only : TScc
   use dftbp_dftb_slakocont, only : TSlakoCont
