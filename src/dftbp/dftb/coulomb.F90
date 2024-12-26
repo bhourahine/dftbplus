@@ -14,7 +14,7 @@ module dftbp_dftb_coulomb
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_schedule, only : distributeRangeInChunks, distributeRangeInChunks2,&
       & assembleChunks
-  use dftbp_dftb_boundarycond, only : boundaryConditions
+  use dftbp_common_boundarycond, only : boundaryConditions
   use dftbp_dftb_periodic, only : TNeighbourList, getLatticePoints, getCellTranslations
   use dftbp_io_message, only : error
   use dftbp_math_blasroutines, only : hemv

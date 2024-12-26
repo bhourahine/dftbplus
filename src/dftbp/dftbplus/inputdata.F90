@@ -294,11 +294,14 @@ module dftbp_dftbplus_inputdata
     logical :: tDualSpinOrbit = .false.
     logical :: t2Component = .false.
 
-    !> Initial spin pattern
+    !> Initial spin pattern for central cell
     real(dp), allocatable :: initialSpins(:,:)
 
     !> Initial charges
     real(dp), allocatable :: initialCharges(:)
+
+    !> q vectors for spin spirals (if noncollinear and periodic)
+    real(dp), allocatable :: spinSpirals(:,:)
 
     !> Electronic/eigenvalue solver options
     type(TElectronicSolverInp) :: solver

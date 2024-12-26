@@ -8,9 +8,10 @@
 #:include 'common.fypp'
 
 !> Contains routines to calculate contributions to typical DFTB Hamiltonian parts using various
-!> generalisations of H_{mu,nu} = 0.5 * S_{mu,nu} * (V_mu + V_nu)
+!! generalisations of H_{mu,nu} = 0.5 * S_{mu,nu} * (V_mu + V_nu)
 module dftbp_dftb_shift
   use dftbp_common_accuracy, only : dp
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_schedule, only : distributeRangeWithWorkload, assembleChunks
   use dftbp_type_commontypes, only : TOrbitals
@@ -121,9 +122,9 @@ contains
 
 
   !> Shift depending on occupation-matrix like potentials. To use this for lm-dependent potentials,
-  !> use a diagonal shift matrix
+  !! use a diagonal shift matrix
   subroutine addShift_block(env, ham, over, nNeighbour, iNeighbour, species, orb, iPair, nAtom,&
-      & img2CentCell, shift, isInputZero)
+      & img2CentCell, shift, isInputZero, coords, boundaryConditions)
 
     !> Computational environment settings
     type(TEnvironment), intent(in) :: env
@@ -161,10 +162,18 @@ contains
     !> Whether array 'ham' is zero everywhere on input
     logical, intent(in) :: isInputZero
 
+    !> Coordinates of all atoms
+    real(dp), intent(in), optional :: coords(:,:)
+
+    !> Boundary condition
+    type(TBoundaryConditions), intent(in), optional :: boundaryConditions
+
     integer :: iAt1, iAt2, iAt2f, iOrig, iSp1, iSp2, nOrb1, nOrb2
     integer :: iIter, iNeigh, iSpin, nSpin
-    real(dp) :: tmpH(orb%mOrb,orb%mOrb), tmpS(orb%mOrb,orb%mOrb)
+    real(dp) :: tmpH(orb%mOrb, orb%mOrb), tmpS(orb%mOrb, orb%mOrb)
+    real(dp) :: tmpShift(orb%mOrb, orb%mOrb, size(ham,dim=2)), rMat(3,3)
     integer, allocatable :: iterIndices(:)
+    logical :: isSpinRotated
 
     @:ASSERT(size(ham,dim=1)==size(over))
     nSpin = size(ham,dim=2)
@@ -178,6 +187,7 @@ contains
     @:ASSERT(size(shift,dim=2)==orb%mOrb)
     @:ASSERT(size(shift,dim=3)==nAtom)
     @:ASSERT(size(shift,dim=4)>=nSpin)
+    @:ASSERT(present(coords) .eqv. present(boundaryConditions))
 
     if (isInputZero) then
       call distributeRangeWithWorkload(env, 1, nAtom, nNeighbour, iterIndices)
@@ -188,7 +198,15 @@ contains
       iterIndices(:) = [(iIter, iIter = 1, nAtom)]
     end if
 
-    do iSpin = 1, nSpin
+    isSpinRotated = .false.
+    if (present(boundaryConditions)) then
+      if (allocated(boundaryConditions%qSpin)) then
+        isSpinRotated = .true.
+      end if
+    end if
+
+    if (isSpinRotated) then
+
       do iIter = 1, size(iterIndices)
         iAt1 = iterIndices(iIter)
         iSp1 = species(iAt1)
@@ -199,19 +217,51 @@ contains
           iSp2 = species(iAt2f)
           nOrb2 = orb%nOrbSpecies(iSp2)
           iOrig = iPair(iNeigh, iAt1)
-          tmpS(1:nOrb2,1:nOrb1) = reshape( &
-              & over(iOrig+1:iOrig+nOrb2*nOrb1),(/nOrb2,nOrb1/) )
-          tmpH(1:nOrb2,1:nOrb1) = 0.5_dp * ( &
-              & matmul(tmpS(1:nOrb2,1:nOrb1), &
-              & shift(1:nOrb1,1:nOrb1,iAt1,iSpin)) + &
-              & matmul(shift(1:nOrb2,1:nOrb2,iAt2f,iSpin), &
-              & tmpS(1:nOrb2,1:nOrb1)) )
-          ham(iOrig+1:iOrig+nOrb2*nOrb1,iSpin) = &
-              & ham(iOrig+1:iOrig+nOrb2*nOrb1,iSpin) + &
-              & reshape(tmpH(1:nOrb2, 1:nOrb1), (/nOrb2*nOrb1/))
+          tmpS(1:nOrb2,1:nOrb1) = reshape(over(iOrig+1:iOrig+nOrb2*nOrb1),(/nOrb2,nOrb1/))
+          tmpShift(:nOrb2,:nOrb2,:) = shift(:nOrb2,:nOrb2,iAt2f,:)
+          ! spin rotate shift from central cell to image atom shift
+          rMat(:,:) = boundaryConditions%foldOutSpinMatrix(iAt2, img2CentCell, coords)
+          tmpShift(:nOrb2,:nOrb2, 2:) = reshape(&
+              & matmul(reshape(tmpShift(:nOrb2, :nOrb2, 2:), [nOrb2*nOrb2, 3]), rMat),&
+              & [nOrb2, nOrb2, 3])
+          do iSpin = 1, nSpin
+            tmpH(1:nOrb2,1:nOrb1) = 0.5_dp * ( &
+                & matmul(tmpS(:nOrb2, :nOrb1), shift(:nOrb1, :nOrb1, iAt1, iSpin)) + &
+                & matmul(tmpShift(:nOrb2, :nOrb2, iSpin), tmpS(:nOrb2, :nOrb1)) )
+            ham(iOrig+1:iOrig+nOrb2*nOrb1, iSpin) = ham(iOrig+1:iOrig+nOrb2*nOrb1, iSpin)&
+                & + reshape(tmpH(:nOrb2, :nOrb1), [nOrb2*nOrb1])
+          end do
         end do
       end do
-    end do
+
+    else
+
+      do iSpin = 1, nSpin
+        do iIter = 1, size(iterIndices)
+          iAt1 = iterIndices(iIter)
+          iSp1 = species(iAt1)
+          nOrb1 = orb%nOrbSpecies(iSp1)
+          do iNeigh = 0, nNeighbour(iAt1)
+            iAt2 = iNeighbour(iNeigh, iAt1)
+            iAt2f = img2CentCell(iAt2)
+            iSp2 = species(iAt2f)
+            nOrb2 = orb%nOrbSpecies(iSp2)
+            iOrig = iPair(iNeigh, iAt1)
+            tmpS(1:nOrb2,1:nOrb1) = reshape( &
+                & over(iOrig+1:iOrig+nOrb2*nOrb1),(/nOrb2,nOrb1/) )
+            tmpH(1:nOrb2,1:nOrb1) = 0.5_dp * ( &
+                & matmul(tmpS(1:nOrb2,1:nOrb1), &
+                & shift(1:nOrb1,1:nOrb1,iAt1,iSpin)) + &
+                & matmul(shift(1:nOrb2,1:nOrb2,iAt2f,iSpin), &
+                & tmpS(1:nOrb2,1:nOrb1)) )
+            ham(iOrig+1:iOrig+nOrb2*nOrb1,iSpin) = &
+                & ham(iOrig+1:iOrig+nOrb2*nOrb1,iSpin) + &
+                & reshape(tmpH(1:nOrb2, 1:nOrb1), (/nOrb2*nOrb1/))
+          end do
+        end do
+      end do
+
+    end if
 
     if (isInputZero) then
       call assembleChunks(env, ham)
@@ -299,7 +349,7 @@ contains
 
 
   !> Add on-site only atomic shift (potential is not only dependent on overlap, only the number of
-  !> each atom in the structure)
+  !! each atom in the structure)
   subroutine addOnsiteShift(ham, over, species, orb, iPair, nAtom, shift)
 
     !> The Hamiltonian to add the contribution
@@ -338,6 +388,7 @@ contains
   end subroutine addOnsiteShift
 
 
+  !> Add shift from multipoles to hamiltonian
   subroutine addAtomicMultipoleShift(ham, mpintBra, mpintKet, nNeighbour, iNeighbour, &
       & species, orb, iPair, nAtom, img2CentCell, shift)
 
@@ -399,12 +450,14 @@ contains
           do iOrb2 = 1, nBlk
             iBlk = ind + iOrb2 + nBlk*(iOrb1-1)
             ham(iBlk, 1) = ham(iBlk, 1) &
-              & + 0.5_dp * dot_product(mpintKet(:, iBlk), shift(:, iAt1)) &
-              & + 0.5_dp * dot_product(mpintBra(:, iBlk), shift(:, iAt2))
+                & + 0.5_dp * dot_product(mpintKet(:, iBlk), shift(:, iAt1)) &
+                & + 0.5_dp * dot_product(mpintBra(:, iBlk), shift(:, iAt2))
           end do
         end do
+
       end do
     end do
+
   end subroutine addAtomicMultipoleShift
 
 

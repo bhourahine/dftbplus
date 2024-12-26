@@ -2,8 +2,9 @@ set(unit-test-prefix "${unit-test-prefix}/common")
 
 set(tests
   atomicmass
-  memman
+  boundarycond
   file
+  memman
   schedule)
 
 foreach(test IN LISTS tests)

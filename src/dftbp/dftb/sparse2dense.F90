@@ -12,6 +12,7 @@
 !>
 module dftbp_dftb_sparse2dense
   use dftbp_common_accuracy, only : dp
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_common_constants, only : pi, imag
   use dftbp_common_environment, only : TEnvironment
   use dftbp_dftb_dense, only : getDescriptor
@@ -33,6 +34,7 @@ module dftbp_dftb_sparse2dense
   public :: unpackHelicalHS, packHelicalHS
   public :: getSparseDescriptor
   public :: getUnpackedOverlapPrime_real, getUnpackedOverlapPrime_kpts
+  public :: spinRotateInPauli, spinRotateOutPauli
 #:if WITH_SCALAPACK
   public :: unpackHSRealBlacs, unpackHSCplxBlacs, unpackHPauliBlacs, unpackSPauliBlacs
   public :: packRhoRealBlacs, packRhoCplxBlacs, packRhoPauliBlacs, packERhoPauliBlacs
@@ -596,11 +598,12 @@ contains
     integer :: nOrb
     integer :: ii
 
+    HSqrCplx(:,:) = 0.0_dp
+
     nOrb = size(HSqrCplx, dim=1) / 2
 
     ! for the moment, but will use S as workspace in the future
     allocate(work(nOrb, nOrb))
-    HSqrCplx(:,:) = 0.0_dp
 
     ! 1 0 charge part
     ! 0 1
@@ -1231,15 +1234,10 @@ contains
     !> Mapping between image atoms and corresponding atom in the central cell.
     integer, intent(in) :: img2CentCell(:)
 
-    complex(dp) :: phase
-    integer :: nAtom
-    integer :: iOrig, ii, jj, kk
-    integer :: iNeigh, iBlock
-    integer :: iOldVec, iVec
-    integer :: iAtom1, iAtom2, iAtom2f
+    complex(dp) :: phase, tmpSqr(mOrb, mOrb)
+    integer :: nAtom, iOrig, ii, jj, kk, iNeigh, iBlock, iOldVec, iVec, iAtom1, iAtom2, iAtom2f
     integer :: nOrb1, nOrb2, nOrb
     real(dp) :: kPoint2p(3)
-    complex(dp) :: tmpSqr(mOrb, mOrb)
   #:block DEBUG_CODE
     integer :: sizePrim
   #:endblock DEBUG_CODE
@@ -3473,5 +3471,53 @@ contains
     sparseSize = ind
 
   end subroutine getSparseDescriptor
+
+#:for DIR, LABEL in [('In', 'into'), ('Out', 'out of')]
+
+  !> Rotate sparse/packed 2-component matrix in spin space acording to the boundary conditions (if
+  !! any spin spirals present).
+  !! Sense of rotation is ${LABEL}$ central cell atom orientations.
+  subroutine spinRotate${DIR}$Pauli(ham, iNeighbour, nNeighbourSK, iSparseStart, img2CentCell,&
+      & boundaryConditions, coords)
+
+    !> Sparse hamiltonian
+    real(dp), intent(inout) :: ham(:,:)
+
+    !> Neighbour list for each atom (First index from 0!)
+    integer, intent(in) :: iNeighbour(0:, :)
+
+    !> Nr. of neighbours for each atom (incl. itself).
+    integer, intent(in) :: nNeighbourSK(:)
+
+    !> Indexing array for the sparse Hamiltonian
+    integer, intent(in) :: iSparseStart(:,:)
+
+    !> Map from images of atoms to central cell atoms
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Boundary condition
+    type(TBoundaryConditions), intent(in) :: boundaryConditions
+
+    !> Coordinates of all atoms
+    real(dp), intent(in) :: coords(:,:)
+
+    real(dp) :: rotateMatrix(3,3)
+    integer :: iAt1, iAt2, iNeigh, nAtom, iStart, iEnd
+
+    @:ASSERT(allocated(boundaryConditions%qSpin))
+    nAtom = size(nNeighbourSK)
+    do iAt1 = 1, nAtom
+      do iNeigh = 1, nNeighbourSK(iAt1)
+        iAt2 = iNeighbour(iNeigh, iAt1)
+        iStart = iSparseStart(iNeigh, iAt1) + 1
+        iEnd = iSparseStart(iNeigh+1, iAt1)
+        rotateMatrix(:,:) = boundaryConditions%fold${DIR}$SpinMatrix(iAt2, img2CentCell, coords)
+        ham(iStart:iEnd, 2:) = matmul(ham(iStart:iEnd, 2:), rotateMatrix)
+      end do
+    end do
+
+  end subroutine spinRotate${DIR}$Pauli
+
+#:endfor
 
 end module dftbp_dftb_sparse2dense

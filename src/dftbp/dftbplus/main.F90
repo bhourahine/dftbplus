@@ -20,7 +20,7 @@ module dftbp_dftbplus_main
   use dftbp_derivs_numderivs2, only : TNumderivs, next, getHessianMatrix, dipoleAdd, polAdd
   use dftbp_derivs_perturb, only : TResponse
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
-  use dftbp_dftb_boundarycond, only : TBoundaryConditions
+  use dftbp_common_boundarycond, only : TBoundaryConditions
   use dftbp_dftb_densitymatrix, only : TDensityMatrix, transformDualSpaceToBvKRealSpace
   use dftbp_dftb_determinants, only : TDftbDeterminants, TDftbDeterminants_init, determinants
   use dftbp_dftb_dftbplusu, only : TDftbU
@@ -52,7 +52,8 @@ module dftbp_dftbplus_main
   use dftbp_dftb_shift, only : addShift, addAtomicMultipoleShift
   use dftbp_dftb_slakocont, only : TSlakoCont
   use dftbp_dftb_sparse2dense, only : unpackHPauli, unpackHS, packHS, packHS, unpackHelicalHS,&
-      & packerho, packHelicalHS, iPackHS, unpackSPauli, getSparseDescriptor
+      & packerho, packHelicalHS, iPackHS, unpackSPauli, getSparseDescriptor, spinRotateInPauli,&
+      & spinRotateOutPauli
   use dftbp_dftb_spin, only : ud2qm, qm2ud
   use dftbp_dftb_spinorbit, only : addOnsiteSpinOrbitHam, getOnsiteSpinOrbitEnergy
   use dftbp_dftb_stress, only : getkineticstress, getBlockStress, getBlockiStress, getNonSCCStress
@@ -579,9 +580,9 @@ contains
     end if
     if (this%tWriteDetailedXML) then
       call writeDetailedXml(this%runId, this%speciesName, this%species0, this%pCoord0Out,&
-          & this%tPeriodic, this%tHelical, this%latVec, this%origin, this%tRealHS, this%nKPoint,&
-          & this%nSpin, size(this%eigen, dim=1), this%nOrb, this%kPoint, this%kWeight,&
-          & this%filling, this%occNatural)
+          & this%tPeriodic, this%tHelical, this%latVec, this%origin, this%boundaryCond,&
+          & this%tRealHS, this%nKPoint, this%nSpin, size(this%eigen, dim=1), this%nOrb,&
+          & this%kPoint, this%kWeight, this%filling, this%occNatural)
     end if
 
     call env%globalTimer%stopTimer(globalTimers%postGeoOpt)
@@ -1223,7 +1224,8 @@ contains
       ! We need to define Hamiltonian by adding the potential
       call getSccHamiltonian(env, this%H0, this%ints, this%nNeighbourSK, this%neighbourList,&
           & this%species, this%orb, this%iSparseStart, this%img2CentCell, this%potential,&
-          & allocated(this%reks), this%ints%hamiltonian, this%ints%iHamiltonian)
+          & allocated(this%reks), this%ints%hamiltonian, this%ints%iHamiltonian, this%coord,&
+          & this%boundaryCond)
       tExitGeoOpt = .true.
       return
     end if
@@ -1276,7 +1278,7 @@ contains
             & this%dftbU, this%dftbEnergy(1)%TS, this%qDepExtPot, this%qBlockOut, this%qiBlockOut,&
             & this%tFixEf, this%Ef, this%rhoPrim, this%onSiteElements, this%dispersion, tConverged,&
             & this%species0, this%referenceN0, this%qNetAtom, this%multipoleOut, this%reks,&
-            & errStatus)
+            & this%coord, this%boundaryCond, errStatus)
         @:PROPAGATE_ERROR(errStatus)
         call optimizeFONsAndWeights(this%eigvecsReal, this%filling, this%dftbEnergy(1), this%reks)
 
@@ -1388,7 +1390,7 @@ contains
           call getSccHamiltonian(env, this%H0, this%ints, this%nNeighbourSK, this%neighbourList,&
               & this%species, this%orb, this%iSparseStart, this%img2CentCell,&
               & this%potential, allocated(this%reks), this%ints%hamiltonian,&
-              & this%ints%iHamiltonian)
+              & this%ints%iHamiltonian, this%coord, this%BoundaryCond)
 
           if (this%tWriteRealHS .or. this%tWriteHS&
               & .and. any(this%electronicSolver%iSolver ==&
@@ -1413,7 +1415,8 @@ contains
               & this%hybridXc, this%eigen, this%filling, this%rhoPrim, this%xi, this%orbitalL,&
               & this%HSqrReal, this%SSqrReal, this%eigvecsReal, this%iRhoPrim, this%HSqrCplx,&
               & this%SSqrCplx, this%eigvecsCplx, this%rhoSqrReal, this%densityMatrix,&
-              & this%nNeighbourCam, this%nNeighbourCamSym, this%deltaDftb, errStatus)
+              & this%nNeighbourCam, this%nNeighbourCamSym, this%deltaDftb, this%boundaryCond,&
+              & errStatus)
           if (errStatus%hasError()) call error(errStatus%message)
 
           if (this%tWriteBandDat) then
@@ -2677,7 +2680,8 @@ contains
       & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
       & iDistribFn, tempElec, nEl, parallelKS, Ef, mu, energy, hybridXc, eigen, filling, rhoPrim,&
       & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
-      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, errStatus)
+      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, boundaryConds,&
+      & errStatus)
     use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
 
     !> Environment settings
@@ -2845,6 +2849,9 @@ contains
     !> Determinant derived type
     type(TDftbDeterminants), intent(inout) :: deltaDftb
 
+    !> Boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConds
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
@@ -2867,7 +2874,7 @@ contains
           & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim,&
           & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
           & eigvecsCplx, rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb,&
-          & errStatus)
+          & boundaryConds, errStatus)
       @:PROPAGATE_ERROR(errStatus)
 
     case(densityMatrixTypes%elecSolverProvided)
@@ -2908,7 +2915,8 @@ contains
       & tRealHS, tSpinSharedEf, tSpinOrbit, tDualSpinOrbit, tFillKSep, tFixEf, tMulliken,&
       & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim, xi,&
       & orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
-      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, errStatus)
+      & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, &
+      & boundaryConds, errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3066,10 +3074,14 @@ contains
     !> Determinant derived type
     type(TDftbDeterminants), intent(inout) :: deltaDftb
 
+    !> Boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConds
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
     integer :: nSpin
+    real(dp), allocatable :: tmpFilling(:,:)
 
     nSpin = size(ints%hamiltonian, dim=2)
     call env%globalTimer%startTimer(globalTimers%diagonalization)
@@ -3092,7 +3104,8 @@ contains
     else
       call buildAndDiagDensePauliHam(env, denseDesc, ints, kPoint, neighbourList,&
           & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
-          & parallelKS, eigen(:,:,1), HSqrCplx, SSqrCplx, eigVecsCplx, errStatus, xi, species)
+          & parallelKS, eigen(:,:,1), HSqrCplx, SSqrCplx, eigVecsCplx, coord, boundaryConds,&
+          & errStatus, xi, species)
       @:PROPAGATE_ERROR(errStatus)
     end if
     call env%globalTimer%stopTimer(globalTimers%diagonalization)
@@ -3117,13 +3130,12 @@ contains
       call ud2qm(rhoPrim)
     else
       ! Pauli structure of eigenvectors
-      filling(:,:,1) = 2.0_dp * filling(:,:,1)
+      tmpFilling = 2.0_dp * filling(:,:,1)
       call getDensityFromPauliEigvecs(env, denseDesc, tRealHS, tSpinOrbit, tDualSpinOrbit,&
-          & tMulliken, kPoint, kWeight, filling(:,:,1), neighbourList, nNeighbourSK, orb,&
-          & iSparseStart, img2CentCell, iCellVec, cellVec, species, parallelKS, eigVecsCplx,&
-          & SSqrCplx, energy, densityMatrix, rhoPrim, xi, orbitalL, iRhoPrim, errStatus)
+          & tMulliken, kPoint, kWeight, tmpFilling, neighbourList, nNeighbourSK, orb, iSparseStart,&
+          & img2CentCell, iCellVec, cellVec, species, parallelKS, eigVecsCplx, SSqrCplx, energy,&
+          & densityMatrix, rhoPrim, xi, orbitalL, iRhoPrim, coord, boundaryConds, errStatus)
       @:PROPAGATE_ERROR(errStatus)
-      filling(:,:,1) = 0.5_dp * filling(:,:,1)
     end if
     call env%globalTimer%stopTimer(globalTimers%densityMatrix)
 
@@ -3488,8 +3500,105 @@ contains
   end subroutine buildAndDiagDenseCplxHam
 
 
-  !> Builds and diagonalizes Pauli two-component Hamiltonians.
-  subroutine buildAndDiagDensePauliHam(env, denseDesc, ints, kPoint, neighbourList,&
+  !> Builds and diagonalizes Pauli two-component hamiltonian.
+  subroutine buildAndDiagDensePauliHam(env, denseDesc, ints, kPoint, neighbourList, nNeighbourSK,&
+      & iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver, parallelKS, eigen,&
+      & HSqrCplx, SSqrCplx, eigvecsCplx, coords, boundaryConds, errStatus, xi, species)
+
+    !> Environment settings
+    type(TEnvironment), intent(inout) :: env
+
+    !> Dense matrix descriptor
+    type(TDenseDescr), intent(in) :: denseDesc
+
+    !> Integral container
+    type(TIntegral), intent(in) :: ints
+
+    !> The k-points
+    real(dp), intent(in) :: kPoint(:,:)
+
+    !> List of neighbours for each atom
+    type(TNeighbourList), intent(in) :: neighbourList
+
+    !> Number of neighbours for each of the atoms
+    integer, intent(in) :: nNeighbourSK(:)
+
+    !> Index array for the start of atomic blocks in sparse arrays
+    integer, intent(in) :: iSparseStart(:,:)
+
+    !> Map from image atoms to the original unique atom
+    integer, intent(in) :: img2CentCell(:)
+
+    !> Index for which unit cell atoms are associated with
+    integer, intent(in) :: iCellVec(:)
+
+    !> Vectors (in units of the lattice constants) to cells of the lattice
+    real(dp), intent(in) :: cellVec(:,:)
+
+    !> Atomic orbital information
+    type(TOrbitals), intent(in) :: orb
+
+    !> Electronic solver information
+    type(TElectronicSolver), intent(inout) :: electronicSolver
+
+    !> The k-points and spins to be handled
+    type(TParallelKS), intent(in) :: parallelKS
+
+    !> Eigenvalues (orbital, kpoint)
+    real(dp), intent(out) :: eigen(:,:)
+
+    !> Dense hamiltonian matrix
+    complex(dp), intent(out) :: HSqrCplx(:,:)
+
+    !> Dense overlap matrix
+    complex(dp), intent(out) :: SSqrCplx(:,:)
+
+    !> Eigenvectors
+    complex(dp), intent(out) :: eigvecsCplx(:,:,:)
+
+    !> Central cell coordinates
+    real(dp), intent(in) :: coords(:,:)
+
+    !> Boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConds
+
+    !> Status of operation
+    type(TStatus), intent(out) :: errStatus
+
+    !> Spin orbit constants
+    real(dp), intent(in), allocatable :: xi(:,:)
+
+    !> Species of atoms
+    integer, intent(in), optional :: species(:)
+
+    type(TIntegral), allocatable :: rotateInts
+
+    if (allocated(boundaryConds%qSpin)) then
+
+      rotateInts = ints
+      call spinRotateInPauli(rotateInts%hamiltonian, neighbourList%iNeighbour, nNeighbourSK,&
+          & iSparseStart, img2CentCell, boundaryConds, coords)
+      if (allocated(rotateInts%iHamiltonian)) then
+        call spinRotateInPauli(rotateInts%iHamiltonian, neighbourList%iNeighbour, nNeighbourSK,&
+            & iSparseStart, img2CentCell, boundaryConds, coords)
+      end if
+      call buildAndDiagDensePauliHam_(env, denseDesc, rotateInts, kPoint, neighbourList,&
+          & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
+          & parallelKS, eigen, HSqrCplx, SSqrCplx, eigvecsCplx, errStatus, xi, species)
+
+    else
+
+      call buildAndDiagDensePauliHam_(env, denseDesc, ints, kPoint, neighbourList,&
+          & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
+          & parallelKS, eigen, HSqrCplx, SSqrCplx, eigvecsCplx, errStatus, xi, species)
+
+    end if
+
+  end subroutine buildAndDiagDensePauliHam
+
+
+  !> Actually builds and diagonalizes Pauli two-component Hamiltonians.
+  subroutine buildAndDiagDensePauliHam_(env, denseDesc, ints, kPoint, neighbourList,&
       & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
       & parallelKS, eigen, HSqrCplx, SSqrCplx, eigvecsCplx, errStatus, xi, species)
 
@@ -3605,7 +3714,7 @@ contains
     call mpifx_allreduceip(env%mpi%interGroupComm, eigen, MPI_SUM)
   #:endif
 
-  end subroutine buildAndDiagDensePauliHam
+  end subroutine buildAndDiagDensePauliHam_
 
 
   !> Creates sparse density matrix from real eigenvectors.
@@ -3919,7 +4028,7 @@ contains
   subroutine getDensityFromPauliEigvecs(env, denseDesc, tRealHS, tSpinOrbit, tDualSpinOrbit,&
       & tMulliken, kPoint, kWeight, filling, neighbourList, nNeighbourSK, orb, iSparseStart,&
       & img2CentCell, iCellVec, cellVec, species, parallelKS, eigvecs, work, dftbEnergy,&
-      & densityMatrix, rhoPrim, xi, orbitalL, iRhoPrim, errStatus)
+      & densityMatrix, rhoPrim, xi, orbitalL, iRhoPrim, coords, boundaryConds, errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3998,6 +4107,12 @@ contains
 
     !> Imaginary part of density matrix  if required
     real(dp), intent(inout), allocatable :: iRhoPrim(:,:)
+
+    !> Central cell coordinates
+    real(dp), allocatable, intent(in) :: coords(:,:)
+
+    !> Boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConds
 
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
@@ -4094,6 +4209,20 @@ contains
   #:endif
     if (tSpinOrbit .and. .not. tDualSpinOrbit) then
       dftbEnergy%ELS = sum(dftbEnergy%atomLS)
+    end if
+
+    if (allocated(boundaryConds%qSpin)) then
+
+      call spinRotateOutPauli(rhoPrim, neighbourList%iNeighbour, nNeighbourSK, iSparseStart,&
+          & img2CentCell, boundaryConds, coords)
+
+      if (tImHam) then
+
+        call spinRotateOutPauli(iRhoPrim, neighbourList%iNeighbour, nNeighbourSK, iSparseStart,&
+            & img2CentCell, boundaryConds, coords)
+
+      end if
+
     end if
 
   end subroutine getDensityFromPauliEigvecs
@@ -7994,7 +8123,8 @@ contains
       & cellVol, extPressure, energy, q0, iAtInCentralRegion, solvation, thirdOrd, potential,&
       & hybridXc, nNeighbourCam, nNeighbourCamSym, tDualSpinOrbit, xi, isExtField, isXlbomd, dftbU,&
       & TS, qDepExtPot, qBlock, qiBlock, tFixEf, Ef, rhoPrim, onSiteElements, dispersion,&
-      & tConverged, species0, referenceN0, qNetAtom, multipole, reks, errStatus)
+      & tConverged, species0, referenceN0, qNetAtom, multipole, reks, coords, boundaryConds,&
+      & errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -8132,6 +8262,12 @@ contains
     !> Data type for REKS
     type(TReksCalc), allocatable, intent(inout) :: reks
 
+    !> Central cell coordinates
+    real(dp), allocatable, intent(in) :: coords(:,:)
+
+    !> Boundary conditions
+    type(TBoundaryConditions), intent(in) :: boundaryConds
+
     !> Error status
     type(TStatus), intent(inout) :: errStatus
 
@@ -8191,7 +8327,8 @@ contains
 
       ! tmpHamSp has (my_qm) component
       call getSccHamiltonian(env, H0, ints, nNeighbourSK, neighbourList, species, orb,&
-          & iSparseStart, img2CentCell, potential, allocated(reks), tmpHamSp, ints%iHamiltonian)
+          & iSparseStart, img2CentCell, potential, allocated(reks), tmpHamSp, ints%iHamiltonian,&
+          & coords, boundaryConds)
       tmpHamSp(:,1) = 2.0_dp * tmpHamSp(:,1)
 
       if (reks%isHybridXc) then

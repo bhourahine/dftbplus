@@ -10,8 +10,8 @@
 !> Implements a repulsive potential between two atoms represented by a polynomial of 9th degree
 module dftbp_dftb_repulsive_twobodyrep
   use dftbp_common_accuracy, only : dp
+  use dftbp_common_boundarycond, only : zAxis
   use dftbp_common_constants, only : pi
-  use dftbp_dftb_boundarycond, only : zAxis
   use dftbp_dftb_periodic, only : TNeighbourList, getNrOfNeighboursForAll
   use dftbp_dftb_repulsive_pairrepulsive, only : TPairRepulsive, TPairRepulsiveItem
   use dftbp_dftb_repulsive_repulsive, only :TRepulsive
