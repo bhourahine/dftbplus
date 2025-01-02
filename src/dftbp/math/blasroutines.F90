@@ -1006,12 +1006,7 @@ contains
     if (present(n)) then
       in = n
     else
-      if (side == 'r' .or. side == 'R') then
-        in = size(A,dim=2)
-      else
-        in = size(B,dim=2)
-      end if
-      !in = size(C,dim=2)
+      in = size(C,dim=2)
     end if
     if (present(m)) then
       im = m
@@ -1030,8 +1025,6 @@ contains
     @:ASSERT(size(a,dim=2)>=ka)
     @:ASSERT(ldb>=im)
     @:ASSERT(ldc>=im)
-    @:ASSERT(size(B,dim=2)>=in)
-    @:ASSERT(size(C,dim=2)>=in)
 
     call dsymm ( side, iUplo, im, in, iAlpha, A, lda, B, ldb, iBeta, C, ldc )
 

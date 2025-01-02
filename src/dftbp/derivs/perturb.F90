@@ -2346,7 +2346,6 @@ contains
               dEi(:, :, :, iCart, iAt) = dEiTmp
             end do
 
-
           elseif (nSpin > 2) then
 
             do iKS = 1, parallelKS%nLocalKS
@@ -2375,10 +2374,6 @@ contains
           call mpifx_allreduceip(env%mpi%globalComm, dRho, MPI_SUM)
         #:endif
 
-          dRho(:,:) = maxFill * drho
-          if (allocated(dRhoOut)) then
-            dRhoOut(:) = maxFill * dRhoOut
-          end if
           call ud2qm(dRho)
 
           if (allocated(idRho)) then
@@ -2392,7 +2387,8 @@ contains
                 & neighbourList%iNeighbour, nNeighbourSK, img2CentCell, iSparseStart)
             !if (allocated(dftbU) .or. allocated(onsMEs)) then
             !  dqBlockOut(:,:,:,iS) = 0.0_dp
-            !  call mulliken(env, dqBlockOut(:,:,:,iS), over, drho(:,iS), orb, neighbourList%iNeighbour,&
+            !  call mulliken(env, dqBlockOut(:,:,:,iS), over, drho(:,iS), orb,&
+            !      & neighbourList%iNeighbour,&
             !      & nNeighbourSK, img2CentCell, iSparseStart)
             !end if
           end do
@@ -2403,7 +2399,8 @@ contains
               dqDiffRed(:) = dRhoOut - dRhoIn
             else
               dqOutRed(:) = 0.0_dp
-              call OrbitalEquiv_reduce(dqOut(:,:,:,iCart, iAt), iEqOrbitals, orb, dqOutRed(:nIneqMixElements))
+              call OrbitalEquiv_reduce(dqOut(:,:,:,iCart, iAt), iEqOrbitals, orb,&
+                  & dqOutRed(:nIneqMixElements))
               !if (allocated(dftbU)) then
               !  call AppendBlockReduced(dqBlockOut, iEqBlockDFTBU, orb, dqOutRed)
               !end if
@@ -2423,11 +2420,11 @@ contains
               if (iSCCIter == 1) then
                 if (allocated(hybridXc)) then
                   dRhoIn(:) = dRhoOut
-#:if WITH_SCALAPACK
+                #:if WITH_SCALAPACK
                   call denseMullikenRealBlacs(env, parallelKS, denseDesc, dRhoInSqr, SSqrReal, dqIn)
-#:else
+                #:else
                   call denseMullikenReal(dRhoInSqr, SSqrReal, denseDesc%iAtomStart, dqIn)
-#:endif
+                #:endif
                 else
                   dqIn(:,:,:) = dqOut(:,:,:,iCart, iAt)
                   dqInpRed(:) = dqOutRed
@@ -2440,17 +2437,17 @@ contains
 
                 if (allocated(hybridXc)) then
                   call TMixerReal_mix(pChrgMixer, dRhoIn, dqDiffRed)
-#:if WITH_SCALAPACK
+                #:if WITH_SCALAPACK
                   call denseMullikenRealBlacs(env, parallelKS, denseDesc, dRhoInSqr, SSqrReal, dqIn)
-#:else
+                #:else
                   call denseMullikenReal(dRhoInSqr, SSqrReal, denseDesc%iAtomStart, dqIn)
-#:endif
+                #:endif
                 else
                   call TMixerReal_mix(pChrgMixer, dqInpRed, dqDiffRed)
-#:if WITH_SCALAPACK
+                #:if WITH_SCALAPACK
                   ! Synchronise charges in order to avoid mixers that store a history drifting apart
                   call mpifx_bcast(env%mpi%globalComm, dqInpRed)
-#:endif
+                #:endif
 
                   call OrbitalEquiv_expand(dqInpRed(:nIneqMixElements), iEqOrbitals, orb, dqIn)
 
@@ -2507,11 +2504,12 @@ contains
     call mpifx_allreduceip(env%mpi%globalComm, dEi, MPI_SUM)
   #:endif
 
-    write(stdOut, *)'dEi'
+    write(stdOut, *)'dEi/d'
+    write(*,"(T16,A,T32,A,T48,A)")direction
     do iS = 1, nSpin
       do iAt = 1, nAtom
         do iOrb = 1, size(dEi,dim=4)
-          write(stdOut, *) dEi(iOrb, 1, iS, :, iAt) * Hartree__eV
+          write(stdOut, "(3F16.8)") dEi(iOrb, 1, iS, :, iAt) * Hartree__eV
         end do
       end do
     end do
@@ -2523,7 +2521,7 @@ contains
         write(stdOut,"(A,I0)")'/d Atom_',iAt
         do iS = 1, nSpin
           do jAt = 1, nAtom
-            write(stdOut, *)jAt, -sum(dqOut(:, jAt, iS, :, iAt), dim=1)
+            write(stdOut, "(1X,I0,T4,3F16.8)")jAt, -sum(dqOut(:, jAt, iS, :, iAt), dim=1)
           end do
           write(stdOut, *)
         end do
@@ -2531,15 +2529,15 @@ contains
       write(stdOut, *)
 
       write(stdOut, *)'Born effective charges'
-      ! i.e. derivative of dipole moment wrt to atom positions, or equivalently derivative of forces
-      ! wrt to a homogeneous electric field
+      ! i.e. derivative of dipole moment wrt to atom positions, i.e. (d/dx) (q-q0) x, or
+      ! equivalently derivative of forces wrt to a homogeneous electric field
       do iAt = 1, nAtom
         do iCart = 1, 3
           do jCart = 1, 3
             dDipole(jCart) = -sum(sum(dqOut(:, : , 1, iCart, iAt), dim=1) * coord(jCart, :))
           end do
-          dDipole(iCart) = dDipole(iCart) -sum(qOrb(:,iAt,1) - q0(:,iAt,1))
-          write(stdOut,*)dDipole
+          dDipole(iCart) = dDipole(iCart) - sum(qOrb(:,iAt,1) - q0(:,iAt,1))
+          write(stdOut,"(3F16.8)")dDipole
         end do
         write(stdOut, *)
       end do
