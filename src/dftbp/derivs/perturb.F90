@@ -49,9 +49,9 @@ module dftbp_derivs_perturb
 #:if WITH_SCALAPACK
   use dftbp_dftb_populations, only : denseMullikenRealBlacs
   use dftbp_extlibs_mpifx, only : mpifx_allreduceip, mpifx_bcast, MPI_SUM
-#:else
-  use dftbp_dftb_sparse2dense, only : unpackHS
+  use dftbp_extlibs_scalapackfx, only : DLEN_, blocklist, size, scalafx_getdescriptor
 #:endif
+  use dftbp_dftb_sparse2dense, only : unpackHS
   implicit none
 
   private
@@ -2125,7 +2125,7 @@ contains
 
     if (allocated(hybridXc)) then
     #:if WITH_SCALAPACK
-      call error("Range separation not supported for MPI at the moment")
+      @:RAISE_ERROR(errStatus, -1, "Range separation not supported for MPI at the moment")
     #:endif
       allocate(SSqrReal(nOrbs, nOrbs))
       SSqrReal(:,:) = 0.0_dp

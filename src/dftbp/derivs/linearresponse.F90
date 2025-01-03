@@ -967,8 +967,8 @@ contains
 
       do iSignOmega = -1, 1, 2 ! loop over positive and negative frequencies
 
-        call weightMatrix(env, desc, cWorkLocal, workLocal, nFilled, nEmpty, .false., eigVals,&
-            & tempElec, iS, iK, Ef, iSignOmega * omega + eta)
+        call weightMatrix(env, desc, cWorkLocal, workLocal, nFilled, nEmpty, eigVals, tempElec, iS,&
+            & iK, Ef, iSignOmega * omega + eta)
 
         ! Derivatives of eigenvectors
         cWorkLocal2(:,:) = eigvecsTransformed
@@ -1004,8 +1004,8 @@ contains
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
       ! the elements
-      call weightMatrix(env, desc, workLocal, workLocal, nFilled, nEmpty, .false., eigVals,&
-          & tempElec, iS, iK, Ef)
+      call weightMatrix(env, desc, workLocal, workLocal, nFilled, nEmpty, eigVals, tempElec, iS,&
+          & iK, Ef)
 
       ! Derivatives of eigenvectors
       call pblasfx_pgemm(eigvecsTransformed, denseDesc%blacsOrbSqr, workLocal,&
@@ -1549,8 +1549,8 @@ contains
 
       do iSignOmega = -1, 1, 2 ! loop over positive and negative frequencies
 
-        call weightMatrix(env, desc, cWorkLocal2, cWorkLocal, nFilled, nEmpty, .false., eigVals,&
-            & tempElec, iS, iK, Ef, iSignOmega * omega + eta)
+        call weightMatrix(env, desc, cWorkLocal2, cWorkLocal, nFilled, nEmpty, eigVals, tempElec,&
+            & iS, iK, Ef, iSignOmega * omega + eta)
 
         ! Derivatives of eigenvectors
         call pblasfx_pgemm(eigvecsTransformed, denseDesc%blacsOrbSqr, cWorkLocal2,&
@@ -1576,8 +1576,8 @@ contains
 
       ! Form actual perturbation U matrix for eigenvectors (potentially at finite T) by weighting
       ! the elements
-      call weightMatrix(env, desc, cWorkLocal, cWorkLocal, nFilled, nEmpty, .false., eigVals,&
-          & tempElec, iS, iK, Ef)
+      call weightMatrix(env, desc, cWorkLocal, cWorkLocal, nFilled, nEmpty, eigVals, tempElec, iS,&
+          & iK, Ef)
 
       ! Derivatives of eigenvectors
       call pblasfx_pgemm(eigvecsTransformed, denseDesc%blacsOrbSqr, cWorkLocal,&
