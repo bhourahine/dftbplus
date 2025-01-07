@@ -54,7 +54,7 @@ contains
   subroutine dRhoReal(env, dHam, dOver, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
       & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals, filling, Ef,&
       & tempElec, orb, dRhoSparse, dRhoSqr, hybridXc, over, nNeighbourCam, transform, species,&
-      & dEi, dPsi, coord, errStatus, omega, isHelical, eta)
+      & dEi, dPsi, coord, errStatus, omega, isHelical, eta, maxFill)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -154,6 +154,9 @@ contains
 
     !> Small complex value for frequency dependent
     complex(dp), intent(in), optional :: eta
+
+    !> Maximum allowed number of electrons in a single particle state
+    real(dp), intent(in), optional :: maxFill
 
   #:if WITH_SCALAPACK
     integer :: iGlob, jGlob, jj
@@ -515,7 +518,7 @@ contains
         call symm(work2Local, 'l', dRho, eigvecsTransformed)
         work2Local(:,:) = work2Local * eigvecsTransformed
         call weight_dx(workLocal, workLocal, work2Local, nFilled, nOrb, 1, iS, transform, eigvals,&
-            & filling)
+            & filling, maxFill)
 
         ! calculate the derivatives of the eigenvectors
         workLocal = matmul(eigvecsTransformed, workLocal)
@@ -2172,7 +2175,7 @@ contains
 #:endif
 
   pure subroutine weight_dx(workOut, workIn, work2Local, nFilled, nOrb, iK, iS, transform, eigvals,&
-      & filling)
+      & filling, maxFill)
 
     real(dp), intent(out) :: workOut(:,:)
     real(dp), intent(in) :: workIn(:,:)
@@ -2195,16 +2198,24 @@ contains
     !> Filling of unperturbed ground state
     real(dp), intent(in) :: filling(:,:,:)
 
+    !> Maximum allowed number of electrons in a single particle state
+    real(dp), intent(in), optional :: maxFill
+
     integer :: iFilled, iEmpty
+    real(dp) :: invMaxFill
+
+    invMaxFill = 1.0_dp
+    if (present(maxFill)) invMaxFill = 1.0_dp / maxFill
 
     do iFilled = 1, nFilled(iS, iK)
       do iEmpty = 1, nOrb
         if (iFilled == iEmpty) then
-          workOut(iFilled, iFilled) = -0.25_dp*filling(iFilled, iK, iS)*sum(work2Local(:, iFilled))
+          workOut(iFilled, iFilled) = -0.5_dp * invMaxFill * filling(iFilled, iK, iS) *&
+              & sum(work2Local(:, iFilled))
         else
           if (.not.transform%degenerate(iFilled,iEmpty)) then
-            workOut(iEmpty, iFilled) = 0.5_dp * filling(iFilled, iK, iS) * workIn(iEmpty, iFilled)&
-                & / (eigvals(iFilled, iK, iS) - eigvals(iEmpty, iK, iS))
+            workOut(iEmpty, iFilled) = invMaxFill * filling(iFilled, iK, iS) *&
+                & workIn(iEmpty, iFilled) / (eigvals(iFilled, iK, iS) - eigvals(iEmpty, iK, iS))
           else
             workOut(iEmpty, iFilled) = 0.0_dp
             workOut(iFilled, iEmpty) = 0.0_dp
