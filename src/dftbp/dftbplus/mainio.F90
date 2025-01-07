@@ -3829,7 +3829,7 @@ contains
 
   !> Seventh group of data for detailed.out
   subroutine writeDetailedOut7(fd, tGeoOpt, tGeomEnd, tMd, tDerivs, eField, dipoleMoment,&
-      & deltaDftb, eFieldScaling, dipoleMessage, quadrupoleMoment)
+      & deltaDftb, transitionDipoleMoment, eFieldScaling, dipoleMessage, quadrupoleMoment)
 
     !> File ID
     integer, intent(in) :: fd
@@ -3854,6 +3854,9 @@ contains
 
     !> type for DFTB determinants
     type(TDftbDeterminants), intent(in) :: deltaDftb
+
+    !> Transition dipole moment (Delta DFTB)
+    real(dp), allocatable :: transitionDipoleMoment(:)
 
     !> Any dielectric environment scaling
     class(TScaleExtEField), intent(in) :: eFieldScaling
@@ -3893,7 +3896,7 @@ contains
               & ' Debye'
           write(fd, *)
           if (deltaDftb%isSpinPurify .and. deltaDftb%iGround > 0) then
-            write(fd, "(A, 3F14.8, A)")'S0 -> S1 transition dipole:',&
+            write(fd, "(A, 3F14.8, A)")'S0 -> S1 difference dipole:',&
                 & eFieldScaling%scaledSoluteDipole(dipoleMoment(:,deltaDftb%iFinal))&
                 & -eFieldScaling%scaledSoluteDipole(dipoleMoment(:,deltaDftb%iGround)), ' au'
           end if
@@ -3903,6 +3906,14 @@ contains
           write(fd, "(A, 3F14.8, A)")'Mixed state Dipole moment:',&
               & eFieldScaling%scaledSoluteDipole(dipoleMoment(:,deltaDftb%iMixed))&
               & * au__Debye, ' Debye'
+          write(fd, *)
+        end if
+        if (allocated(transitionDipoleMoment) .and. deltaDftb%isTDM) then  !! TDK - not yet compatible with solvation
+          write(fd, "(A, 3F14.8, A)")'Transition Dipole moment:',&
+              & transitionDipoleMoment, ' au'
+          write(fd, "(A, 3F14.8, A)")'Transition Dipole moment:',&
+              & transitionDipoleMoment * au__Debye,&
+              & ' Debye'
           write(fd, *)
         end if
       else
@@ -4854,6 +4865,7 @@ contains
 
     write(stdOut, "(A5, A18, A18, A18)") "iSCC", " Total electronic ", "  Diff electronic ",&
         & "     SCC error    "
+    write(stdOut, "(A)") "TDMWRITE: printed SCC header"
 
   end subroutine printSccHeader
 
