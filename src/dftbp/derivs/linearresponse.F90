@@ -95,7 +95,7 @@ contains
     !> Eigenvalue of each level, kpoint and spin channel
     real(dp), intent(in) :: eigvals(:,:,:)
 
-    !> Filling
+    !> Filling of unperturbed ground state
     real(dp), intent(in) :: filling(:,:,:)
 
     !> Fermi level(s)
@@ -514,7 +514,8 @@ contains
             & iSparseStart, img2CentCell)
         call symm(work2Local, 'l', dRho, eigvecsTransformed)
         work2Local(:,:) = work2Local * eigvecsTransformed
-        call weight_dx(workLocal, workLocal, work2Local, nFilled, nOrb, 1, iS, transform, eigvals)
+        call weight_dx(workLocal, workLocal, work2Local, nFilled, nOrb, 1, iS, transform, eigvals,&
+            & filling)
 
         ! calculate the derivatives of the eigenvectors
         workLocal = matmul(eigvecsTransformed, workLocal)
@@ -2170,7 +2171,8 @@ contains
 
 #:endif
 
-  pure subroutine weight_dx(workOut, workIn, work2Local, nFilled, nOrb, iK, iS, transform, eigvals)
+  pure subroutine weight_dx(workOut, workIn, work2Local, nFilled, nOrb, iK, iS, transform, eigvals,&
+      & filling)
 
     real(dp), intent(out) :: workOut(:,:)
     real(dp), intent(in) :: workIn(:,:)
@@ -2178,7 +2180,10 @@ contains
     integer, intent(in) :: nFilled(:,:)
     integer, intent(in) :: nOrb
 
+    !> Current k-point
     integer, intent(in) :: iK
+
+    !> Current spin channel
     integer, intent(in) :: iS
 
     !> Transformation structure for degenerate orbitals
@@ -2187,15 +2192,18 @@ contains
     !> Eigenvalue of each level, kpoint and spin channel
     real(dp), intent(in) :: eigvals(:,:,:)
 
+    !> Filling of unperturbed ground state
+    real(dp), intent(in) :: filling(:,:,:)
+
     integer :: iFilled, iEmpty
 
     do iFilled = 1, nFilled(iS, iK)
       do iEmpty = 1, nOrb
         if (iFilled == iEmpty) then
-          workOut(iFilled, iFilled) = -0.5_dp * sum(work2Local(:, iFilled))
+          workOut(iFilled, iFilled) = -0.5_dp*filling(iFilled, iK, iS)*sum(work2Local(:, iFilled))
         else
           if (.not.transform%degenerate(iFilled,iEmpty)) then
-            workOut(iEmpty, iFilled) = workIn(iEmpty, iFilled)&
+            workOut(iEmpty, iFilled) = filling(iFilled, iK, iS) * workIn(iEmpty, iFilled)&
                 & / (eigvals(iFilled, iK, iS) - eigvals(iEmpty, iK, iS))
           else
             workOut(iEmpty, iFilled) = 0.0_dp
