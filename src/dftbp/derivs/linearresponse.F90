@@ -2200,10 +2200,10 @@ contains
     do iFilled = 1, nFilled(iS, iK)
       do iEmpty = 1, nOrb
         if (iFilled == iEmpty) then
-          workOut(iFilled, iFilled) = -0.5_dp*filling(iFilled, iK, iS)*sum(work2Local(:, iFilled))
+          workOut(iFilled, iFilled) = -0.25_dp*filling(iFilled, iK, iS)*sum(work2Local(:, iFilled))
         else
           if (.not.transform%degenerate(iFilled,iEmpty)) then
-            workOut(iEmpty, iFilled) = filling(iFilled, iK, iS) * workIn(iEmpty, iFilled)&
+            workOut(iEmpty, iFilled) = 0.5_dp * filling(iFilled, iK, iS) * workIn(iEmpty, iFilled)&
                 & / (eigvals(iFilled, iK, iS) - eigvals(iEmpty, iK, iS))
           else
             workOut(iEmpty, iFilled) = 0.0_dp
