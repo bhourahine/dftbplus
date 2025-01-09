@@ -2079,9 +2079,15 @@ contains
       call error("Custom occupation not compatible with linear response")
     end if
 
+    if (input%ctrl%isTDM .and. this%boundaryCond%iBoundaryCondition /= boundaryCondsEnum%cluster)&
+        & then
+      @:RAISE_ERROR(errStatus, -1, "Transition dipole moments only available for molecular&
+          & systems")
+    end if
     ! DFTB related variables if multiple determinants are used
     call TDftbDeterminants_init(this%deltaDftb, input%ctrl%isNonAufbau, input%ctrl%isSpinPurify,&
-        & input%ctrl%isGroundGuess, input%ctrl%isTDM, this%nEl, this%dftbEnergy)
+        & input%ctrl%isGroundGuess, input%ctrl%isTDM, this%nEl, this%dftbEnergy, errStatus)
+    if (errStatus%hasError()) call error(errStatus%message)
 
     if (this%tForces) then
       this%tCasidaForces = input%ctrl%tCasidaForces
@@ -5605,16 +5611,14 @@ contains
 
     !> Initialize storage for TI-DFTB TDMs
     if (this%deltaDftb%isTDM) then
-      allocate(this%transitionDipoleMoment(3))
-      allocate(this%tiMatG(nLocalRows,nLocalCols,this%nSpin))
-      allocate(this%tiMatE(nLocalRows,nLocalCols,this%nSpin))
-      allocate(this%tiMatPT(nLocalRows,nLocalCols))
-      allocate(this%tiSigma(nLocalRows))
-      allocate(this%gfilling(sqrHamSize, this%nKPoint, this%nSpin))
-      allocate(this%mfilling(sqrHamSize, this%nKPoint, this%nSpin))
-      allocate(this%tiTraCharges(this%orb%mOrb, this%nAtom))
-      this%gfilling(:,:,:) = 0.0_dp
-      this%mfilling(:,:,:) = 0.0_dp
+      allocate(this%transitionDipoleMoment(3), source=0.0_dp)
+      allocate(this%tiMatG(nLocalRows,nLocalCols,this%nSpin), source=0.0_dp)
+      allocate(this%tiMatE(nLocalRows,nLocalCols,this%nSpin), source=0.0_dp)
+      allocate(this%tiMatPT(nLocalRows,nLocalCols), source=0.0_dp)
+      allocate(this%tiSigma(nLocalRows), source=0.0_dp)
+      allocate(this%gfilling(sqrHamSize, this%nKPoint, this%nSpin), source=0.0_dp)
+      allocate(this%mfilling(sqrHamSize, this%nKPoint, this%nSpin), source=0.0_dp)
+      allocate(this%tiTraCharges(this%orb%mOrb, this%nAtom), source=0.0_dp)
     end if
 
   end subroutine initDetArrays

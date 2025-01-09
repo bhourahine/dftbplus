@@ -23,7 +23,7 @@ module dftbp_dftbplus_main
   use dftbp_dftb_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_dftb_densitymatrix, only : TDensityMatrix, transformDualSpaceToBvKRealSpace
   use dftbp_dftb_determinants, only : determinants, TDftbDeterminants, TDftbDeterminants_init,&
-      & tiTDM, tiTraDip
+      & tiTraDip
   use dftbp_dftb_dftbplusu, only : TDftbU
   use dftbp_dftb_dispersions, only : TDispersionIface
   use dftbp_dftb_energytypes, only : TEnergies
@@ -131,10 +131,10 @@ module dftbp_dftbplus_main
   use dftbp_dftb_populations, only : denseMullikenRealBlacs,&
       & denseSubtractDensityOfAtomsRealNonperiodicBlacs,&
       & denseSubtractDensityOfAtomsRealPeriodicBlacs
-  use dftbp_dftb_sparse2dense, only : packERhoPauliBlacs, packRhoCplxBlacs,&
-      & packRhoHelicalCplxBlacs, packRhoHelicalRealBlacs, packRhoPauliBlacs, packRhoRealBlacs,&
-      & unpackHPauliBlacs, unpackHSCplxBlacs, unpackHSHelicalCplxBlacs, unpackHSHelicalRealBlacs,&
-      & unpackHSRealBlacs, unpackSPauliBlacs, tiTDM, tiTraDip
+  use dftbp_dftb_sparse2dense, only : packRhoRealBlacs, packRhoCplxBlacs, packRhoPauliBlacs,&
+      & packRhoHelicalRealBlacs, packRhoHelicalCplxBlacs, packERhoPauliBlacs, unpackHSRealBlacs,&
+      & unpackHSCplxBlacs, unpackHPauliBlacs, unpackSPauliBlacs, unpackHSHelicalRealBlacs,&
+      & unpackHSHelicalCplxBlacs
   use dftbp_dftbplus_eigenvects, only : diagDenseMtxBlacs
   use dftbp_extlibs_mpifx, only : MPI_MAX, MPI_SUM, mpifx_allreduceip, mpifx_bcast
   use dftbp_extlibs_scalapackfx, only : blacsfx_gemr2d, pblasfx_phemm, pblasfx_psymm,&
@@ -1645,7 +1645,7 @@ contains
               & this%orb, this%denseDesc, this%iSparseStart, this%img2CentCell, this%rhoPrim,&
               & this%ints%overlap, this%tiTraCharges, this%transitionDipoleMoment, this%q0,&
               & this%coord0, this%iAtInCentralRegion, this%gfilling, this%mfilling, env)
-      !> Write out the TDM, because TDM not available in time for writeDetailedOut7 dipole writeout
+      ! Write out the TDM, because TDM not available in time for writeDetailedOut7 dipole writeout
       write(stdOut,*)
       write(stdOut,'(A, 3F14.8, A)') 'TI-DFTB Transition Dipole Moment:',&
           & this%transitionDipoleMoment, ' a.u.'
@@ -3406,8 +3406,8 @@ contains
     call env%globalTimer%stopTimer(globalTimers%diagonalization)
 
     call getFillingsAndBandEnergies(eigen, nEl, nSpin, tempElec, kWeight, tSpinSharedEf,&
-        & tFillKSep, tFixEf, iDistribFn, Ef, filling, energy%Eband, energy%TS, energy%E0, deltaDftb,&
-        & gfilling, mfilling)
+        & tFillKSep, tFixEf, iDistribFn, Ef, filling, energy%Eband, energy%TS, energy%E0,&
+        & deltaDftb, gfilling, mfilling)
 
     call env%globalTimer%startTimer(globalTimers%densityMatrix)
     if (nSpin /= 4) then
@@ -3628,7 +3628,6 @@ contains
 
     #:endif
 
-      ! Store Hamiltonians for TDM calculation
       write(stdOut,*) 'TDMWRITE: Entering tiMat assignments'
       ! Store eigenvectors (in HSqrReal after diag) for TDM calculation
       if (deltaDftb%isTDM) then
@@ -4731,10 +4730,10 @@ contains
     ! Store fillings for TDM calculation
     if (deltaDftb%isTDM) then
       if(deltaDftb%whichDeterminant(deltaDftb%iDeterminant) == determinants%ground) then
-        gfilling = fillings
+        gfilling(:,:,:) = fillings
       end if
       if(deltaDftb%whichDeterminant(deltaDftb%iDeterminant) == determinants%mixed) then
-        mfilling = fillings
+        mfilling(:,:,:) = fillings
       end if
     end if
 
