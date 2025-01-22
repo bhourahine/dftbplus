@@ -10,8 +10,11 @@ Welcome to DFTB+ code design's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   datastructures.rst
+   hamiltonian.rst
+   linearalgebra.rst
    testing.rst
-   
+
 
 Indices and tables
 ==================
