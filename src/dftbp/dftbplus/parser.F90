@@ -2566,11 +2566,18 @@ contains
       call getChildValue(value1, "Order", ctrl%iDistribFn, 2)
       if (ctrl%iDistribFn < 1) then
         call getNodeHSDName(value1, buffer)
-        write(errorStr, "(A,A,A,I4)")"Unsuported filling mode for '", &
-            & char(buffer),"' :",ctrl%iDistribFn
-        call detailedError(child, errorStr)
+        select case(ctrl%iDistribFn)
+        case (0)
+          write(errorStr, "(A)")"Methfessel-Paxton filling order 0 is equivalent to gaussian&
+              & smearing"
+          call detailedWarning(child, errorStr)
+        case default
+          write(errorStr, "(A,A,A,I4)")"Filling order must be above zero '", char(buffer),"' :",&
+              &ctrl%iDistribFn
+          call detailedError(child, errorStr)
+        end select
       end if
-      ctrl%iDistribFn = fillingTypes%Methfessel + ctrl%iDistribFn
+      ctrl%iDistribFn = ctrl%iDistribFn + fillingTypes%Methfessel
     case default
       call getNodeHSDName(value1, buffer)
       call detailedError(child, "Invalid filling method '" //char(buffer)// "'")
