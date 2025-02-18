@@ -23,7 +23,7 @@
     type(TStatus) :: errStatus
     integer, allocatable :: img2CentCell(:)
     real(dp), allocatable :: coords(:,:)
-    real(dp) :: outMatrix(3,3), inMatrix(3,3), matrix(3,3), vec(3), spin(3), theta, a0
+    real(dp) :: outMatrix(3,3), inMatrix(3,3), matrix(3,3), vec(4), spin(3), theta, a0
     real(dp), parameter :: eye(3,3) = real(reshape([1,0,0,0,1,0,0,0,1],[3,3]), dp)
     integer :: iAt, n, m
 
@@ -31,7 +31,7 @@
 
     #:block TEST("initfail")
       call TBoundaryConditions_init(bcs, boundaryConditions%cluster, errStatus,&
-          & reshape([1.0_dp,0.0_dp,0.0_dp],[3,1]))
+          & reshape([1.0_dp,0.0_dp,0.0_dp,0.0_dp],[4,1]))
       @:ASSERT(errStatus%hasError())
     #:endblock
 
@@ -43,12 +43,9 @@
       a0 = 1.234_dp
 
 
-      ! spin spiral along [110] direction, rotating pi on translation by [4,4,0]
-      theta = pi
-      vec = [1,1,0]
-      vec(:) = vec / norm2(vec) ! unit vector
-      vec(:) = theta * vec / norm2(a0 * [4,4,0])
-      call TBoundaryConditions_init(bcs, boundaryConditions%pbc3d, errStatus, reshape(vec,[3,1]))
+      ! spin spiral along [110] direction
+      vec = [pi, 1.0_dp/sqrt(2.0_dp),1.0_dp/sqrt(2.0_dp),0.0_dp]
+      call TBoundaryConditions_init(bcs, boundaryConditions%pbc3d, errStatus, reshape(vec,[4,1]))
       @:ASSERT(.not.errStatus%hasError())
 
       call latticeInit(m, n, 1, a0, img2CentCell, coords)

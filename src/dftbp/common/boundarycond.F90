@@ -58,11 +58,8 @@ module dftbp_common_boundarycond
 
     ! Boundary conditions on spin in space-filling structures
 
-    !> Momentum for spin spirals (nSpinWaves)
-    real(dp), allocatable :: qSpin(:)
-
-    !> Unit vectors for spin spiral directions: (3, nSpinWaves)
-    real(dp), allocatable :: qVec(:,:)
+    !> Angle and momentum for spin spirals (nSpinWaves)
+    real(dp), allocatable :: qSpin(:, :)
 
   contains
 
@@ -98,10 +95,10 @@ contains
     !> Status of routine
     type(TStatus), intent(out) :: errStatus
 
-    !> Optional q-vectors for any spin waves
+    !> Optional quaternions for any spin waves (angle, vector along which angle twists)
     real(dp), intent(in), optional :: spinSpiralQ(:,:)
 
-    integer :: nSpinSpiral
+    integer :: nSpinSpiral, iSpiral
 
     if (.not. any([boundaryConditions%cluster, boundaryConditions%pbc3d,&
         & boundaryConditions%helical] == iBoundaryCondition)) then
@@ -116,10 +113,13 @@ contains
       else
         ! Note: could also be make to work with helical, PBC2d, ...
         nSpinSpiral = size(spinSpiralQ, dim=2)
-        allocate(this%qSpin(nSpinSpiral))
-        allocate(this%qVec(3,nSpinSpiral))
-        this%qSpin(:) = norm2(spinSpiralQ, dim=1)
-        this%qVec(:,:) = spinSpiralQ / spread(this%qSpin, 1, 3)
+        allocate(this%qSpin(4, nSpinSpiral))
+        ! Angle and axis
+        do iSpiral = 1, nSpinSpiral
+          ! component (1) is the rotation angle (rad) experienced on moving along the vector in
+          ! (2:4)
+          this%qSpin(:,iSpiral) = spinSpiralQ(:,iSpiral)
+        end do
       end if
     end if
 
@@ -376,9 +376,9 @@ contains
     do ii = 1, 3
       foldOutSpinMatrix(ii, ii) = 1.0_dp
     end do
-    do ii = 1, size(this%qSpin)
-      angle = this%qSpin(ii) * dot_product(this%qVec(:,ii), vec)
-      call quaternionConstruct(q, angle, this%qVec(:,ii))
+    do ii = 1, size(this%qSpin, dim=2)
+      angle = this%qSpin(1, ii) * dot_product(this%qSpin(2:,ii), vec) / sum(this%qSpin(2:,ii)**2)
+      call quaternionConstruct(q, angle, this%qSpin(2:,ii))
       mTmp = rotationMatrix(q)
       foldOutSpinMatrix = matmul(foldOutSpinMatrix, mTmp)
     end do
@@ -414,9 +414,9 @@ contains
     do ii = 1, 3
       foldInSpinMatrix(ii, ii) = 1.0_dp
     end do
-    do ii = 1, size(this%qSpin)
-      angle = this%qSpin(ii) * dot_product(this%qVec(:,ii), vec)
-      call quaternionConstruct(q, angle, this%qVec(:,ii))
+    do ii = 1, size(this%qSpin, dim=2)
+      angle = this%qSpin(1,ii) * dot_product(this%qSpin(2:,ii), vec) / sum(this%qSpin(2:,ii)**2)
+      call quaternionConstruct(q, angle, this%qSpin(2:,ii))
       mTmp = rotationMatrix(q)
       foldInSpinMatrix = matmul(mTmp, foldInSpinMatrix)
     end do

@@ -80,7 +80,8 @@ contains
   end subroutine quaternionRotate
 
 
-  !> Constructs a quaternion equivalent to rotation by an angle around an axis
+  !> Constructs a quaternion equivalent to rotation by an angle around an axis, normalising the axis
+  !! vector
   pure subroutine quaternionConstruct(res, angle, axis)
 
     !> The quaternion
@@ -94,7 +95,11 @@ contains
 
     real(dp) :: norm(3)
 
-    norm = axis / sqrt(sum(axis**2))
+    if (norm2(axis) > epsilon(0.0_dp)) then
+      norm(:) = axis / norm2(axis)
+    else
+      norm(:) = 0.0_dp
+    end if
 
     res(1) = cos(0.5_dp * angle)
     res(2:) = sin(0.5_dp * angle) * norm

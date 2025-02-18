@@ -2288,7 +2288,7 @@ contains
     type(fnodeList), pointer :: children
     type(string) :: buffer, modifier
     real(dp) :: theta, vec(3)
-    integer :: ii
+    integer :: ii, jj
 
     call renameChildren(node, "SpinPolarization", "SpinPolarisation")
     call getChildValue(node, "SpinPolarisation", value1, "", child=child, &
@@ -2332,15 +2332,29 @@ contains
 
         call getChildren(child, "spiral", children)
         if (getLength(children) > 0) then
-          allocate(ctrl%spinSpirals(3, getLength(children)), source=0.0_dp)
+          allocate(ctrl%spinSpirals(4, getLength(children)), source=0.0_dp)
           do ii = 1, getLength(children)
             call getItem1(children, ii, child2)
             call getChildValue(child2, "angle", theta, modifier=modifier, child=child3)
             call convertUnitHsd(char(modifier), angularUnits, child3, theta)
-            write(*,*)'HERE', theta
-            call getChildValue(child2, "vector", vec, modifier=modifier, child=child3)
-            call convertUnitHsd(char(modifier), lengthUnits, child3, vec)
-            ctrl%spinSpirals(: ,ii) = theta * vec / norm2(vec)
+            ctrl%spinSpirals(1 ,ii) = theta
+
+            !call getChildValue(child2, "latticevector", value1, "", child=child3, &
+            !    &allowEmptyValue=.true., dummyValue=.true.)
+            !if (associated(value1)) then
+            !  call getChildValue(child2, "", buffer)
+            !  paramFile = trim(unquote(char(buffer)))
+
+            call getChildValue(child2, "latticevector", value1, "", child=child3,&
+                & allowEmptyValue=.true., dummyValue=.true.)
+            if (associated(value1)) then
+              call getChildValue(child3, "", jj)
+              vec(:) = geo%latVecs(:, jj)
+            else
+              call getChildValue(child2, "vector", vec, modifier=modifier, child=child3)
+              call convertUnitHsd(char(modifier), lengthUnits, child3, vec)
+            end if
+            ctrl%spinSpirals(2: ,ii) = vec
           end do
         end if
 
@@ -2591,8 +2605,8 @@ contains
     end select
 
     if (.not. ctrl%tSetFillingTemp) then
-      call getChildValue(value1, "Temperature", ctrl%tempElec, temperatureDefault, &
-          &modifier=modifier, child=field)
+      call getChildValue(value1, "Temperature", ctrl%tempElec, temperatureDefault,&
+          & modifier=modifier, child=field)
       call convertUnitHsd(char(modifier), energyUnits, field, ctrl%tempElec)
       if (ctrl%tempElec < minTemp) then
         ctrl%tempElec = minTemp

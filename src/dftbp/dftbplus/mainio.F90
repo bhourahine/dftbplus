@@ -2318,7 +2318,6 @@ contains
       call writeChildValue(xf, "coordinateorigin", origin)
       if (allocated(boundaryConds%qSpin)) then
         call writeChildValue(xf, "spinspiralq", boundaryConds%qSpin)
-        call writeChildValue(xf, "spinspiralvec", boundaryConds%qVec)
       end if
     end if
     call xml_EndElement(xf, "geometry")

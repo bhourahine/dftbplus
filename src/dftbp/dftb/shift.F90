@@ -220,7 +220,7 @@ contains
           tmpS(1:nOrb2,1:nOrb1) = reshape(over(iOrig+1:iOrig+nOrb2*nOrb1),(/nOrb2,nOrb1/))
           tmpShift(:nOrb2,:nOrb2,:) = shift(:nOrb2,:nOrb2,iAt2f,:)
           ! spin rotate shift from central cell to image atom shift
-          rMat(:,:) = boundaryConditions%foldOutSpinMatrix(iAt2, img2CentCell, coords)
+          rMat(:,:) = boundaryConditions%foldInSpinMatrix(iAt2, img2CentCell, coords)
           tmpShift(:nOrb2,:nOrb2, 2:) = reshape(&
               & matmul(reshape(tmpShift(:nOrb2, :nOrb2, 2:), [nOrb2*nOrb2, 3]), rMat),&
               & [nOrb2, nOrb2, 3])

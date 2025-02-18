@@ -607,18 +607,16 @@ contains
 
     ! 1 0 charge part
     ! 0 1
-    call unpackHS(work, ham(:, 1), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
-        & cellVec, iAtomStart, iSparseStart, img2CentCell)
-    HSqrCplx(1:nOrb, 1:nOrb) = 0.5_dp*work(1:nOrb, 1:nOrb)
-    HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = 0.5_dp*work(1:nOrb, 1:nOrb)
+    call unpackHS(work, ham(:, 1), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
+        & iAtomStart, iSparseStart, img2CentCell)
+    HSqrCplx(:nOrb, :nOrb) = 0.5_dp*work(:nOrb, :nOrb)
+    HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = 0.5_dp*work(:nOrb, :nOrb)
     if (present(iHam)) then
-      call unpackHS(work, iHam(:, 1), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
-          & cellVec, iAtomStart, iSparseStart, img2CentCell)
-      HSqrCplx(1:nOrb, 1:nOrb) = HSqrCplx(1:nOrb, 1:nOrb)&
-          & + 0.5_dp*imag*work(1:nOrb, 1:nOrb)
-      HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) =&
-          & HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb)&
-          & + 0.5_dp*imag*work(1:nOrb, 1:nOrb)
+      call unpackHS(work, iHam(:, 1), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
+          & iAtomStart, iSparseStart, img2CentCell)
+      HSqrCplx(:nOrb, :nOrb) = HSqrCplx(:nOrb, :nOrb) + 0.5_dp*imag*work(:nOrb, :nOrb)
+      HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb)&
+          & + 0.5_dp*imag*work(:nOrb, :nOrb)
     end if
 
     ! 0 1 x part
@@ -628,57 +626,49 @@ contains
     do ii = 1, nOrb
       work(ii, ii+1:) = conjg(work(ii+1:, ii))
     end do
-
-    HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
-        & + 0.5_dp * work(1:nOrb, 1:nOrb)
+    HSqrCplx(nOrb+1:2*nOrb, :nOrb) = HSqrCplx(nOrb+1:2*nOrb, :nOrb) + 0.5_dp * work(:nOrb, :nOrb)
     if (present(iHam)) then
       call unpackHS(work, iHam(:, 2), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
           & iAtomStart, iSparseStart, img2CentCell)
       do ii = 1, nOrb
         work(ii, ii+1:) = -conjg(work(ii+1:, ii))
       end do
-      HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
-          & + 0.5_dp * imag * work(1:nOrb, 1:nOrb)
+      HSqrCplx(nOrb+1:2*nOrb, :nOrb) = HSqrCplx(nOrb+1:2*nOrb, :nOrb)&
+          & + 0.5_dp * imag * work(:nOrb, :nOrb)
     end if
 
     ! 0 -i y part
     ! i  0
-    call unpackHS(work, ham(:, 3), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
-        & cellVec, iAtomStart, iSparseStart, img2CentCell)
+    call unpackHS(work, ham(:, 3), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart,&
+        & iSparseStart, img2CentCell)
     do ii = 1, nOrb
       work(ii, ii+1:) = conjg(work(ii+1:, ii))
     end do
-
-    HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
-        & + cmplx(0.0, 0.5, dp) * work(1:nOrb, 1:nOrb)
+    HSqrCplx(nOrb+1:2*nOrb, :nOrb) = HSqrCplx(nOrb+1:2*nOrb, :nOrb)&
+        & + cmplx(0.0, 0.5, dp) * work(:nOrb, :nOrb)
     if (present(iHam)) then
       call unpackHS(work, iHam(:, 3), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
           & iAtomStart, iSparseStart, img2CentCell)
-
       ! Apply hermitian symmetry just in case
       do ii = 1, nOrb
         work(ii, ii+1:) = -conjg(work(ii+1:, ii))
       end do
-
-      HSqrCplx(nOrb+1:2*nOrb, 1:nOrb) = HSqrCplx(nOrb+1:2*nOrb, 1:nOrb)&
-          & - 0.5_dp * work(1:nOrb, 1:nOrb)
+      HSqrCplx(nOrb+1:2*nOrb, :nOrb) = HSqrCplx(nOrb+1:2*nOrb, :nOrb) - 0.5_dp * work(:nOrb, :nOrb)
     end if
 
     ! 1  0 z part
     ! 0 -1
-    call unpackHS(work, ham(:, 4), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
-        & cellVec, iAtomStart, iSparseStart, img2CentCell)
-    HSqrCplx(1:nOrb, 1:nOrb) = HSqrCplx(1:nOrb, 1:nOrb)&
-        & + 0.5_dp * work(1:nOrb, 1:nOrb)
+    call unpackHS(work, ham(:, 4), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec, iAtomStart,&
+        & iSparseStart, img2CentCell)
+    HSqrCplx(:nOrb, :nOrb) = HSqrCplx(:nOrb, :nOrb) + 0.5_dp * work(:nOrb, :nOrb)
     HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb)&
-        & - 0.5_dp * work(1:nOrb, 1:nOrb)
+        & - 0.5_dp * work(:nOrb, :nOrb)
     if (present(iHam)) then
-      call unpackHS(work, iHam(:, 4), kPoint, iNeighbour, nNeighbourSK, iCellVec,&
-          & cellVec, iAtomStart, iSparseStart, img2CentCell)
-      HSqrCplx(1:nOrb, 1:nOrb) = HSqrCplx(1:nOrb, 1:nOrb)&
-          & + 0.5_dp * imag * work(1:nOrb, 1:nOrb)
+      call unpackHS(work, iHam(:, 4), kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
+          & iAtomStart, iSparseStart, img2CentCell)
+      HSqrCplx(:nOrb, :nOrb) = HSqrCplx(:nOrb, :nOrb) + 0.5_dp * imag * work(:nOrb, :nOrb)
       HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb) = HSqrCplx(nOrb+1:2*nOrb, nOrb+1:2*nOrb)&
-          & - 0.5_dp * imag * work(1:nOrb, 1:nOrb)
+          & - 0.5_dp * imag * work(:nOrb, :nOrb)
     end if
 
   end subroutine unpackHPauli
