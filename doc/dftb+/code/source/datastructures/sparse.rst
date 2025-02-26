@@ -192,7 +192,7 @@ Back transformation:
 .. math::
 
    \label{eq:KToR}
-     S_{\alpha\beta}(\ensuremath{\mathbf{R}}) = \sum_{l} \omega_l e^{-i\ensuremath{\mathbf{k}}_l \ensuremath{\mathbf{R}}} 
+     S_{\alpha\beta}(\ensuremath{\mathbf{R}}) = \sum_{l} \omega_l e^{-i\ensuremath{\mathbf{k}}_l \ensuremath{\mathbf{R}}}
      S_{\alpha\beta}(\ensuremath{\mathbf{k}}_l)
 
 with :math:`\omega_l` being the :math:`k`-point weighting (note: without
@@ -204,7 +204,7 @@ Substituting `[eq:RToK] <#eq:RToK>`__ in `[eq:KToR] <#eq:KToR>`__ yields
 .. math::
 
    \begin{aligned}
-     S_{\alpha\beta}(\ensuremath{\mathbf{R}}) &=& \sum_{l} \omega_l e^{-i\ensuremath{\mathbf{k}}_l \ensuremath{\mathbf{R}}} 
+     S_{\alpha\beta}(\ensuremath{\mathbf{R}}) &=& \sum_{l} \omega_l e^{-i\ensuremath{\mathbf{k}}_l \ensuremath{\mathbf{R}}}
      \sum_{\ensuremath{\mathbf{R}}'} e^{i\ensuremath{\mathbf{k}}_l\ensuremath{\mathbf{R}}'} S_{\alpha\beta}(\ensuremath{\mathbf{R}}') \\
      &=&\sum_{\ensuremath{\mathbf{R}}'} \sum_{l} \omega_l e^{i\ensuremath{\mathbf{k}}_l(\ensuremath{\mathbf{R}}'-\ensuremath{\mathbf{R}})}
      S_{\alpha\beta}(\ensuremath{\mathbf{R}}') \\

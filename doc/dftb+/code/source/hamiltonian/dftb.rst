@@ -9,7 +9,7 @@ example : for O with no :math:`d` orbitals interacting with Si that has
 :math:`d`.
 
 ==== ================ ======================================
-\    :math:`sd\sigma` 
+\    :math:`sd\sigma`
 Si-O =0               no-:math:`d` orbital
 O-Si :math:`\neq`\ 0  yes there is a :math:`d` orbital on Si
 ==== ================ ======================================

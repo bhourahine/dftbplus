@@ -16,12 +16,12 @@ software are performing as intended under various conditions
 **Key Characteristics**
 
 - Tests are small and specific, targeting single subroutines.
-  
+
 - Conducted early in the development life-cycle, often during
   implementation.
-  
+
 - Usually automated and run frequently.
-  
+
 - Helps identify bugs at the earliest stage.
 
 **Advantages**
@@ -29,9 +29,9 @@ software are performing as intended under various conditions
 - Reduces bugs in newly developed features.
 
 - Encorages modularity and isolation of code routines.
-  
+
 - Ensures code reliability and facilitates later refactoring.
-  
+
 - Provides documentation for the expected behaviour of code units.
 
 What is Regression Testing?
@@ -48,21 +48,21 @@ bug fixes.
 **Key Characteristics**
 
 - Tests existing functionality in addition to any new changes.
-  
+
 - Conducted after integration of new code or during maintenance.
-  
+
 - Can be automated or performed manually.
-  
+
 - Involves running a suite of previously written test cases for the
   program.
 
 **Advantages**
 
 - Ensures software stability after updates.
-  
+
 - Identifies issues that might go unnoticed without comprehensive
   testing.
-  
+
 - Supports continuous integration and deployment processes.
 
 Why Use Both Techniques?
@@ -73,16 +73,16 @@ software quality assurance. Their combined use improveds robustness
 and reliability of software development:
 
 - **Unit Testing Benefits**
-  
+
   - Validates new code in isolation, preventing early-stage bugs.
-    
+
   - Enhances developer confidence during development and refactoring.
 
 - **Regression Testing Benefits**
-  
+
   - Safeguards existing functionality when integrating new features or
     refactoring code.
-    
+
   - Reduces the risk of introducing defects in production code.
 
 Using both techniques together provides a more comprehensive testing
@@ -97,7 +97,7 @@ run tests in software projects. The DFTB+ build includes regression
 tests by default and can conditionally enable unit testing.
 
 Tests are compiled and can be run tests in the build directory with:
-   
+
      make
      ctest
 
@@ -118,13 +118,13 @@ Advantages of This Setup
 - **Flexibility:** The ctest methodology enables developers to
   selectively run specific unit tests (`ctest -R <regex>` tests cases
   where their names match the regular expression).
-  
+
 - **Automation:** Simplifies integration into continuous testing
   pipelines. The DFTB+ `github repository
   <https://github.com/dftbplus/dftbplus>`_ runs serial and MPI
   parallel testing pipelines when code is pushed or a pull request is
   made.
-  
+
 - **Control:** Allows for streamlined testing during different phases
   of development (for example, we differentiate quickly finishing and
   slow regression tests).

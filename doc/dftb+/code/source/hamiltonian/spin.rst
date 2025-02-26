@@ -70,7 +70,7 @@ where the Pauli matrices are in the usual form
 .. math::
 
    \begin{aligned}
-   \mathbf{1} &=&  \begin{pmatrix}1&0\\0&1\end{pmatrix} \\ 
+   \mathbf{1} &=&  \begin{pmatrix}1&0\\0&1\end{pmatrix} \\
    \boldsymbol{\sigma}_x &=&  \begin{pmatrix}0&1\\1&0\end{pmatrix} \\
    \boldsymbol{\sigma}_y &=&  \begin{pmatrix}0&i\\-i&0\end{pmatrix} \\
    \boldsymbol{\sigma}_z &=&  \begin{pmatrix}1&0\\0&-1\end{pmatrix}
@@ -113,7 +113,7 @@ like (Nordstrom PRL 76 442):
 .. math::
 
    \begin{aligned}
-   H &=& \{ \nabla^2 + v(\vec{r}) \} \mathbf{1} 
+   H &=& \{ \nabla^2 + v(\vec{r}) \} \mathbf{1}
     + \{ \vec{b}(\vec{r}) + \xi \vec{l} \} \cdot \boldsymbol{\sigma}
    \end{aligned}
 
@@ -173,7 +173,7 @@ Its products with the Pauli matrices are then:
        & 0
      \end{bmatrix}\\
      \Re H \otimes
-     \boldsymbol{\sigma}_z&=& \begin{bmatrix} \begin{pmatrix}H_{aa}&H_{ab}\\ 
+     \boldsymbol{\sigma}_z&=& \begin{bmatrix} \begin{pmatrix}H_{aa}&H_{ab}\\
          H_{ab}&H_{bb}\end{pmatrix} & 0 \\ 0 &
        -\begin{pmatrix}H_{aa}&H_{ab}\\H_{ab}&H_{bb}\end{pmatrix}
      \end{bmatrix}
@@ -235,7 +235,7 @@ still overall hermitian:
      &=& \begin{bmatrix} 0 &
        \begin{pmatrix}0&H_{ab}\\ -H_{ab}&0\end{pmatrix}
        \\ \begin{pmatrix}0&-H_{ab}\\H_{ab}&0\end{pmatrix} & 0
-     \end{bmatrix}\\  
+     \end{bmatrix}\\
      \Im H \otimes i \boldsymbol{\sigma}_z&=& \begin{bmatrix}
        i \begin{pmatrix}0&H_{ab}\\ -H_{ab}&0\end{pmatrix} & 0
        \\ 0 &
@@ -289,7 +289,7 @@ with
    c^\alpha_{ij} c^\beta_{ik} H^0_{jk} \delta_{\alpha\beta} \nonumber \\
    &=& \sum_{i\;j\;k} n_i (c^\alpha_{ij} c^\alpha_{ik} + c^\beta_{ij}
    c^\beta_{ik} ) H^0_{jk}\\ q_j &=& \sum_{\alpha \beta i k} n_i S_{jk}
-   c^\alpha_{ij} c^\beta_{ik} \delta_{\alpha \beta} \nonumber \\ &=& 
+   c^\alpha_{ij} c^\beta_{ik} \delta_{\alpha \beta} \nonumber \\ &=&
    \sum_{i k} n_i S_{jk}
    (c^\alpha_{ij} c^\alpha_{ik} + c^\beta_{ij} c^\beta_{ik})\\ p_{jx} &=&
    \sum_{i\;k} n_i Re (c^\alpha_{ij} c^\beta_{ik} + c^\beta_{ij}

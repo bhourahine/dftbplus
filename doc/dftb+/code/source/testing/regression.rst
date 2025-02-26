@@ -4,7 +4,7 @@ Regression testing in DFTB+
 
 The regression tests for the DFTB+ programs are located below the main
 directory in the `app/` folder::
-  
+
   test/
   ├── app
   │   ├── dftb+
@@ -37,7 +37,7 @@ corresponds to a test located in::
   │   ├── hybrid
   │   │   │   ├── cluster
   │   │   │   │   ├── C18H12-force-lc
-  
+
 which cannot be run for MPI enabled code.
 
 Each test directory contains the input file(s) and the tagged output
@@ -71,7 +71,7 @@ inside `src/dftbp/dftbplus/mainio.F90` but the call to the writer can
 be made outside of this routine (or if the quantity is available in
 `main.F90`, can be passed into it). To write tagged data from
 elsewhere, something like::
-  
+
   use dftbp_common_file, only : TFileDescr, openFile, closeFile
   use dftbp_dftbplus_outputfiles, only : autotestTag
   use dftbp_io_taggedoutput, only : TTaggedWriter, tagLabels
