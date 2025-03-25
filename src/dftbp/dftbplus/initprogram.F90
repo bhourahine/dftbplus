@@ -1374,10 +1374,14 @@ contains
       call error("Colinear spin polarization required for shared Ef over spin channels")
     end if
 
-    call initGeometry_(input, this%nAtom, this%nType, this%tPeriodic, this%tHelical,&
+  #:if WITH_MPI
+    call env%initMpi(input%ctrl%parallelOpts%nGroup)
+  #:endif
+
+    call initGeometry_(env, input, this%nAtom, this%nType, this%tPeriodic, this%tHelical,&
         & this%boundaryCond, this%coord0, this%species0, this%tCoordsChanged, this%tLatticeChanged,&
         & this%latVec, this%origin, this%recVec, this%invLatVec, this%cellVol, this%recCellVol,&
-        & errStatus)
+        & input%transpar, errStatus)
     if (errStatus%hasError()) call error(errStatus%message)
 
     ! Get species names and output file
@@ -1476,8 +1480,6 @@ contains
     if (input%ctrl%parallelOpts%nGroup > 1 .and. this%isLinResp) then
       call error("Multiple MPI groups not available for excited state calculations")
     end if
-
-    call env%initMpi(input%ctrl%parallelOpts%nGroup)
 
     if (this%isHybridXc) then
       if ((.not. this%tRealHS)&
@@ -6701,9 +6703,12 @@ contains
 
 
   !> Initializes the variables directly related to the user specified geometry.
-  subroutine initGeometry_(input, nAtom, nType, tPeriodic, tHelical, boundaryCond, coord0,&
+  subroutine initGeometry_(env, input, nAtom, nType, tPeriodic, tHelical, boundaryCond, coord0,&
       & species0, tCoordsChanged, tLatticeChanged, latVec, origin, recVec, invLatVec, cellVol,&
-      & recCellVol, errStatus)
+      & recCellVol, transpar, errStatus)
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
 
     !> Input variables to use for setput
     type(TInputData), intent(in) :: input
@@ -6753,8 +6758,16 @@ contains
     !> Volume of the reciprocal space unit cell
     real(dp), intent(out) :: recCellVol
 
+    !> Transport calculation parameters
+    type(TTransPar), intent(in) :: transpar
+
     !> Operation status, if an error needs to be returned
     type(TStatus), intent(inout) :: errStatus
+
+    real(dp), allocatable :: tmpCoords0(:,:)
+    integer, allocatable :: tmpSpecies0(:), nExtraContAtoms(:)
+    integer :: iCont, nContAts, iStart, iEnd, iStart2, iStructOffSet, iAt
+    real(dp) :: contactVector(3)
 
     nAtom = input%geom%nAtom
     nType = input%geom%nSpecies
@@ -6779,6 +6792,44 @@ contains
 
     coord0 = input%geom%coords
     species0 = input%geom%species
+
+    if (transpar%ncont > 0) then
+      ! Extend contact regions for dispersion interaction distance
+      allocate(nExtraContAtoms(transpar%ncont), source=0)
+      do iCont = 1, transpar%ncont
+        nExtraContAtoms(iCont) = transpar%contacts(iCont)%idxrange(2) + 1&
+            & - transpar%contacts(iCont)%idxrange(1)
+      end do
+      allocate(tmpCoords0(3, nAtom + sum(nExtraContAtoms)))
+      allocate(tmpSpecies0(nAtom + sum(nExtraContAtoms)))
+      tmpCoords0(:, :nAtom) = coord0
+      tmpSpecies0(:nAtom) = species0
+      iStructOffSet = nAtom
+      do iCont = 1, transpar%ncont
+        iStart = transpar%contacts(iCont)%idxrange(1)
+        iEnd = transpar%contacts(iCont)%idxrange(2)
+        iStart2 = iStart + (iEnd - iStart + 1) / 2
+        ! Vector pointing into contact, away from device:
+        contactVector(:) = 2.0_dp * (coord0(:,iStart2) - coord0(:,iStart))
+        tmpSpecies0(iStructOffSet+1:iStructOffSet+nExtraContAtoms(iCont)) =&
+            & species0(transpar%contacts(iCont)%idxrange(1) : transpar%contacts(iCont)%idxrange(2))
+        tmpCoords0(:, iStructOffSet+1:iStructOffSet+nExtraContAtoms(iCont)) =&
+            & coord0(:,transpar%contacts(iCont)%idxrange(1):transpar%contacts(iCont)%idxrange(2))
+        do iAt = iStructOffSet+1, iStructOffSet+nExtraContAtoms(iCont)
+          tmpCoords0(:, iAt) = tmpCoords0(:, iAt) + contactVector
+        end do
+        iStructOffSet = iStructOffSet + nExtraContAtoms(iCont)
+      end do
+      block
+        use dftbp_io_formatout, only : writeXYZFormat
+        if (env%tGlobalLead) then
+          call writeXYZFormat("contactedTmp.xyz", tmpCoords0, tmpSpecies0, input%geom%speciesNames)
+        end if
+      end block
+      deallocate(tmpCoords0)
+      deallocate(tmpSpecies0)
+    end if
+
     tCoordsChanged = .true.
 
     tLatticeChanged = .false.
