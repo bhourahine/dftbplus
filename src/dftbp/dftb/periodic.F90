@@ -103,6 +103,15 @@ module dftbp_dftb_periodic
     !> Neighbour list instance
     type(TNeighbourList), allocatable :: neighbourList
 
+    !> Atoms in the geometry
+    integer, allocatable :: nAtom0
+
+    !> Coordinates of atoms
+    real(dp), allocatable :: coord0(:,:)
+
+    !> Species of atoms
+    integer, allocatable :: species0(:)
+
     !> Number of all interacting atoms, including periodic images
     integer :: nAllAtom
 
