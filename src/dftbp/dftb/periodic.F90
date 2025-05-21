@@ -112,6 +112,9 @@ module dftbp_dftb_periodic
     !> Species of atoms
     integer, allocatable :: species0(:)
 
+    !> Cutoff for which geometry was extended, if relevant
+    real(dp), allocatable :: cutOff
+
     !> Number of all interacting atoms, including periodic images
     integer :: nAllAtom
 

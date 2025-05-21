@@ -6848,6 +6848,9 @@ contains
     integer :: iCont, nContAts, iStart, iEnd, iStart2, iStructOffSet, iAt, iRepeat, nContAt
     real(dp) :: contactVector(3)
 
+    ! store cutoff used to extend contacts
+    extndDisprtnNeighbourList%cutOff = cutOff
+
     ! Count atoms in extend contact regions for dispersion up to the interaction distance
     allocate(nExtraContAtoms(transpar%ncont), source=0)
     allocate(nRepeat(transpar%ncont), source=0)
