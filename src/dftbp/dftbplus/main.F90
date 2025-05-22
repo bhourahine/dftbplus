@@ -2408,7 +2408,8 @@ contains
     end if
 
     if (allocated(extndDisprtnNeighbourList)) then
-      extndDisprtnNeighbourList%coord0(:,:) = coord0Fold
+
+      extndDisprtnNeighbourList%coord0(:,:size(coord0Fold, dim=2)) = coord0Fold
       call updateNeighbourListAndSpecies(env, extndDisprtnNeighbourList%coord,&
           & extndDisprtnNeighbourList%species, extndDisprtnNeighbourList%img2CentCell,&
           & extndDisprtnNeighbourList%iCellVec, extndDisprtnNeighbourList%neighbourList,&

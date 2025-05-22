@@ -2800,6 +2800,11 @@ contains
 
   #:if WITH_TRANSPORT
     if (this%transpar%nCont /= 0 .and. allocated(this%dispersion)) then
+      ! Set up storage for extended geometry
+      allocate(this%extndDisprtnNeighbourList)
+
+      call TAuxNeighbourList_init(this%extndDisprtnNeighbourList, this%nAtom, this%nAllAtom,&
+          & nInitNeighbour)
       call initAuxDispGeometry_(this%extndDisprtnNeighbourList, this%transpar, this%nAtom,&
           & this%coord0, this%species0, this%dispersion%getRCutOff())
       call writeXYZAuxGeometry(env, this%extndDisprtnNeighbourList, input%geom%speciesNames)
@@ -6827,7 +6832,7 @@ contains
       & cutOff)
 
     !> ADT for neighbour parameters
-    type(TAuxNeighbourList), allocatable, intent(out) :: extndDisprtnNeighbourList
+    type(TAuxNeighbourList), allocatable, intent(inout) :: extndDisprtnNeighbourList
 
     !> Transport parameters
     type(TTransPar), intent(in) :: transpar
@@ -6848,7 +6853,7 @@ contains
     integer :: iCont, nContAts, iStart, iEnd, iStart2, iStructOffSet, iAt, iRepeat, nContAt
     real(dp) :: contactVector(3)
 
-    ! store cutoff used to extend contacts
+    ! Store cutoff used to extend contacts
     extndDisprtnNeighbourList%cutOff = cutOff
 
     ! Count atoms in extend contact regions for dispersion up to the interaction distance
@@ -6865,8 +6870,6 @@ contains
       nExtraContAtoms(iCont) = nRepeat(iCont) * (iStart2 - iStart)
     end do
 
-    ! Set up storage for extended geometry
-    allocate(extndDisprtnNeighbourList)
     extndDisprtnNeighbourList%nAtom0 = nAtom + sum(nExtraContAtoms)
     allocate(extndDisprtnNeighbourList%coord0(3, extndDisprtnNeighbourList%nAtom0),&
         & source=0.0_dp)
