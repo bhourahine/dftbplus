@@ -2408,7 +2408,6 @@ contains
     end if
 
     if (allocated(extndDisprtnNeighbourList)) then
-
       extndDisprtnNeighbourList%coord0(:,:size(coord0Fold, dim=2)) = coord0Fold
       call updateNeighbourListAndSpecies(env, extndDisprtnNeighbourList%coord,&
           & extndDisprtnNeighbourList%species, extndDisprtnNeighbourList%img2CentCell,&
@@ -2431,7 +2430,13 @@ contains
     end if
 
     if (allocated(dispersion)) then
-      call dispersion%updateCoords(env, neighbourList, img2CentCell, coord, species0, errStatus)
+      if (allocated(extndDisprtnNeighbourList)) then
+        call dispersion%updateCoords(env, extndDisprtnNeighbourList%neighbourList,&
+            & extndDisprtnNeighbourList%img2CentCell, extndDisprtnNeighbourList%coord,&
+            & extndDisprtnNeighbourList%species0, errStatus)
+      else
+        call dispersion%updateCoords(env, neighbourList, img2CentCell, coord, species0, errStatus)
+      end if
       @:PROPAGATE_ERROR(errStatus)
     end if
     if (allocated(solvation)) then
