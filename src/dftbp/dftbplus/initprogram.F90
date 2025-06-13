@@ -2796,15 +2796,16 @@ contains
     end if
 
   #:if WITH_TRANSPORT
-    if (this%transpar%nCont /= 0 .and. allocated(this%dispersion)) then
-      ! Set up storage for extended geometry
-      allocate(this%extndDisprtnNeighbourList)
+    if (this%transpar%nCont /= 0) then
+      ! Set up storage for extended geometries used by transport
 
-      call TAuxNeighbourList_init(this%extndDisprtnNeighbourList, this%nAtom, this%nAllAtom,&
-          & nInitNeighbour)
-      call initAuxDispGeometry_(this%extndDisprtnNeighbourList, this%transpar, this%nAtom,&
-          & this%coord0, this%species0, this%dispersion%getRCutOff())
-      call writeXYZAuxGeometry(env, this%extndDisprtnNeighbourList, input%geom%speciesNames)
+      if (allocated(this%dispersion)) then
+        call initAuxDispGeometry_(this%extndDisprtnNeighbourList, this%transpar, this%nAtom,&
+            & this%nAllAtom, this%coord0, this%species0, this%dispersion%getRCutOff(),&
+            & nInitNeighbour)
+        call writeXYZAuxGeometry(env, this%extndDisprtnNeighbourList, input%geom%speciesNames)
+      end if
+
     end if
   #:endif
 
@@ -6825,8 +6826,8 @@ contains
 
 
   !> Set-up auxiliary geometry for dispersion with transport
-  subroutine initAuxDispGeometry_(extndDisprtnNeighbourList, transpar, nAtom, coord0, species0,&
-      & cutOff)
+  subroutine initAuxDispGeometry_(extndDisprtnNeighbourList, transpar, nAtom, nAllAtom, coord0,&
+      & species0, cutOff, nInitNeighbour)
 
     !> ADT for neighbour parameters
     type(TAuxNeighbourList), allocatable, intent(inout) :: extndDisprtnNeighbourList
@@ -6837,6 +6838,9 @@ contains
     !> Number of unique atoms in the system
     integer, intent(out) :: nAtom
 
+    !> Number of atoms including images in the system
+    integer, intent(out) :: nAllAtom
+
     !> Coordinates of the central cell atoms
     real(dp), allocatable, intent(in) :: coord0(:,:)
 
@@ -6846,9 +6850,16 @@ contains
     !> Distance at which contact atoms stop interacting with the device region
     real(dp), intent(in) :: cutOff
 
+    !> First guess for nr. of neighbours
+    integer, intent(in) :: nInitNeighbour
+
     integer, allocatable :: nExtraContAtoms(:), nRepeat(:)
     integer :: iCont, nContAts, iStart, iEnd, iStart2, iStructOffSet, iAt, iRepeat, nContAt
     real(dp) :: contactVector(3)
+
+    allocate(extndDisprtnNeighbourList)
+
+    call TAuxNeighbourList_init(extndDisprtnNeighbourList, nAtom, nAllAtom, nInitNeighbour)
 
     ! Store cutoff used to extend contacts
     extndDisprtnNeighbourList%cutOff = cutOff
