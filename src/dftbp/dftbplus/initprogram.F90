@@ -275,6 +275,9 @@ module dftbp_dftbplus_initprogram
     !> ADT for neighbour parameters, for dispersion and transport calculations
     type(TAuxNeighbourList), allocatable :: extndDisprtnNeighbourList
 
+    !> ADT for neighbour parameters for transport calculation electrostatics using image charges
+    type(TAuxNeighbourList), allocatable :: transportPoissonNeighbourList
+
     !> Nr. of neighbours for atoms out to max interaction distance (excluding Ewald terms)
     integer, allocatable :: nNeighbourSK(:)
 
@@ -2808,6 +2811,10 @@ contains
 
     end if
   #:endif
+
+    if (this%tPoisson) then
+      allocate(this%transportPoissonNeighbourList)
+    end if
 
     call this%initializeCharges(errStatus, initialSpins=input%ctrl%initialSpins,&
         & initialCharges=input%ctrl%initialCharges, hybridXcAlg=this%hybridXcAlg)
