@@ -39,7 +39,7 @@ module dftbp_poisson_poisson
       & SavePOT, scratchfolder, set_accuracy, set_builtin, set_cluster, set_cont_indices,&
       & set_contdir, set_contlabels, set_dopoisson, set_fermi, set_mol_indeces, set_ncont,&
       & set_poissonbox, set_poissongrid, set_potentials, set_scratch, set_temperature, set_verbose,&
-      & telec, temp, tip_atom, tipbias, verbose, x0, y0, z0
+      & telec, temp, tip_atom, tipbias, verbose, x0, y0, z0, poissonBCsEnum
   use dftbp_poisson_parcheck, only : check_biasdir, check_contacts, check_localbc,&
       & check_parameters, check_poisson_box, write_parameters
   use dftbp_poisson_structure, only : angShells, boxsiz, dqmat, init_charges, init_skdata,&
@@ -588,38 +588,38 @@ case(GetPOT)     !Poisson called in order to calculate potential in SCC
           na = iparm(14)
           nb = iparm(15)
           nc = iparm(16)
-          overrideBC( 2*minloc( (/nb*nc,na*nc,na*nb/),1 )-1 ) = 1
-          overrideBC( 2*minloc( (/nb*nc,na*nc,na*nb/),1 )   ) = 1
+          overrideBC( 2*minloc( (/nb*nc,na*nc,na*nb/),1 )-1 ) = poissonBCsEnum%dirichlet
+          overrideBC( 2*minloc( (/nb*nc,na*nc,na*nb/),1 )   ) = poissonBCsEnum%dirichlet
        end if
 
     end if
 
-    if(overrideBC(1).ne.0) iparm(2) = overrideBC(1)
-    if(overrideBC(2).ne.0) iparm(3) = overrideBC(2)
-    if(overrideBC(3).ne.0) iparm(4) = overrideBC(3)
-    if(overrideBC(4).ne.0) iparm(5) = overrideBC(4)
-    if(overrideBC(5).ne.0) iparm(6) = overrideBC(5)
-    if(overrideBC(6).ne.0) iparm(7) = overrideBC(6)
+    if(overrideBC(1) /= poissonBCsEnum%periodic) iparm(2) = overrideBC(1)
+    if(overrideBC(2) /= poissonBCsEnum%periodic) iparm(3) = overrideBC(2)
+    if(overrideBC(3) /= poissonBCsEnum%periodic) iparm(4) = overrideBC(3)
+    if(overrideBC(4) /= poissonBCsEnum%periodic) iparm(5) = overrideBC(4)
+    if(overrideBC(5) /= poissonBCsEnum%periodic) iparm(6) = overrideBC(5)
+    if(overrideBC(6) /= poissonBCsEnum%periodic) iparm(7) = overrideBC(6)
 
 
     if(id0.and.niter_.eq.1.and.verbose.gt.VBT) then
       write(stdOut,*) 'Boundary Conditions:'
       BCinfo = 'x: '//boundary2string(iparm(2),mixed(1))
-      if (overrideBC(1).ne.0) BCinfo = trim(BCinfo)//' (overridden)'
+      if (overrideBC(1) /= poissonBCsEnum%periodic) BCinfo = trim(BCinfo)//' (overridden)'
       BCinfo = trim(BCinfo)//'  '//boundary2string(iparm(3),mixed(2))
-      if (overrideBC(2).ne.0) BCinfo = trim(BCinfo)//' (overridden)'
+      if (overrideBC(2) /= poissonBCsEnum%periodic) BCinfo = trim(BCinfo)//' (overridden)'
       write(stdOut,*) trim(BCinfo)
 
       BCinfo = 'y: '//boundary2string(iparm(4),mixed(3))
-      if (overrideBC(3).ne.0) BCinfo = trim(BCinfo)//' (overridden)'
+      if (overrideBC(3) /= poissonBCsEnum%periodic) BCinfo = trim(BCinfo)//' (overridden)'
       BCinfo = trim(BCinfo)//'  '//boundary2string(iparm(5),mixed(4))
-      if (overrideBC(4).ne.0) BCinfo = trim(BCinfo)//' (overridden)'
+      if (overrideBC(4) /= poissonBCsEnum%periodic) BCinfo = trim(BCinfo)//' (overridden)'
       write(stdOut,*) trim(BCinfo)
 
       BCinfo = 'z: '//boundary2string(iparm(6),mixed(5))
-      if (overrideBC(5).ne.0) BCinfo = trim(BCinfo)//' (overridden)'
+      if (overrideBC(5) /= poissonBCsEnum%periodic) BCinfo = trim(BCinfo)//' (overridden)'
       BCinfo = trim(BCinfo)//'  '//boundary2string(iparm(7),mixed(6))
-      if (overrideBC(6).ne.0) BCinfo = trim(BCinfo)//' (overridden)'
+      if (overrideBC(6) /= poissonBCsEnum%periodic) BCinfo = trim(BCinfo)//' (overridden)'
       write(stdOut,*) trim(BCinfo)
     endif
 

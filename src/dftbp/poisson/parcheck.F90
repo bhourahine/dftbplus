@@ -23,7 +23,7 @@ module dftbp_poisson_parcheck
   use dftbp_poisson_parameters, only : cluster, contdir, contnames, deltaR_max, DoCilGate, DoGate,&
       & DoPoisson, dr_cont, dr_eps, Efermi, eps_r, foundbox, gate, gatedir, GateLength_l,&
       & GateLength_t, iatc, iatm, initPot, localBC, mixed, mu, ncdim, ncont, overrideBC, OxLength,&
-      & PoissAcc, poissBC, poissbox, Rmin_gate, Rmin_ins, verbose
+      & PoissAcc, poissBC, poissbox, Rmin_gate, Rmin_ins, verbose, poissonBCsEnum
   use dftbp_poisson_structure, only : boxsiz, natoms, period, period_dir, x
 
   implicit none
@@ -136,7 +136,7 @@ contains
       enddo
       if (DoGate) period_dir(gatedir)=.false.
       do i=1,3
-         if (overrideBC(2*i).ne.0) then
+         if (overrideBC(2*i) /= poissonBCsEnum%periodic) then
             period_dir(i)=.false.
          endif
       enddo
@@ -240,56 +240,57 @@ contains
    err = 0
    mixed = .false.
 
-   if (any(localBC.gt.0)) then
-      do m=1,ncont
-         PoissBC(m)=1 ! Sets Mixed BC on this contact
-         select case(contdir(m))
-         case(-1)
-            if (overrideBC(1).eq.2) err = 1
-            if (overrideBC(1).eq.1) then
-               err = 2
-               overrideBC(1) = 2
-            endif
-            mixed(1) = .true.
-         case(1)
-            if (overrideBC(2).eq.2) err = 1
-            if (overrideBC(2).eq.1) then
-               err = 2
-               overrideBC(2) = 2
-            endif
-            mixed(2) = .true.
-         case(-2)
-            if (overrideBC(3).eq.2) err = 1
-            if (overrideBC(3).eq.1) then
-               err = 2
-               overrideBC(3) = 2
-            endif
-            mixed(3) = .true.
-         case(2)
-            if (overrideBC(4).eq.2) err = 1
-            if (overrideBC(4).eq.1) then
-               err = 2
-               overrideBC(4) = 2
-            endif
-            mixed(4) = .true.
-         case(-3)
-            if (overrideBC(5).eq.2) err = 1
-            if (overrideBC(5).eq.1) then
-               err = 2
-               overrideBC(5) = 2
-            endif
-            mixed(5) = .true.
-         case(3)
-            if (overrideBC(6).eq.2) err = 1
-            if (overrideBC(6).eq.1) then
-               err = 2
-               overrideBC(6) = 2
-            endif
-            mixed(6) = .true.
-         end select
+   if (any(localBC == poissonBCsEnum%dirichlet) .or. any(localBC == poissonBCsEnum%neumann)) then
+     do m = 1, ncont
+       PoissBC(m) = 1 ! Sets Mixed BCs on this contact
+       select case(contdir(m))
+       case(-1)
+         if (overrideBC(1) == poissonBCsEnum%neumann) err = 1
+         if (overrideBC(1) == poissonBCsEnum%dirichlet) then
+           err = 2
+           overrideBC(1) = poissonBCsEnum%neumann
+         endif
+         mixed(1) = .true.
+       case(1)
+         if (overrideBC(2) == poissonBCsEnum%dirichlet) err = 1
+         if (overrideBC(2) == poissonBCsEnum%neumann) then
+           err = 2
+           overrideBC(2) = poissonBCsEnum%neumann
+         endif
+         mixed(2) = .true.
+       case(-2)
+         if (overrideBC(3) == poissonBCsEnum%dirichlet) err = 1
+         if (overrideBC(3) == poissonBCsEnum%neumann) then
+           err = 2
+           overrideBC(3) = poissonBCsEnum%neumann
+         endif
+         mixed(3) = .true.
+       case(2)
+         if (overrideBC(4) == poissonBCsEnum%neumann) err = 1
+         if (overrideBC(4) == poissonBCsEnum%dirichlet) then
+           err = 2
+           overrideBC(4) = poissonBCsEnum%neumann
+         endif
+         mixed(4) = .true.
+       case(-3)
+         if (overrideBC(5) == poissonBCsEnum%neumann) err = 1
+         if (overrideBC(5) == poissonBCsEnum%dirichlet) then
+           err = 2
+           overrideBC(5) = poissonBCsEnum%neumann
+         endif
+         mixed(5) = .true.
+       case(3)
+         if (overrideBC(6) == poissonBCsEnum%neumann) err = 1
+         if (overrideBC(6) == poissonBCsEnum%dirichlet) then
+           err = 2
+           overrideBC(6) = poissonBCsEnum%neumann
+         endif
+         mixed(6) = .true.
+       end select
 
-      enddo
+     enddo
    endif
+
    if (err.eq.1 .and. id0) then
       write(stdOut,*)
       write(stdOut,*) 'ERROR: BoundaryRegion{} sets a Dirichlet BC'

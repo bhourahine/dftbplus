@@ -153,7 +153,7 @@ module dftbp_poisson_parameters
     mbound_end(:)=0
     maxiter=30
     localBC=0
-    poissBC=0
+    poissBC(:) =0
     overrideBC(:) = poissonBCsEnum%periodic
     overrBulkBC(:) = poissonBCsEnum%unset
     mixed = .false.
