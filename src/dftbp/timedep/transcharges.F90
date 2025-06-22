@@ -13,6 +13,7 @@ module dftbp_timedep_transcharges
   use dftbp_common_environment, only : TEnvironment
   use dftbp_io_message, only : error
   use dftbp_type_densedescr, only : TDenseDescr
+  use dftbp_type_orbitals, only : TOrbitals
 
 #:if WITH_SCALAPACK
   use dftbp_extlibs_mpifx, only : MPI_SUM, mpifx_allreduceip
@@ -73,6 +74,11 @@ module dftbp_timedep_transcharges
 
   end type TTransCharges
 
+
+  interface transq
+    module procedure :: transqRealAtom
+    module procedure :: transqRealShell
+  end interface transq
 
 contains
 
@@ -745,7 +751,7 @@ contains
   !> S the overlap matrix.
   !> Since qij is an atomic quantity (so far) the corresponding values for the atom are summed up.
   !> Note: the parameters 'updwn' were added for spin alpha and beta channels.
-  function transq(ii, jj, env, denseDesc, updwn, sTimesGrndEigVecs, grndEigVecs) result(qij)
+  function transqRealAtom(ii, jj, env, denseDesc, updwn, sTimesGrndEigVecs, grndEigVecs) result(qij)
 
     !> Index of initial state
     integer, intent(in) :: ii
@@ -795,6 +801,76 @@ contains
       qij(kk) = 0.5_dp * sum(qTmp(aa:bb))
     end do
 
-  end function transq
+  end function transqRealAtom
+
+
+  !> Calculates atomic shell resolved transition charges for a specified excitation.
+  !> Calculates qij = 0.5 * (c_i S c_j + c_j S c_i) where c_i and c_j are selected eigenvectors, and
+  !> S the overlap matrix.
+  !> Since qij is an atomic quantity (so far) the corresponding values for the atom are summed up.
+  !> Note: the parameters 'updwn' were added for spin alpha and beta channels.
+  function transqRealShell(ii, jj, env, denseDesc, orb, species, updwn, sTimesGrndEigVecs,&
+      & grndEigVecs) result(qij)
+
+    !> Index of initial state
+    integer, intent(in) :: ii
+
+    !> Index of final state
+    integer, intent(in) :: jj
+
+    !> Environment settings
+    type(TEnvironment), intent(in) :: env
+
+    !> Dense matrix descriptor
+    type(TDenseDescr), intent(in) :: denseDesc
+
+    !> Atomic orbital data
+    type(TOrbitals), intent(in) :: orb
+
+    !> Species of central cell atoms
+    integer, intent(in) :: species(:)
+
+    !> Up spin channel (T) or down spin channel (F)
+    logical, intent(in) :: updwn
+
+    !> Overlap times eigenvector: sum_m Smn cmi (nOrb, nOrb)
+    real(dp), intent(in) :: sTimesGrndEigVecs(:,:,:)
+
+    !> Eigenvectors (nOrb, nOrb)
+    real(dp), intent(in) :: grndEigVecs(:,:,:)
+
+    !> Transition charge on exit. (nAtom)
+    real(dp) :: qij(orb%mShell, size(denseDesc%iAtomStart)-1)
+
+    integer :: iAt, iSp, iSh, iAtFirstOrb, iSpin, iShStart, iShEnd
+    real(dp), allocatable :: qTmp(:)
+
+  #:if WITH_SCALAPACK
+
+    call error('Direct call to transq not allowed under MPI.')
+
+  #:endif
+
+    iSpin = 1
+    if (.not. updwn) then
+      iSpin = 2
+    end if
+
+    allocate(qTmp(size(grndEigVecs,dim=1)))
+    qTmp(:) =  grndEigVecs(:,ii,iSpin) * sTimesGrndEigVecs(:,jj,iSpin)&
+        & + grndEigVecs(:,jj,iSpin) * sTimesGrndEigVecs(:,ii,iSpin)
+
+    qij(:,:) = 0.0_dp
+    do iAt = 1, size(qij)
+      iAtFirstOrb = denseDesc%iAtomStart(iAt)
+      iSp = species(iAt)
+      do iSh = 1, orb%nShell(iSp)
+        iShStart = iAtFirstOrb + orb%posShell(iSh,iSp) -1
+        iShEnd = iAtFirstOrb + orb%posShell(iSh+1,iSp) - 2
+        qij(iSh, iAt) = 0.5_dp * sum(qTmp(iShStart:iShEnd))
+      end do
+    end do
+
+  end function transqRealShell
 
 end module dftbp_timedep_transcharges

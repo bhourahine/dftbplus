@@ -31,7 +31,7 @@ module dftbp_type_orbitals
     !> Ang. momentum of the a particular l-shell on a particular species (maxval(nShell), nSpecies)
     integer, allocatable :: angShell(:,:)
 
-    !> The shell which contains the given orbital on an atom
+    !> The shell which contains the given orbital on an atom of each species
     !> (maxval(nOrbSpecies), nSpecies)
     integer, allocatable :: iShellOrb(:,:)
 
