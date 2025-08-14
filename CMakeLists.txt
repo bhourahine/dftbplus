@@ -273,7 +273,7 @@ if(WITH_TBLITE)
 
   if(INCLUDE_INDIRECT_DEPS)
     set(DFTD4_GIT_REPOSITORY "https://github.com/dftd4/dftd4.git")
-    set(DFTD4_GIT_TAG "3844dc141936e801ca059d1daea1773c3e6103ec")  # do not change manually!
+    set(DFTD4_GIT_TAG "1e3274f1de65c8e273786bd620eb9dd88b7d42f9")  # do not change manually!
     dftbp_config_hybrid_dependency(dftd4 dftd4::dftd4 "${HYBRID_CONFIG_METHODS}" "QUIET"
       external/dftd4 "${exclude}" "${DFTD4_GIT_REPOSITORY}" "${DFTD4_GIT_TAG}")
     #list(APPEND PKG_CONFIG_REQUIRES dftd4)
