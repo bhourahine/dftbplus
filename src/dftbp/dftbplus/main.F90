@@ -61,7 +61,7 @@ module dftbp_dftbplus_main
   use dftbp_dftbplus_apicallback, only : TAPICallback
   use dftbp_dftbplus_eigenvects, only : diagDenseMtx
   use dftbp_dftbplus_forcetypes, only : forceTypes
-  use dftbp_dftbplus_initprogram, only : TDftbPlusMain, TNegfInt
+  use dftbp_dftbplus_initprogram, only : TDangerousChange, TDftbPlusMain, TNegfInt
   use dftbp_dftbplus_inputdata, only : TNEGFInfo
   use dftbp_dftbplus_mainio, only : openOutputFile, printBlankLine, printElecConstrHeader,&
       & printElecConstrInfo, printEnergies, printForceNorm, printGeostepInfo,&
@@ -1455,7 +1455,7 @@ contains
               & this%HSqrReal, this%SSqrReal, this%eigvecsReal, this%iRhoPrim, this%HSqrCplx,&
               & this%SSqrCplx, this%eigvecsCplx, this%rhoSqrReal, this%densityMatrix,&
               & this%nNeighbourCam, this%nNeighbourCamSym, this%deltaDftb, this%apiCallBack,&
-              & errStatus)
+              & this%dangerousChanges, errStatus)
           if (errStatus%hasError()) call error(errStatus%message)
 
           if (this%tWriteBandDat) then
@@ -2746,7 +2746,7 @@ contains
       & iDistribFn, tempElec, nEl, parallelKS, Ef, mu, energy, hybridXc, eigen, filling, rhoPrim,&
       & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
       & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, apiCallBack,&
-      & errStatus)
+      & dangerousChanges, errStatus)
 
     use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
 
@@ -2918,6 +2918,9 @@ contains
     !> Object for invocation of the density, overlap, and hamiltonian matrices exported by callbacks
     type(TAPICallback), intent(inout), allocatable :: apiCallBack
 
+    !> Possibly fatal situations to check for at run-time
+    type(TDangerousChange) :: dangerousChanges
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
@@ -2940,7 +2943,7 @@ contains
           & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim,&
           & xi, orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx,&
           & eigvecsCplx, rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb,&
-          & apiCallBack, errStatus)
+          & apiCallBack, dangerousChanges, errStatus)
       @:PROPAGATE_ERROR(errStatus)
 
     case(densityMatrixTypes%elecSolverProvided)
@@ -2983,7 +2986,7 @@ contains
       & iDistribFn, tempElec, nEl, parallelKS, Ef, energy, hybridXc, eigen, filling, rhoPrim, xi,&
       & orbitalL, HSqrReal, SSqrReal, eigvecsReal, iRhoPrim, HSqrCplx, SSqrCplx, eigvecsCplx,&
       & rhoSqrReal, densityMatrix, nNeighbourCam, nNeighbourCamSym, deltaDftb, apiCallBack,&
-      & errStatus)
+      & dangerousChanges, errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3144,6 +3147,9 @@ contains
     !> Object for invocation of the density, overlap, and hamiltonian matrices exported by callbacks
     type(Tapicallback), intent(inout), allocatable :: apiCallBack
 
+    !> Possibly fatal situations to check for at run-time
+    type(TDangerousChange) :: dangerousChanges
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
@@ -3157,21 +3163,22 @@ contains
             & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, orb, tPeriodic, tHelical,&
             & coord, electronicSolver, parallelKS, hybridXc, densityMatrix%deltaRhoIn,&
             & nNeighbourCam, nNeighbourCamSym, HSqrReal, SSqrReal, eigVecsReal, eigen(:,1,:),&
-            & apiCallBack, errStatus)
+            & apiCallBack, dangerousChanges, errStatus)
         @:PROPAGATE_ERROR(errStatus)
       else
         call buildAndDiagDenseCplxHam(env, denseDesc, ints, kPoint, kWeight, neighbourList,&
             & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, rCellVecs, iCellVec,&
             & recVecs2p, cellVec, electronicSolver, parallelKS, tHelical, orb, species, coord,&
             & hybridXc, densityMatrix, nNeighbourCamSym, HSqrCplx, SSqrCplx, eigVecsCplx, eigen,&
-            & apiCallBack, errStatus)
+            & apiCallBack, dangerousChanges, errStatus)
         @:PROPAGATE_ERROR(errStatus)
       end if
     else
       call buildAndDiagDensePauliHam(env, denseDesc, ints, kPoint, neighbourList,&
           & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
           & parallelKS, hybridXc, densityMatrix%deltaRhoInCplx, nNeighbourCam, nNeighbourCamSym,&
-          & HSqrCplx, SSqrCplx, eigVecsCplx, eigen(:,:,1), apiCallBack, errStatus, xi, species)
+          & HSqrCplx, SSqrCplx, eigVecsCplx, eigen(:,:,1), apiCallBack, dangerousChanges,&
+          & errStatus, xi, species)
       @:PROPAGATE_ERROR(errStatus)
     end if
     call env%globalTimer%stopTimer(globalTimers%diagonalization)
@@ -3215,7 +3222,8 @@ contains
   subroutine buildAndDiagDenseRealHam(env, denseDesc, ints, species, neighbourList,&
       & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, orb, tPeriodic, tHelical,&
       & coord, electronicSolver, parallelKS, hybridXc, deltaRhoIn, nNeighbourCam,&
-      & nNeighbourCamSym, HSqrReal, SSqrReal, eigvecsReal, eigen, apiCallBack, errStatus)
+      & nNeighbourCamSym, HSqrReal, SSqrReal, eigvecsReal, eigen, apiCallBack, dangerousChanges,&
+      & errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3289,10 +3297,14 @@ contains
     !> Object for invocation of the density, overlap, and hamiltonian matrices exported by callbacks
     type(Tapicallback), intent(in), allocatable :: apiCallBack
 
+    !> Possibly fatal situations to check for at run-time
+    type(TDangerousChange) :: dangerousChanges
+
     !> Status of operation
     type(TStatus), intent(inout) :: errStatus
 
     integer :: iKS, iSpin, iK
+    logical :: isSChanged, isHChanged
 
     eigen(:,:) = 0.0_dp
 
@@ -3324,7 +3336,14 @@ contains
 
       if (allocated(apiCallBack)) then
         call apiCallBack%invokeHSCallBack(parallelKS%localKS(:,iKS),&
-            & electronicSolver%hasCholesky(iKS), SSqrReal, HSqrReal, denseDesc)
+            & electronicSolver%hasCholesky(iKS), SSqrReal, HSqrReal, isSChanged, isHChanged,&
+            & denseDesc)
+        if (isSChanged .and. dangerousChanges%overlap) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the overlap matrix, aborting")
+        end if
+        if (isHChanged .and. dangerousChanges%hamiltonian) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the hamiltonian matrix, aborting")
+        end if
       endif
 
       call diagDenseMtxBlacs(electronicSolver, 1, 'V', denseDesc%blacsOrbSqr, HSqrReal, SSqrReal,&
@@ -3355,7 +3374,13 @@ contains
 
       if (allocated(apiCallBack)) then
         call apiCallBack%invokeHSCallBack(parallelKS%localKS(:,iKS),&
-            & electronicSolver%hasCholesky(iKS), SSqrReal, HSqrReal)
+            & electronicSolver%hasCholesky(iKS), SSqrReal, HSqrReal, isSChanged, isHChanged)
+        if (isSChanged .and. dangerousChanges%overlap) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the overlap matrix, aborting")
+        end if
+        if (isHChanged .and. dangerousChanges%hamiltonian) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the hamiltonian matrix, aborting")
+        end if
       end if
 
       ! Warning: SSqrReal gets overwritten here
@@ -3379,7 +3404,7 @@ contains
       & symNeighbourList, nNeighbourSK, iSparseStart, img2CentCell, rCellVecs, iCellVec, recVecs2p,&
       & cellVec, electronicSolver, parallelKS, tHelical, orb, species, coord, hybridXc,&
       & densityMatrix, nNeighbourCamSym, HSqrCplx, SSqrCplx, eigvecsCplx, eigen, apiCallBack,&
-      & errStatus)
+      & dangerousChanges, errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3465,6 +3490,9 @@ contains
     !> Object for invocation of the density, overlap, and hamiltonian matrices exporting callbacks
     type(Tapicallback), intent(in), allocatable :: apiCallBack
 
+    !> Possibly fatal situations to check for at run-time
+    type(TDangerousChange) :: dangerousChanges
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
@@ -3476,6 +3504,8 @@ contains
 
     !! Indices for k-points and spins + composite
     integer :: iK, iSpin, iKS
+
+    logical :: isSChanged, isHChanged
 
     eigen(:,:,:) = 0.0_dp
 
@@ -3547,7 +3577,14 @@ contains
 
       if (allocated(apiCallBack)) then
         call apiCallBack%invokeHSCallBack(parallelKS%localKS(:,iKS),&
-            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx, denseDesc)
+            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx, isSChanged, isHChanged,&
+            & denseDesc)
+        if (isSChanged .and. dangerousChanges%overlap) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the overlap matrix, aborting")
+        end if
+        if (isHChanged .and. dangerousChanges%hamiltonian) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the hamiltonian matrix, aborting")
+        end if
       endif
 
       call diagDenseMtxBlacs(env, electronicSolver, iKS, 'V', denseDesc%blacsOrbSqr, HSqrCplx,&
@@ -3579,7 +3616,13 @@ contains
 
       if (allocated(apiCallBack)) then
         call apiCallBack%invokeHSCallBack(parallelKS%localKS(:,iKS),&
-            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx)
+            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx, isSChanged, isHChanged)
+        if (isSChanged .and. dangerousChanges%overlap) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the overlap matrix, aborting")
+        end if
+        if (isHChanged .and. dangerousChanges%hamiltonian) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the hamiltonian matrix, aborting")
+        end if
       endif
 
       call diagDenseMtx(env, electronicSolver, 'V', HSqrCplx, SSqrCplx, eigen(:, iK, iSpin),&
@@ -3601,7 +3644,7 @@ contains
   subroutine buildAndDiagDensePauliHam(env, denseDesc, ints, kPoint, neighbourList,&
       & nNeighbourSK, iSparseStart, img2CentCell, iCellVec, cellVec, orb, electronicSolver,&
       & parallelKS, hybridXc, deltaRhoIn, nNeighbourCam, nNeighbourCamSym, HSqrCplx,&
-      & SSqrCplx, eigvecsCplx, eigen, apiCallBack, errStatus, xi, species)
+      & SSqrCplx, eigvecsCplx, eigen, apiCallBack, dangerousChanges, errStatus, xi, species)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -3669,6 +3712,9 @@ contains
     !> Object for invocation of the density, overlap, and hamiltonian matrices exported by callbacks
     type(Tapicallback), intent(in), allocatable :: apiCallBack
 
+    !> Possibly fatal situations to check for at run-time
+    type(TDangerousChange) :: dangerousChanges
+
     !> Status of operation
     type(TStatus), intent(out) :: errStatus
 
@@ -3679,6 +3725,7 @@ contains
     integer, intent(in), optional :: species(:)
 
     integer :: iKS, iK
+    logical :: isSChanged, isHChanged
 
     eigen(:,:) = 0.0_dp
     do iKS = 1, parallelKS%nLocalKS
@@ -3725,7 +3772,14 @@ contains
 
       if (allocated(apiCallBack)) then
         call apiCallBack%invokeHSCallBack(parallelKS%localKS(:,iKS),&
-            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx, denseDesc)
+            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx, isSChanged, isHChanged,&
+            & denseDesc)
+        if (isSChanged .and. dangerousChanges%overlap) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the overlap matrix, aborting")
+        end if
+        if (isHChanged .and. dangerousChanges%hamiltonian) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the hamiltonian matrix, aborting")
+        end if
       endif
 
       call diagDenseMtxBlacs(env, electronicSolver, iKS, 'V', denseDesc%blacsOrbSqr, HSqrCplx,&
@@ -3736,7 +3790,13 @@ contains
 
       if (allocated(apiCallBack)) then
         call apiCallBack%invokeHSCallBack(parallelKS%localKS(:,iKS),&
-            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx)
+            & electronicSolver%hasCholesky(iKS), SSqrCplx, HSqrCplx, isSChanged, isHChanged)
+        if (isSChanged .and. dangerousChanges%overlap) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the overlap matrix, aborting")
+        end if
+        if (isHChanged .and. dangerousChanges%hamiltonian) then
+          @:RAISE_ERROR(errStatus, -1, "ASI interface changed the hamiltonian matrix, aborting")
+        end if
       endif
 
       call diagDenseMtx(env, electronicSolver, 'V', HSqrCplx, SSqrCplx, eigen(:,iK), errStatus)

@@ -137,7 +137,7 @@ module dftbp_dftbplus_apicallback
 
 
     !> Are the H/S callbacks expected to modify the model?
-    procedure :: isAsiChangingTheModel => TAPICallback_isAsiChangingTheModel
+    procedure :: canAsiChangeTheModel => TAPICallback_canAsiChangeTheModel
 
   end type TAPICallback
 
@@ -145,15 +145,17 @@ module dftbp_dftbplus_apicallback
 contains
 
   !> Are the H/S callbacks expected to modify the model?
-  logical function TAPICallback_isAsiChangingTheModel(this)
+  function TAPICallback_canAsiChangeTheModel(this) result(canIt)
 
     !> Instance
     class(TAPICallback) :: this
 
-    TAPICallback_isAsiChangingTheModel = associated(this%set_s_callback) .or.&
-        & associated(this%set_h_callback)
+    !> Can the ASI binding change the state?
+    logical :: canIt
 
-  end function TAPICallback_isAsiChangingTheModel
+    canIt = associated(this%set_s_callback) .or. associated(this%set_h_callback)
+
+  end function TAPICallback_canAsiChangeTheModel
 
 
   !> Register callback to be invoked on each density matrix evaluation
@@ -193,11 +195,11 @@ contains
     !! supported
     integer, intent(in), target, optional :: blacsDescr(:)
 
-    if (.not. associated(this%dm_callback)) then
-      return
-    endif
-
-    call this%dm_callback(this%dmAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr, dataBufReal=dataBuf)
+    if (associated(this%dm_callback)) then
+      ! Expose the DFTB+ density matrix to the external code (assumes they do not modify it!)
+      call this%dm_callback(this%dmAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
+          & dataBufReal=dataBuf)
+    end if
 
   end subroutine TAPICallback_invokeDM_real
 
@@ -221,11 +223,11 @@ contains
     !! supported
     integer, intent(in), target, optional :: blacsDescr(:)
 
-    if (.not. associated(this%dm_callback)) then
-      return
-    endif
-
-    call this%dm_callback(this%dmAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr, dataBufCplx=dataBuf)
+    if (associated(this%dm_callback)) then
+      ! Expose the DFTB+ density matrix to the external code (assumes they do not modify it!)
+      call this%dm_callback(this%dmAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
+          & dataBufCplx=dataBuf)
+    end if
 
   end subroutine TAPICallback_invokeDM_cplx
 
@@ -267,7 +269,7 @@ contains
 
 
   !> Callback for real overlap matrix
-  subroutine TAPICallback_invokeS_real(this, iKpoint, iSpin, dataBuf, blacsDescr)
+  subroutine TAPICallback_invokeS_real(this, iKpoint, iSpin, dataBuf, status, blacsDescr)
 
     !> Instance
     class(TAPICallback) :: this
@@ -281,18 +283,22 @@ contains
     !> Overlap matrix in dense format
     real(dp), intent(inout), target :: dataBuf(:,:)
 
+    !> Return value from the ASI matrix setting callback, set -1 if not registered, 0 if unchanged
+    integer, intent(out) :: status
+
     !> Optional BLACS descriptor for the matrix in dataBuf. Not present if SCALAPACK is not
     !! supported
     integer, intent(in), target, optional :: blacsDescr(:)
 
-    integer res
-
     if (associated(this%s_callback)) then
+      ! Expose the DFTB+ S matrix to the external code (assumes they do not modify it!)
       call this%s_callback(this%sAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr, dataBufReal=dataBuf)
     endif
 
+    status = -1
     if (associated(this%set_s_callback)) then
-      res = this%set_s_callback(this%set_sAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
+      ! Allow the external code to (potentially) modify the S matrix, status on return
+      status = this%set_s_callback(this%set_sAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
           & dataBufReal=dataBuf)
     endif
 
@@ -300,7 +306,7 @@ contains
 
 
   !> Callback for complex overlap matrix
-  subroutine TAPICallback_invokeS_cplx(this, iKpoint, iSpin, dataBuf, blacsDescr)
+  subroutine TAPICallback_invokeS_cplx(this, iKpoint, iSpin, dataBuf, status, blacsDescr)
 
     !> Instance
     class(TAPICallback) :: this
@@ -311,18 +317,22 @@ contains
     !> Overlap matrix in dense format
     complex(dp), intent(inout), target :: dataBuf(:,:)
 
+    !> Return value from the ASI matrix setting callback, set -1 if not registered, 0 if unchanged
+    integer, intent(out) :: status
+
     !> Optional BLACS descriptor for the matrix in dataBuf. Not present if SCALAPACK is not
     !! supported
     integer, intent(in), target, optional :: blacsDescr(:)
 
-    integer res
-
     if (associated(this%s_callback)) then
+      ! Expose the DFTB+ S matrix to the external code (assumes they do not modify it!)
       call this%s_callback(this%sAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr, dataBufCplx=dataBuf)
     endif
 
+    status = -1
     if (associated(this%set_s_callback)) then
-      res = this%set_s_callback(this%set_sAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
+      ! Expose the DFTB+ S matrix to the external code, possibly with modification happening
+      status = this%set_s_callback(this%set_sAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
           & dataBufCplx=dataBuf)
     endif
 
@@ -366,7 +376,7 @@ contains
 
 
   !> Callback for real hamiltonian matrix
-  subroutine TAPICallback_invokeH_real(this, iKpoint, iSpin, dataBuf, blacsDescr)
+  subroutine TAPICallback_invokeH_real(this, iKpoint, iSpin, dataBuf, status, blacsDescr)
 
     !> Instance
     class(TAPICallback) :: this
@@ -380,18 +390,22 @@ contains
     !> Hamiltonian matrix in dense format
     real(dp), intent(inout), target :: dataBuf(:,:)
 
+    !> Return value from the ASI matrix setting callback, set -1 if not registered, 0 if unchanged
+    integer, intent(out) :: status
+
     !> Optional BLACS descriptor for the matrix in dataBuf. Not present if SCALAPACK is not
     !! supported
     integer, intent(in), target, optional :: blacsDescr(:)
 
-    integer res
-
     if (associated(this%h_callback)) then
+      ! Expose the DFTB+ H matrix to the external code (assumes they do not modify it!)
       call this%h_callback(this%hAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr, dataBufReal=dataBuf)
     endif
 
+    status = -1
     if (associated(this%set_h_callback)) then
-      res = this%set_h_callback(this%set_hAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
+      ! Expose the DFTB+ H matrix to the external code, possibly with modification happening
+      status = this%set_h_callback(this%set_hAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
           & dataBufReal=dataBuf)
     endif
 
@@ -399,7 +413,7 @@ contains
 
 
   !> Hamiltonian complex matrix callback invocation
-  subroutine TAPICallback_invokeH_cplx(this, iKpoint, iSpin, dataBuf, blacsDescr)
+  subroutine TAPICallback_invokeH_cplx(this, iKpoint, iSpin, dataBuf, status, blacsDescr)
 
     !> Instance
     class(TAPICallback) :: this
@@ -413,18 +427,22 @@ contains
     !> Hamiltonian matrix in dense format
     complex(dp), intent(inout), target :: dataBuf(:,:)
 
+    !> Return value from the ASI matrix setting callback, set -1 if not registered, 0 if unchanged
+    integer, intent(out) :: status
+
     !> Optional BLACS descriptor for the matrix in dataBuf. Not present if SCALAPACK is not
     !! supported
     integer, intent(in), target, optional :: blacsDescr(:)
 
-    integer res
-
     if (associated(this%h_callback)) then
+      ! Expose the DFTB+ H matrix to the external code (assumes they do not modify it!)
       call this%h_callback(this%hAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr, dataBufCplx=dataBuf)
     endif
 
+    status = -1
     if (associated(this%set_h_callback)) then
-      res = this%set_h_callback(this%set_hAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
+      ! Expose the DFTB+ H matrix to the external code, possibly with modification happening
+      status = this%set_h_callback(this%set_hAuxPtr, iKpoint, iSpin, blacsDescr=blacsDescr,&
           & dataBufCplx=dataBuf)
     endif
 
@@ -434,7 +452,7 @@ contains
 #:if WITH_SCALAPACK
 
   !> Callback invocation
-  subroutine TAPIinvokeHS_real(this, iKS, isCholesky, S, H, denseDesc)
+  subroutine TAPIinvokeHS_real(this, iKS, isCholesky, S, H, isSChanged, isHChanged, denseDesc)
 
     !> Instance
     class(TAPICallback) :: this
@@ -451,23 +469,32 @@ contains
     !> Dense hamiltonian matrix
     real(dp), intent(out) :: H(:,:)
 
+    !> Is the overlap modified?
+    logical, intent(out) :: isSChanged
+
+    !> Is the overlap modified?
+    logical, intent(out) :: isHChanged
+
     !> Dense matrix descriptor
     type(TDenseDescr), intent(in) :: denseDesc
 
-    integer :: iK, iS
+    integer :: iK, iS, status
 
     iK = iKS(1)
     iS = iKS(2)
+    status = 0
     if (.not.isCholesky) then
-      call this%invokeS(iK, iS, S, denseDesc%blacsOrbSqr)
+      call this%invokeS(iK, iS, S, status, denseDesc%blacsOrbSqr)
     end if
-    call this%invokeH(iK, iS, H, denseDesc%blacsOrbSqr)
+    isSChanged = status > 0
+    call this%invokeH(iK, iS, H, status, denseDesc%blacsOrbSqr)
+    isHChanged = status > 0
 
   end subroutine TAPIinvokeHS_real
 
 
   !> Callback invocation
-  subroutine TAPIinvokeHS_cplx(this, iKS, isCholesky, S, H, denseDesc)
+  subroutine TAPIinvokeHS_cplx(this, iKS, isCholesky, S, H, isSChanged, isHChanged, denseDesc)
 
     !> Instance
     class(TAPICallback) :: this
@@ -487,14 +514,23 @@ contains
     !> Dense matrix descriptor
     type(TDenseDescr), intent(in) :: denseDesc
 
-    integer :: iK, iS
+    !> Is the overlap modified?
+    logical, intent(out) :: isSChanged
+
+    !> Is the overlap modified?
+    logical, intent(out) :: isHChanged
+
+    integer :: iK, iS, status
 
     iK = iKS(1)
     iS = iKS(2)
+    status = 0
     if (.not.isCholesky) then
-      call this%invokeS(iK, iS, S, denseDesc%blacsOrbSqr)
+      call this%invokeS(iK, iS, S, status, denseDesc%blacsOrbSqr)
     end if
-    call this%invokeH(iK, iS, H, denseDesc%blacsOrbSqr)
+    isSChanged = status > 0
+    call this%invokeH(iK, iS, H, status, denseDesc%blacsOrbSqr)
+    isHChanged = status > 0
 
   end subroutine TAPIinvokeHS_cplx
 
@@ -502,7 +538,7 @@ contains
 #:else
 
   !> Callback invocation
-  subroutine TAPIinvokeHS_real(this, iKS, isCholesky, S, H)
+  subroutine TAPIinvokeHS_real(this, iKS, isCholesky, S, H, isSChanged, isHChanged)
 
     !> Instance
     class(TAPICallback) :: this
@@ -519,20 +555,29 @@ contains
     !> Dense hamiltonian matrix
     real(dp), intent(out) :: H(:,:)
 
-    integer :: iK, iS
+    !> Is the overlap modified?
+    logical, intent(out) :: isSChanged
+
+    !> Is the overlap modified?
+    logical, intent(out) :: isHChanged
+
+    integer :: iK, iS, status
 
     iK = iKS(1)
     iS = iKS(2)
+    status = 0
     if (.not.isCholesky) then
-      call this%invokeS(iK, iS, S)
+      call this%invokeS(iK, iS, S, status)
     end if
-    call this%invokeH(iK, iS, H)
+    isSChanged = status > 0
+    call this%invokeH(iK, iS, H, status)
+    isHChanged = status > 0
 
   end subroutine TAPIinvokeHS_real
 
 
   !> Callback invocation
-  subroutine TAPIinvokeHS_cplx(this, iKS, isCholesky, S, H)
+  subroutine TAPIinvokeHS_cplx(this, iKS, isCholesky, S, H, isSChanged, isHChanged)
 
     !> Instance
     class(TAPICallback) :: this
@@ -549,14 +594,23 @@ contains
     !> Dense hamiltonian matrix
     complex(dp), intent(out) :: H(:,:)
 
-    integer :: iK, iS
+    !> Is the overlap modified?
+    logical, intent(out) :: isSChanged
+
+    !> Is the overlap modified?
+    logical, intent(out) :: isHChanged
+
+    integer :: iK, iS, status
 
     iK = iKS(1)
     iS = iKS(2)
+    status = 0
     if (.not.isCholesky) then
-      call this%invokeS(iK, iS, S)
+      call this%invokeS(iK, iS, S, status)
     end if
-    call this%invokeH(iK, iS, H)
+    isSChanged = status > 0
+    call this%invokeH(iK, iS, H, status)
+    isHChanged = status > 0
 
   end subroutine TAPIinvokeHS_cplx
 

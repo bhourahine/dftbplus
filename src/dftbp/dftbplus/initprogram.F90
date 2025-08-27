@@ -74,6 +74,7 @@ module dftbp_dftbplus_initprogram
       & fStopDriver, fStopSCC, hessianOut, mdOut, resultsTag, userOut
   use dftbp_dftbplus_qdepextpotproxy, only : TQDepExtPotProxy
   use dftbp_dftbplus_transportio, only : readContactShifts
+  use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
   use dftbp_elecsolvers_elecsolvers, only : electronicSolverTypes, TElectronicSolver,&
       & TElectronicSolver_init
   use dftbp_elecsolvers_elsisolver, only : TElsiSolver_final, TElsiSolver_init
@@ -150,7 +151,7 @@ module dftbp_dftbplus_initprogram
   implicit none
 
   private
-  public :: TDftbPlusMain, TNegfInt
+  public :: TDangerousChange, TDftbPlusMain, TNegfInt
   public :: initReferenceCharges, updateReferenceShellCharges, initElectronNumber
 #:if WITH_TRANSPORT
   public :: overrideContactCharges
@@ -167,6 +168,16 @@ module dftbp_dftbplus_initprogram
   end type TNegfInt
 
 #:endif
+
+
+  !> Structure for calculations where changing the quantities are dangerous for calculation
+  !> reliability/correctness
+  type TDangerousChange
+    !> Hamiltonian matrix
+    logical :: hamiltonian = .false.
+    !> Overlap matrix
+    logical :: overlap = .false.
+  end type TDangerousChange
 
 
   type :: TDftbPlusMain
@@ -1165,6 +1176,10 @@ module dftbp_dftbplus_initprogram
     !> This object encapsulates subroutines and variables that are used for registering and
     !! invocation of the density, overlap, and hamiltonian matrices exporting callbacks.
     type(TAPICallback), allocatable :: apiCallBack
+
+    !> Lists changes that are dangerous for calculation reliability/correctness if these quantities
+    !> are changed
+    type(TDangerousChange) :: dangerousChanges
 
   #:if WITH_SCALAPACK
 
@@ -3860,24 +3875,32 @@ contains
     end if
 
     if (allocated(this%apiCallBack)) then
-      if (this%apiCallBack%isAsiChangingTheModel()) then
+      if (this%apiCallBack%canAsiChangeTheModel()) then
         if (allocated(this%scc)) then
           ! As this needs assurances that the DM is actually being read by the external code,
           ! leading to the external code making changes in the hamiltonian, otherwise SCC never
           ! converges.
-          call error("ASI callback with model modification enabled does not support self-consistent&
-              & calculations at present")
+          call warning("ASI callback with model modification enabled does not support&
+              & self-consistent calculations at present")
+          this%dangerousChanges%hamiltonian = .true.
         end if
         if (this%tForces) then
           ! Since if H and/or S is modified, the derivatives are not available via ASI at the
           ! moment.
-          call error("ASI callback with model modification enabled does not support forces at&
+          call warning("ASI callback with model modification enabled does not support forces at&
               & present")
+          this%dangerousChanges%hamiltonian = .true.
+          this%dangerousChanges%overlap = .true.
         end if
         if (this%tMulliken) then
-          call error("ASI callback with model modification enabled does not support population&
-              & analysis at present")
+          call warning("ASI callback with model modification enabled does not support Mulliken&
+              & population analysis at present")
+          this%dangerousChanges%overlap = .true.
         end if
+      end if
+      if (all(this%densityMatrix%iDensityMatrixAlgorithm /= [densityMatrixTypes%fromEigenVecs,&
+          & densityMatrixTypes%magma_fromEigenVecs])) then
+        call error("ASI callback currently requires eigenvector enabled solution in DFTB+")
       end if
       if (allocated(this%reks)) then
         call error("ASI callback does not support REKS")
@@ -6566,7 +6589,6 @@ contains
   !> Sets up how the density matrix is obtained
   subroutine densityMatrixSource(densityMatrix, electronicSolver, isGpuUsed)
     use dftbp_dftb_densitymatrix, only : TDensityMatrix_init
-    use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
 
     !> Holds real and complex delta density matrices and pointers
     type(TDensityMatrix), intent(out) :: densityMatrix

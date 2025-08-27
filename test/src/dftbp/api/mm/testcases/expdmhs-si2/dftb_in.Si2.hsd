@@ -8,25 +8,25 @@ Geometry = GenFormat {
    0.00000000000E+00   0.27135460000E+01   0.27135460000E+01
    0.27135460000E+01   0.00000000000E+00   0.27135460000E+01
 }
-Driver = {}
+Driver {}
 Hamiltonian = DFTB {
-  ASI { }
+  ASI {}
   Scc = Yes
   MaxAngularMomentum = {
     Si = "p"
   }
-  Charge = 0.000000000000000E+000
+  Charge = 0.0
   Filling = Fermi {
-    Temperature [Kelvin] = 1.000000000000000E-008
+    Temperature [Kelvin] = 1.0E-008
   }
   SlaterKosterFiles = {
     Si-Si = "./Si-Si.skf"
   }
   KPointsAndWeights = {
- 0.250000000000000 0.250000000000000 0.250000000000000 1.00000000000000
- -0.250000000000000 0.250000000000000 0.250000000000000 1.00000000000000
- 0.250000000000000 -0.250000000000000 0.250000000000000 1.00000000000000
- -0.250000000000000 -0.250000000000000 0.250000000000000 1.00000000000000
+  0.25  0.25 0.25 1.0
+ -0.25  0.25 0.25 1.0
+  0.25 -0.25 0.25 1.0
+ -0.25 -0.25 0.25 1.0
   }
 }
 
@@ -35,13 +35,13 @@ Options {
 }
 
 Analysis {
-  CalculateForces = Yes
+  PrintForces = Yes
   MullikenAnalysis = Yes
   AtomResolvedEnergies = Yes
 }
 
 ParserOptions = {
-  ParserVersion = 12
+  ParserVersion = 14
 }
 
 Parallel {
