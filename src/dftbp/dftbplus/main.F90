@@ -5278,8 +5278,7 @@ contains
     !> Data for hybrid xc-functional calculation
     class(THybridXcFunc), allocatable, intent(inout) :: hybridXc
 
-    real(dp), allocatable :: dQAtom(:,:), deltaRhoOut(:,:,:)
-    real(dp), allocatable :: naturalOrbs(:,:,:)
+    real(dp), allocatable :: deltaRhoOut(:,:,:), dQAtom(:,:), naturalOrbs(:,:,:)
     integer, pointer :: pSpecies0(:)
     integer :: iSpin, nSpin, nAtom
     logical :: tSpin
@@ -5294,8 +5293,7 @@ contains
     allocate(dQAtom(nAtom, nSpin))
     dQAtom(:,:) = sum(qOutput(:,:,:) - q0(:,:,:), dim=1)
 
-    ! Avoid overwritte deltaRhoOut
-    allocate(deltaRhoOut, mold=dRhoOut)
+    ! Avoid overwriting deltaRhoOut
     deltaRhoOut = dRhoOut
 
   #:if WITH_SCALAPACK
@@ -5340,8 +5338,6 @@ contains
     dftbEnergy%Etotal = dftbEnergy%Etotal + dftbEnergy%Eexcited
     dftbEnergy%EMermin = dftbEnergy%EMermin + dftbEnergy%Eexcited
     dftbEnergy%EGibbs = dftbEnergy%EGibbs + dftbEnergy%Eexcited
-
-    deallocate(deltaRhoOut)
 
   end subroutine calculateLinRespExcitations
 
