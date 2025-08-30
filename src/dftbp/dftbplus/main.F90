@@ -3753,8 +3753,12 @@ contains
           !NOTE: I did not test when the code goes for this way
           rhoSqrReal(:,:, iSpin) = work
         else
+        #:if WITH_SCALAPACK
           call distrib2replicated(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr,&
-               &  densityMatrix%deltaRhoOut(:,:,iSpin), rhoSqrReal(:,:,iSpin))
+              & densityMatrix%deltaRhoOut(:,:,iSpin), rhoSqrReal(:,:,iSpin))
+        #:else
+          rhoSqrReal(:,:, iSpin) = densityMatrix%deltaRhoOut(:,:,iSpin)
+        #:endif
         end if
       end if
 

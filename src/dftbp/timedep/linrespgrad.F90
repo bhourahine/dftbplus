@@ -757,6 +757,7 @@ contains
 
           do iSpin = 1, nSpin
             ! Make MO to AO transformation of the excited density matrix
+          #:if WITH_SCALAPACK
             allocate(VecGlb(norb,norb))
             call distrib2replicated(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr,&
                 & grndEigVecs(:,:,iSpin), VecGlb(:,:))
@@ -767,6 +768,10 @@ contains
 
             call getExcMulliken(denseDesc, pc(:,:,iSpin), VecGlb, dqex(:,iSpin))
             deallocate(VecGlb)
+          #:else
+            call makeSimilarityTrans(pc(:,:,iSpin), grndEigVecs(:,:,iSpin))
+            call getExcMulliken(denseDesc, pc(:,:,iSpin), SSqr, dqex(:,iSpin))
+          #:endif
           end do
 
           if (this%tWriteDensityMatrix) then
@@ -822,6 +827,7 @@ contains
 
               do iSpin = 1, nSpin
                 ! Make MO to AO transformation of the excited density matrix
+              #:if WITH_SCALAPACK
                 allocate(VecGlb(norb,norb))
                 call distrib2replicated(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr,&
                     & grndEigVecs(:,:,iSpin), VecGlb(:,:))
@@ -832,6 +838,10 @@ contains
 
                 call getExcMulliken(denseDesc, pc(:,:,iSpin), VecGlb, dqex(:,iSpin))
                 deallocate(VecGlb)
+              #:else
+                call makeSimilarityTrans(pc(:,:,iSpin), grndEigVecs(:,:,iSpin))
+                call getExcMulliken(denseDesc, pc(:,:,iSpin), SSqr, dqex(:,iSpin))
+              #:endif
               end do
 
               ! For 0-n couplings, the standard force routine can be used, where
@@ -872,6 +882,7 @@ contains
 
               do iSpin = 1, nSpin
                 ! Make MO to AO transformation of the excited density matrix
+              #:if WITH_SCALAPACK
                 allocate(VecGlb(norb,norb))
                 call distrib2replicated(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr,&
                     & grndEigVecs(:,:,iSpin), VecGlb(:,:))
@@ -882,6 +893,10 @@ contains
 
                 call getExcMulliken(denseDesc, pc(:,:,iSpin), VecGlb, dqex(:,iSpin))
                 deallocate(VecGlb)
+              #:else
+                call makeSimilarityTrans(pc(:,:,iSpin), grndEigVecs(:,:,iSpin))
+                call getExcMulliken(denseDesc, pc(:,:,iSpin), SSqr, dqex(:,iSpin))
+              #:endif
               end do
 
               call addNadiaGradients(env, orb, this, rpa, transChrg, hybridXc, denseDesc, sym,&
@@ -2601,6 +2616,7 @@ contains
       allocate(gammaLongRangePrime(3, lr%nAtom, lr%nAtom))
 
       ! Convert local arrays to global
+    #:if WITH_SCALAPACK
       allocate(deltaRhoGlobal(norb,norb,size(deltaRho,dim=3)))
       allocate(grndEigVecsGlobal(norb,norb,size(grndEigVecs,dim=3)))
       do iSpin = 1, nSpin
@@ -2616,6 +2632,14 @@ contains
           deltaRhoGlobal(mu,nu,:) = deltaRhoGlobal(nu,mu,:)
         end do
       end do
+    #:else
+      ! Symmetrize deltaRho
+      do mu = 1, nOrb
+        do nu = mu + 1, nOrb
+          deltaRho(mu,nu,:) = deltaRho(nu,mu,:)
+        end do
+      end do
+    #:endif
 
       ! Compute long-range gamma derivative
       call distributeRangeInChunks(env, 1, lr%nAtom, iGlobal, fGlobal)
@@ -4716,6 +4740,7 @@ contains
       allocate(lrGammaOrb(nOrb, nOrb))
       allocate(gammaLongRangePrime(3, lr%nAtom, lr%nAtom))
 
+    #:if WITH_SCALAPACK
       ! Convert local arrays to global
       allocate(deltaRhoGlobal(norb,norb,size(deltaRho,dim=3)))
       allocate(grndEigVecsGlobal(norb,norb,size(grndEigVecs,dim=3)))
@@ -4732,6 +4757,17 @@ contains
           deltaRhoGlobal(mu,nu,:) = deltaRhoGlobal(nu,mu,:)
         end do
       end do
+
+    #:else
+
+      ! Symmetrize deltaRho
+      do mu = 1, nOrb
+        do nu = mu + 1, nOrb
+          deltaRho(mu,nu,:) = deltaRho(nu,mu,:)
+        end do
+      end do
+
+    #:endif
 
       ! Compute long-range gamma derivative
       call distributeRangeInChunks(env, 1, lr%nAtom, iGlobal, fGlobal)
