@@ -18,11 +18,13 @@ module dftbp_derivs_perturb
   use dftbp_common_file, only : closeFile, openFile, TFileDescr
   use dftbp_common_globalenv, only : stdOut
   use dftbp_common_status, only : TStatus
+  use dftbp_derivs_energyderivatives, only : secondEDerivative
   use dftbp_derivs_fermihelper, only : deltamn
   use dftbp_derivs_linearresponse, only : dRhoCmplx, dRhoFermiChangeCmplx, dRhoFermiChangePauli,&
       & dRhoFermiChangeReal, dRhoPauli, dRhoReal
   use dftbp_derivs_rotatedegen, only : TRotateDegen, TRotateDegen_init
   use dftbp_dftb_blockpothelper, only : appendBlockReduced
+  use dftbp_dftb_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_dftb_dftbplusu, only : plusUFunctionals, TDftbU
   use dftbp_dftb_hybridxc, only : THybridXcFunc
   use dftbp_dftb_nonscc, only : TNonSccDiff
@@ -50,8 +52,6 @@ module dftbp_derivs_perturb
   use dftbp_dftb_populations, only : denseMullikenRealBlacs
   use dftbp_extlibs_mpifx, only : mpifx_allreduceip, mpifx_bcast, MPI_SUM
   use dftbp_extlibs_scalapackfx, only : DLEN_, blocklist, scalafx_getdescriptor, size
-#:else
-  use dftbp_dftb_sparse2dense, only : unpackHS
 #:endif
   use dftbp_dftb_sparse2dense, only : unpackHS
   implicit none
@@ -180,11 +180,11 @@ contains
 
   !> Perturbation at q=0 with respect to a static electric field
   subroutine wrtEField(this, env, parallelKS, filling, eigvals, eigVecsReal, eigVecsCplx, ham,&
-      & over, orb, nAtom, species, neighbourList, nNeighbourSK, denseDesc, iSparseStart,&
-      & img2CentCell, coord, sccCalc, maxSccIter, sccTol, isSccConvRequired, nMixElements,&
-      & nIneqMixElements, iEqOrbitals, tempElec, Ef, spinW, thirdOrd, dftbU, iEqBlockDftbu, onsMEs,&
-      & iEqBlockOnSite, hybridXc, nNeighbourCam, chrgMixerReal, kPoint, kWeight, iCellVec, cellVec,&
-      & polarisability, dEi, dqOut, neFermi, dEfdE, errStatus, omega)
+      & over, boundaryCond, orb, nAtom, species, neighbourList, nNeighbourSK, denseDesc,&
+      & iSparseStart, img2CentCell, coord, sccCalc, maxSccIter, sccTol, isSccConvRequired,&
+      & nMixElements, nIneqMixElements, iEqOrbitals, tempElec, Ef, spinW, thirdOrd, dftbU,&
+      & iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc, nNeighbourCam, chrgMixerReal, kPoint,&
+      & kWeight, iCellVec, cellVec, polarisability, dEi, dqOut, neFermi, dEfdE, errStatus, omega)
 
     !> Instance
     class(TResponse), intent(in) :: this
@@ -212,6 +212,9 @@ contains
 
     !> Sparse overlap matrix
     real(dp), intent(in) :: over(:)
+
+    !> Boundary conditions on the calculation
+    type(TBoundaryConds), intent(in) :: boundaryCond
 
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
@@ -365,7 +368,7 @@ contains
     type(TRotateDegen), allocatable :: degenTransform(:)
 
     write(stdOut,*)
-    write(stdOut,*)'Perturbation calculation of electric polarisability'
+    write(stdOut,*)'Perturbation calculation with respect to applied electric field'
     write(stdOut,*)
 
     call init_perturbation(parallelKS, this%tolDegen, nOrbs, nKpts, nSpin, nIndepHam, maxFill,&
@@ -404,11 +407,13 @@ contains
 
     dqOut(:,:,:,:) = 0.0_dp
 
-    ! polarisation direction
+    ! Electric field polarisation direction
     ! note: could MPI parallelise over this in principle
     lpCart: do iCart = 1, 3
 
-      write(stdOut,*)"Polarisabilty for field along ", trim(quaternionName(iCart+1))
+      if (boundaryCond%iBoundaryCondition==boundaryCondsEnum%cluster) then
+        write(stdOut,*)"Polarisabilty for field along ", trim(quaternionName(iCart+1))
+      end if
 
       ! set outside loop, as in time dependent case if adjacent frequencies are similar this should
       ! converge a bit faster
@@ -472,21 +477,23 @@ contains
     end if
   #:endif
 
-    write(stdOut,*)
-    write(stdOut,*)'Polarisability (a.u.)'
-    do iOmega = 1, size(omega)
+    if (boundaryCond%iBoundaryCondition==boundaryCondsEnum%cluster) then
       write(stdOut,*)
-      if (abs(omega(iOmega)) > epsilon(0.0_dp)) then
-        write(stdOut, format2U)"Polarisability at omega = ", omega(iOmega), ' H ',&
-            & omega(iOmega) * Hartree__eV, ' eV'
-      else
-        write(stdOut, "(A)")"Static polarisability:"
-      end if
-      do iCart = 1, 3
-        write(stdOut,"(3E20.12)")polarisability(:, iCart, iOmega)
+      write(stdOut,*)'Polarisability (a.u.)'
+      do iOmega = 1, size(omega)
+        write(stdOut,*)
+        if (abs(omega(iOmega)) > epsilon(0.0_dp)) then
+          write(stdOut, format2U)"Polarisability at omega = ", omega(iOmega), ' H ',&
+              & omega(iOmega) * Hartree__eV, ' eV'
+        else
+          write(stdOut, "(A)")"Static polarisability:"
+        end if
+        do iCart = 1, 3
+          write(stdOut,"(3E20.12)")polarisability(:, iCart, iOmega)
+        end do
       end do
-    end do
-    write(stdOut,*)
+      write(stdOut,*)
+    end if
 
   end subroutine wrtEField
 

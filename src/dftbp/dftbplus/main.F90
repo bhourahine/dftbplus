@@ -319,14 +319,15 @@ contains
         if (this%isEResp) then
           call this%response%wrtEField(env, this%parallelKS, this%filling, this%eigen,&
               & this%eigVecsReal, this%eigvecsCplx, this%ints%hamiltonian, this%ints%overlap,&
-              & this%orb, this%nAtom, this%species, this%neighbourList, this%nNeighbourSK,&
-              & this%denseDesc, this%iSparseStart, this%img2CentCell, this%coord, this%scc,&
-              & this%maxPerturbIter, this%perturbSccTol, this%isPerturbConvRequired,&
-              & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
-              & this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu, this%onSiteElements,&
-              & this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam, this%chrgMixerReal,&
-              & this%kPoint, this%kWeight, this%iCellVec, this%cellVec, this%polarisability,&
-              & this%dEidE, this%dqOut, this%neFermi, this%dEfdE, errStatus, this%dynRespEFreq)
+              & this%boundaryCond, this%orb, this%nAtom, this%species, this%neighbourList,&
+              & this%nNeighbourSK, this%denseDesc, this%iSparseStart, this%img2CentCell,&
+              & this%coord, this%scc, this%maxPerturbIter, this%perturbSccTol,&
+              & this%isPerturbConvRequired, this%nMixElements, this%nIneqOrb, this%iEqOrbitals,&
+              & this%tempElec, this%Ef, this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu,&
+              & this%onSiteElements, this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam,&
+              & this%chrgMixerReal, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
+              & this%polarisability, this%dEidE, this%dqOut, this%neFermi, this%dEfdE, errStatus,&
+              & this%dynRespEFreq)
           if (errStatus%hasError()) then
             call error(errStatus%message)
           end if
@@ -495,9 +496,9 @@ contains
       if (this%isEResp) then
         call this%response%wrtEField(env, this%parallelKS, this%filling, this%eigen,&
             & this%eigVecsReal, this%eigvecsCplx, this%ints%hamiltonian, this%ints%overlap,&
-            & this%orb, this%nAtom, this%species, this%neighbourList, this%nNeighbourSK,&
-            & this%denseDesc, this%iSparseStart, this%img2CentCell, this%coord, this%scc,&
-            & this%maxPerturbIter, this%perturbSccTol, this%isPerturbConvRequired,&
+            & this%boundaryCond, this%orb, this%nAtom, this%species, this%neighbourList,&
+            & this%nNeighbourSK, this%denseDesc, this%iSparseStart, this%img2CentCell, this%coord,&
+            & this%scc, this%maxPerturbIter, this%perturbSccTol, this%isPerturbConvRequired,&
             & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
             & this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu, this%onSiteElements,&
             & this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam, this%chrgMixerReal,&
