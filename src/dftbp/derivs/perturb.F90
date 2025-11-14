@@ -365,7 +365,7 @@ contains
     type(TRotateDegen), allocatable :: degenTransform(:)
 
     write(stdOut,*)
-    write(stdOut,*)'Perturbation calculation of electric polarisability'
+    write(stdOut,*)'Perturbation calculation with respect to applied electric field'
     write(stdOut,*)
 
     call init_perturbation(parallelKS, this%tolDegen, nOrbs, nKpts, nSpin, nIndepHam, maxFill,&
