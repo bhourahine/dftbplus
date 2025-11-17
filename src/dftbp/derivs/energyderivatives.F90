@@ -14,9 +14,9 @@ module dftbp_derivs_energyderivatives
   use dftbp_common_accuracy, only : dp
   use dftbp_common_environment, only : TEnvironment
   use dftbp_dftb_periodic, only : TNeighbourList
-  use dftbp_dftb_potentials, only : TPotentials
   use dftbp_dftb_shift, only : addShift, totalShift
   use dftbp_dftb_sparse2dense, only : unpackHS
+  use dftbp_math_matrixops, only : adjointLowerTriangle
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_type_densedescr, only : TDenseDescr
   implicit none
@@ -31,27 +31,42 @@ module dftbp_derivs_energyderivatives
 contains
 
   !> Energy second derivatives
-  subroutine secondEDerivative_real(env, dPsiReal, dPotential, d2Potential, eigvals, eigVecsReal,&
-      & over, ham, nNeighbourSK, neighbourList, species, orb, denseDesc, iSparseStart, nAtom,&
-      & img2CentCell, work)
+  subroutine secondEDerivative_real(env, d2E, dPsiReal1, dPsiReal2, dPotential1, dPotential2,&
+      & d2Potential, eigvals, filling, eigVecsReal, nFilled, over, ham, nNeighbourSK,&
+      & neighbourList, species, orb, denseDesc, iSparseStart, nAtom, img2CentCell)
 
     !> Computational environment settings
     type(TEnvironment), intent(inout) :: env
 
-    !> Derivatives of wavefunctions with respect to perturbations (nOrb, nOrb, nPerturb)
-    real(dp), intent(in) :: dPsiReal(:,:,:)
+    !> Second derivative of the energy
+    real(dp), intent(out) :: d2E
 
-    !> 1st derivatives of external potential (nPerturb)
-    type(TPotentials), intent(in) :: dPotential(:)
+    !> Derivatives of wavefunctions with respect to perturbations (nOrb, nOrb)
+    real(dp), intent(in) :: dPsiReal1(:,:)
 
-    !> Mixed 2nd derivative of external potential
-    type(TPotentials), intent(in), allocatable :: d2Potential
+    !> Derivatives of wavefunctions with respect to perturbations (nOrb, nOrb)
+    real(dp), intent(in) :: dPsiReal2(:,:)
+
+    !> 1st derivatives of external potential (mOrb, mOrb, nAtom, nSpin)
+    real(dp), intent(in) :: dPotential1(:,:,:,:)
+
+    !> 1st derivatives of external potential (mOrb, mOrb, nAtom, nSpin)
+    real(dp), intent(in) :: dPotential2(:,:,:,:)
+
+    !> Mixed 2nd derivative of external potential (mOrb, mOrb, nAtom, nSpin)
+    real(dp), intent(in), allocatable :: d2Potential(:,:,:,:)
 
     !> Unperturbed eigenvalues of each level, kpoint and spin channel
     real(dp), intent(in) :: eigvals(:,:,:)
 
+    !> Filling
+    real(dp), intent(in) :: filling(:,:,:)
+
     !> Ground state eigenvectors
     real(dp), intent(in) :: eigVecsReal(:,:,:)
+
+    !> Number of (partly) filled states in each [nIndepHam,kpt]
+    integer, intent(in) :: nFilled(:,:)
 
     !> Sparse overlap matrix
     real(dp), intent(in) :: over(:)
@@ -71,9 +86,6 @@ contains
     !> Atomic orbital information
     type(TOrbitals), intent(in) :: orb
 
-    !> Square work matrix
-    real(dp), intent(in) :: work(:,:)
-
     !> Dense matrix descriptor
     type(TDenseDescr), intent(in) :: denseDesc
 
@@ -86,38 +98,102 @@ contains
     !> Map from image atoms to the original unique atom in the central cell
     integer, intent(in) :: img2CentCell(:)
 
-    real(dp), allocatable :: dHamSqr(:,:), dOverSqr(:,:), vSparse(:, :)
-    real(dp), allocatable :: eCiReal(:,:,:)
+    real(dp), allocatable :: work(:,:), work2(:,:), vSparse(:, :)
+    real(dp) :: eTerm
+    integer :: iOrb, nOrb, nSpin
 
-    integer :: nOrb, nSpin
-
-    @:ASSERT(size(dPotential) == 2)
-
-    nOrb = size(work,dim=1)
+    nOrb = orb%nOrb
     nSpin = size(ham, dim=2)
 
-    allocate(dHamSqr(nOrb, nOrb))
-    allocate(dOverSqr(nOrb, nOrb))
-    allocate(vSparse(size(over), nSpin))
+    allocate(work(nOrb, nOrb), source=0.0_dp)
+    allocate(work2(nOrb, nOrb), source=0.0_dp)
 
-    call unpackHS(dHamSqr, ham(:,1), neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+    call unpackHS(work, ham(:,1), neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
         & iSparseStart, img2CentCell)
-    call unpackHS(dOverSqr, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+    call adjointLowerTriangle(work)
+
+    work2(:,:) = 0.0_dp
+    do iOrb = 1, nFilled(1,1)
+      work2(:, iOrb) = dPsiReal2(:,iOrb) * filling(iOrb, 1, 1)**2
+    end do
+
+    ! <Psi1 | H | Psi2>
+    eTerm = sum(dPsiReal1(:,:nFilled(1,1)) * matmul(work, work2(:,:nFilled(1,1))))
+    !write(*,*)eTerm
+    d2E = eTerm
+
+    work(:,:) = 0.0_dp
+    call unpackHS(work, over, neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
         & iSparseStart, img2CentCell)
+    call adjointLowerTriangle(work)
 
+    work2(:,:) = 0.0_dp
+    do iOrb = 1, nFilled(1,1)
+      work2(:, iOrb) = dPsiReal2(:,iOrb) * eigVals(iOrb, 1, 1) * filling(iOrb, 1, 1)**2
+    end do
 
+    ! <Psi1 | - e S| Psi2>
+    eTerm = -sum(dPsiReal1(:,:nFilled(1,1)) * matmul(work, work2(:,:nFilled(1,1))))
+    !write(*,*)eTerm
+    d2E = d2E + eTerm
 
+    deallocate(work2)
+    allocate(vsparse(size(over), nSpin))
+
+    vSparse(:,:) = 0.0_dp
     call addShift(env, vSparse, over, nNeighbourSK, neighbourList%iNeighbour, species, orb,&
-        & iSparseStart, nAtom, img2CentCell, dPotential(1)%extBlock, isInputZero=.true.)
+        & iSparseStart, nAtom, img2CentCell, dPotential1, isInputZero=.true.)
 
+    work(:,:) = 0.0_dp
+    call unpackHS(work, vSparse(:,1), neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+        & iSparseStart, img2CentCell)
+    call adjointLowerTriangle(work)
+
+    ! <Psi0 | v1 | Psi2>
+    eTerm = sum(eigVecsReal(:,:nFilled(1,1), 1) * matmul(work, dPsiReal2(:,:nFilled(1,1))))
+    write(*,*)eTerm
+    d2E = d2E + eTerm
+
+    vSparse(:,:) = 0.0_dp
     call addShift(env, vSparse, over, nNeighbourSK, neighbourList%iNeighbour, species, orb,&
-        & iSparseStart, nAtom, img2CentCell, dPotential(2)%extBlock, isInputZero=.true.)
+        & iSparseStart, nAtom, img2CentCell, dPotential2, isInputZero=.true.)
 
-    if (allocated(d2Potential)) then
-      call addShift(env, vSparse, over, nNeighbourSK, neighbourList%iNeighbour, species, orb,&
-          & iSparseStart, nAtom, img2CentCell, d2Potential%extBlock, isInputZero=.true.)
+    work(:,:) = 0.0_dp
+    call unpackHS(work, vSparse(:,1), neighbourList%iNeighbour, nNeighbourSK, denseDesc%iAtomStart,&
+        & iSparseStart, img2CentCell)
+    call adjointLowerTriangle(work)
 
-    end if
+    ! <Psi1 | v2 | Psi0>
+    eTerm = sum(dPsiReal1(:,:nFilled(1,1)) * matmul(work, eigVecsReal(:,:nFilled(1,1), 1)))
+    write(*,*)eTerm
+    d2E = d2E + eTerm
+
+    !if (allocated(d2Potential)) then
+
+    !  call addShift(env, vSparse, over, nNeighbourSK, neighbourList%iNeighbour, species, orb,&
+    !      & iSparseStart, nAtom, img2CentCell, d2Potential, isInputZero=.true.)
+
+    !  call unpackHS(work, vSparse(:,1), neighbourList%iNeighbour, nNeighbourSK,&
+    !      & denseDesc%iAtomStart, iSparseStart, img2CentCell)
+    !  call adjointLowerTriangle(work)
+
+    !  ! <Psi0 | v12| Psi0>
+    !  eTerm = sum(eigVecsReal(:,:nFilled(1,1), 1)*matmul(work, eigVecsReal(:,:nFilled(1,1), 1)))
+    !  write(*,*)eTerm
+    !  d2E = d2E + eTerm
+
+    !end if
+
+    !write(*,*)"Psi"
+    !write(*,*)eigVecsReal(:,:nFilled(1,1), 1)
+    !write(*,*)"Psi'1"
+    !write(*,*)dPsiReal1(:,:nFilled(1,1))
+    !write(*,*)"Psi'2"
+    !write(*,*)dPsiReal2(:,:nFilled(1,1))
+    !write(*,*)"V1"
+    !write(*,*)dPotential1
+    !write(*,*)"V2"
+    !write(*,*)dPotential2
 
   end subroutine secondEDerivative_real
 

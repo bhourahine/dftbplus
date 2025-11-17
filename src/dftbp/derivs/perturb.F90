@@ -181,7 +181,7 @@ contains
   !> Perturbation at q=0 with respect to a static electric field
   subroutine wrtEField(this, env, parallelKS, filling, eigvals, eigVecsReal, eigVecsCplx, ham,&
       & over, boundaryCond, orb, nAtom, species, neighbourList, nNeighbourSK, denseDesc,&
-      & iSparseStart, img2CentCell, coord, sccCalc, maxSccIter, sccTol, isSccConvRequired,&
+      & iSparseStart, img2CentCell, coord, coord0, sccCalc, maxSccIter, sccTol, isSccConvRequired,&
       & nMixElements, nIneqMixElements, iEqOrbitals, tempElec, Ef, spinW, thirdOrd, dftbU,&
       & iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc, nNeighbourCam, chrgMixerReal, kPoint,&
       & kWeight, iCellVec, cellVec, polarisability, dEi, dqOut, neFermi, dEfdE, errStatus, omega)
@@ -242,6 +242,9 @@ contains
 
     !> Atomic coordinates
     real(dp), intent(in) :: coord(:,:)
+
+    !> Atomic coordinates in central cell
+    real(dp), intent(in) :: coord0(:,:)
 
     !> SCC module internal variables
     type(TScc), intent(inout), allocatable :: sccCalc
@@ -331,7 +334,7 @@ contains
     !> Driving frequencies (including potentially 0 for static)
     real(dp), intent(in) :: omega(:)
 
-    integer :: iAt, iCart
+    integer :: iAt, iCart, jCart
 
     integer :: nSpin, nKpts, nOrbs, nIndepHam
 
@@ -352,20 +355,24 @@ contains
 
     ! derivative of potentials
     type(TPotentials) :: dPotential
+    real(dp), allocatable :: dExtBlockPotential(:,:,:,:,:), dMixExtBlockPotential(:,:,:,:)
 
     logical :: tSccCalc
     logical, allocatable :: tMetallic(:,:)
 
-    real(dp), allocatable :: dPsiReal(:,:,:)
-    complex(dp), allocatable :: dPsiCmplx(:,:,:,:)
+    real(dp), allocatable :: dPsiReal(:,:,:,:)
+    complex(dp), allocatable :: dPsiCmplx(:,:,:,:,:)
 
     ! variables used for hybrid functional contributions, note this stays in the up/down
     ! representation throughout if spin polarised
     real(dp), pointer :: dRhoOutSqr(:,:,:), dRhoInSqr(:,:,:)
     real(dp), allocatable, target :: dRhoOut(:), dRhoIn(:)
 
-    !> For transformation in the  case of degeneracies
+    ! For transformation in the  case of degeneracies
     type(TRotateDegen), allocatable :: degenTransform(:)
+
+    ! Temporary polarisability variable
+    real(dp) :: tmpPolarisability(3,3)
 
     write(stdOut,*)
     write(stdOut,*)'Perturbation calculation with respect to applied electric field'
@@ -399,19 +406,22 @@ contains
 
     ! if derivatives of valence wavefunctions needed. Note these will have an arbitrary set of
     ! global phases
-    ! if (allocated(eigVecsReal)) then
-    !   allocate(dPsiReal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2), nIndepHam, 3))
-    ! else
-    !   allocate(dPsiCmplx(size(eigvecsCplx,dim=1), size(eigvecsCplx,dim=2), nKpts, nIndepHam, 3))
-    ! end if
+    if (allocated(eigVecsReal)) then
+      allocate(dPsiReal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2), nIndepHam, 3))
+    else
+      allocate(dPsiCmplx(size(eigvecsCplx,dim=1), size(eigvecsCplx,dim=2), nKpts, nIndepHam, 3))
+    end if
 
     dqOut(:,:,:,:) = 0.0_dp
+
+    allocate(dExtBlockPotential(orb%mOrb,orb%mOrb,nAtom,nSpin,3))
+    ! Do not allocate dMixExtBlockPotential for electric field
 
     ! Electric field polarisation direction
     ! note: could MPI parallelise over this in principle
     lpCart: do iCart = 1, 3
 
-      if (boundaryCond%iBoundaryCondition==boundaryCondsEnum%cluster) then
+      if (.true.) then
         write(stdOut,*)"Polarisabilty for field along ", trim(quaternionName(iCart+1))
       end if
 
@@ -429,10 +439,11 @@ contains
 
       ! derivative wrt to electric field as a perturbation
       do iAt = 1, nAtom
-        dPotential%extAtom(iAt,1) = coord(iCart,iAt)
+        dPotential%extAtom(iAt,1) = coord0(iCart,iAt)
       end do
       call totalShift(dPotential%extShell, dPotential%extAtom, orb, species)
       call totalShift(dPotential%extBlock, dPotential%extShell, orb, species)
+      dExtBlockPotential(:,:,:,:, iCart) = dPotential%extBlock
 
       do iOmega = 1, size(omega)
 
@@ -449,7 +460,7 @@ contains
             & iEqBlockOnSite, dqBlockIn, dqBlockOut, eigVals, degenTransform, dEiTmp, dEfdETmp,&
             & filling, Ef, this%isEfFixed, dHam, idHam, dRho, idRho, tempElec, tMetallic, neFermi,&
             & nFilled, nEmpty, kPoint, kWeight, cellVec, iCellVec, eigVecsReal, eigVecsCplx,&
-            & dPsiReal, dPsiCmplx, coord, errStatus, omega(iOmega),&
+            & dPsiReal, dPsiCmplx, iCart, coord, errStatus, omega(iOmega),&
             & dDipole=polarisability(:, iCart, iOmega), eta=this%eta)
         @:PROPAGATE_ERROR(errStatus)
 
@@ -477,7 +488,7 @@ contains
     end if
   #:endif
 
-    if (boundaryCond%iBoundaryCondition==boundaryCondsEnum%cluster) then
+    if (.true.) then
       write(stdOut,*)
       write(stdOut,*)'Polarisability (a.u.)'
       do iOmega = 1, size(omega)
@@ -493,6 +504,25 @@ contains
         end do
       end do
       write(stdOut,*)
+    end if
+
+    if (allocated(eigVecsReal) .and. nIndepHam == 1) then
+      write(stdOut,*)'Energy derivative for polarisability'
+      tmpPolarisability(:, :) = 0.0_dp
+      do iCart = 1, 3
+        do jCart = 1, 3
+          !write(*,*)jCart, iCart
+          call secondEDerivative(env, tmpPolarisability(jCart, iCart),&
+              & dPsiReal(:,:,1,iCart), dPsiReal(:,:,1,jCart),&
+              & dExtBlockPotential(:,:,:,:,iCart), dExtBlockPotential(:,:,:,:,jCart),&
+              & dMixExtBlockPotential, eigvals, filling, eigVecsReal, nFilled, over, ham,&
+              & nNeighbourSK, neighbourList, species, orb, denseDesc, iSparseStart, nAtom,&
+              & img2CentCell)
+        end do
+      end do
+      do iCart = 1, 3
+        write(stdOut,"(3E20.12)")tmpPolarisability(:, iCart)
+      end do
     end if
 
   end subroutine wrtEField
@@ -688,8 +718,8 @@ contains
     logical :: tSccCalc
     logical, allocatable :: tMetallic(:,:)
 
-    real(dp), allocatable :: dPsiReal(:,:,:)
-    complex(dp), allocatable :: dPsiCmplx(:,:,:,:)
+    real(dp), allocatable :: dPsiReal(:,:,:,:)
+    complex(dp), allocatable :: dPsiCmplx(:,:,:,:,:)
 
     real(dp), allocatable :: dqNetAtom(:), dqNetAtomTmp(:,:,:)
 
@@ -793,7 +823,7 @@ contains
             & dqBlockIn, dqBlockOut, eigVals, degenTransform, dEi, dEf, filling, Ef,&
             & this%isEfFixed, dHam, idHam, dRho, idRho, tempElec, tMetallic, neFermi, nFilled,&
             & nEmpty, kPoint, kWeight, cellVec, iCellVec, eigVecsReal, eigVecsCplx, dPsiReal,&
-            & dPsiCmplx, coord, errStatus, omega(iOmega), isHelical=isHelical, eta=this%eta)
+            & dPsiCmplx, iAt, coord, errStatus, omega(iOmega), isHelical=isHelical, eta=this%eta)
           @:PROPAGATE_ERROR(errStatus)
 
       #:if WITH_SCALAPACK
@@ -888,8 +918,8 @@ contains
       & spinW, thirdOrd, dftbU, iEqBlockDftbu, onsMEs, iEqBlockOnSite, dqBlockIn, dqBlockOut,&
       & eigVals, degenTransform, dEi, dEf, filling, Ef, isEfFixed, dHam, idHam, dRho, idRho,&
       & tempElec, tMetallic, neFermi, nFilled, nEmpty, kPoint, kWeight, cellVec, iCellVec,&
-      & eigVecsReal, eigVecsCplx, dPsiReal, dPsiCmplx, coord, errStatus, omega, dDipole, isHelical,&
-      & eta)
+      & eigVecsReal, eigVecsCplx, dPsiReal, dPsiCmplx, iPerturb, coord, errStatus, omega, dDipole,&
+      & isHelical, eta)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -1076,10 +1106,13 @@ contains
     integer, intent(in) :: iCellVec(:)
 
     !> Derivative of single particle wavefunctions (real case), if needed
-    real(dp), allocatable, intent(inout) :: dPsiReal(:,:,:)
+    real(dp), allocatable, intent(inout) :: dPsiReal(:,:,:,:)
 
     !> Derivative of single particle wavefunctions (complex case), if needed
-    complex(dp), allocatable, intent(inout) :: dPsiCmplx(:,:,:,:)
+    complex(dp), allocatable, intent(inout) :: dPsiCmplx(:,:,:,:,:)
+
+    !> Perturbation index, if required to store wavefunctions
+    integer, intent(in) :: iPerturb
 
     !> Coordinates of all atoms including images
     real(dp), intent(in) :: coord(:,:)
@@ -1262,8 +1295,8 @@ contains
           call dRhoReal(env, dHam, dOver, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
               & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals,&
               & filling, Ef, tempElec, orb, drho(:,iS), dRhoOutSqr, hybridXc, over, nNeighbourCam,&
-              & degenTransform(iKS), species, dEi, dPsiReal, coord, errStatus, omega, isHelical,&
-              & eta=eta)
+              & degenTransform(iKS), species, dEi, dPsiReal, iPerturb, coord, errStatus, omega,&
+              & isHelical, eta=eta)
           if (errStatus%hasError()) then
             exit
           end if
@@ -1279,8 +1312,8 @@ contains
           call dRhoPauli(env, dHam, idHam, neighbourList, nNeighbourSK, iSparseStart,&
               & img2CentCell, denseDesc, parallelKS, nFilled, nEmpty, eigvecsCplx, eigVals, Ef,&
               & tempElec, orb, dRho, idRho, kPoint, kWeight, iCellVec, cellVec, iKS,&
-              & degenTransform(iKS), species, coord, dEi, dPsiCmplx, errStatus, omega, isHelical,&
-              & eta=eta)
+              & degenTransform(iKS), species, coord, dEi, dPsiCmplx, iPerturb, errStatus, omega,&
+              & isHelical, eta=eta)
           if (errStatus%hasError()) then
             exit
           end if
@@ -1302,7 +1335,7 @@ contains
           call dRhoCmplx(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
               & denseDesc, parallelKS, nFilled, nEmpty, eigvecsCplx, eigVals, Ef, tempElec, orb,&
               & dRho, kPoint, kWeight, iCellVec, cellVec, iKS, degenTransform(iKS), species,&
-              & coord, dEi, dPsiCmplx, errStatus, omega, isHelical, eta=eta)
+              & coord, dEi, dPsiCmplx, iPerturb, errStatus, omega, isHelical, eta=eta)
           if (errStatus%hasError()) then
             exit
           end if
@@ -1522,8 +1555,8 @@ contains
         if (allocated(dEi)) dEi(:,:,:) = quietNan
         if (allocated(dEf)) dEf(:) = quietNan
         if (allocated(dqBlockOut)) dqBlockOut(:,:,:,:) = quietNan
-        if (allocated(dPsiReal)) dPsiReal(:,:,:) = quietNan
-        if (allocated(dPsiCmplx)) dPsiCmplx(:,:,:,:) = quietNan
+        if (allocated(dPsiReal)) dPsiReal(:,:,:,iPerturb) = quietNan
+        if (allocated(dPsiCmplx)) dPsiCmplx(:,:,:,:,iPerturb) = quietNan
         ! restore back-ups of the input charges/density matrix in case the iteration fails
         dqIn(:,:,:) = dqInBackup
         if (allocated(dqBlockIn)) then
@@ -2014,8 +2047,8 @@ contains
     logical, allocatable :: tMetallic(:,:)
 
     real(dp), allocatable :: dEi(:,:,:,:,:), dEiTmp(:,:,:)
-    real(dp), allocatable :: dPsiReal(:,:,:)
-    complex(dp), allocatable :: dPsiCmplx(:,:,:,:)
+    real(dp), allocatable :: dPsiReal(:,:,:,:)
+    complex(dp), allocatable :: dPsiCmplx(:,:,:,:,:)
 
     integer :: fdResults, fdResponses
 
@@ -2367,7 +2400,8 @@ contains
                   & iSparseStart, img2CentCell, denseDesc, iKS, parallelKS, nFilled(:,1:1),&
                   & nEmpty(:,1:1), eigVecsReal, eCiReal, eigVals, filling, Ef, tempElec, orb,&
                   & drho(:,iS), dRhoOutSqr, hybridXc, over, nNeighbourLC, degenTransform(iKS),&
-                  & species, dEiTmp, dPsiReal, coord, errStatus, omega, isHelical, maxFill=maxFill)
+                  & species, dEiTmp, dPsiReal, iAt, coord, errStatus, omega, isHelical,&
+                  & maxFill=maxFill)
               @:PROPAGATE_ERROR(errStatus)
               dEi(:, :, :, iCart, iAt) = dEiTmp
             end do

@@ -54,7 +54,7 @@ contains
   subroutine dRhoReal(env, dHam, dOver, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
       & denseDesc, iKS, parallelKS, nFilled, nEmpty, eigVecsReal, eCiReal, eigVals, filling, Ef,&
       & tempElec, orb, dRhoSparse, dRhoSqr, hybridXc, over, nNeighbourCam, degenTransform, species,&
-      & dEi, dPsi, coord, errStatus, omega, isHelical, eta, maxFill)
+      & dEi, dPsi, iPerturb, coord, errStatus, omega, isHelical, eta, maxFill)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -138,7 +138,10 @@ contains
     real(dp), allocatable, intent(inout) :: dEi(:,:,:)
 
     !> Optional derivatives of single particle wavefunctions
-    real(dp), allocatable, intent(inout) :: dPsi(:,:,:)
+    real(dp), allocatable, intent(inout) :: dPsi(:,:,:,:)
+
+    !> Perturbation index, if required to store wavefunctions
+    integer, intent(in) :: iPerturb
 
     !> Coordinates of all atoms including images
     real(dp), intent(in) :: coord(:,:)
@@ -203,7 +206,7 @@ contains
       dEi(:, iK, iS) = 0.0_dp
     end if
     if (allocated(dPsi)) then
-      dPsi(:, :, iS) = 0.0_dp
+      dPsi(:, :, iS, iPerturb) = 0.0_dp
     end if
 
     allocate(workLocal(size(eigVecsReal,dim=1), size(eigVecsReal,dim=2)), source=0.0_dp)
@@ -371,7 +374,7 @@ contains
           & denseDesc%blacsOrbSqr, dRho, denseDesc%blacsOrbSqr)
 
       if (allocated(dPsi)) then
-        dPsi(:, :, iS) = dRho
+        dPsi(:, :, iS, iPerturb) = dRho
       end if
 
       ! Form derivative of occupied density matrix
@@ -524,7 +527,7 @@ contains
         workLocal = matmul(eigvecsTransformed, workLocal)
 
         if (allocated(dPsi)) then
-          dPsi(:, :, iS) = workLocal
+          dPsi(:, :, iS, iPerturb) = workLocal
         end if
 
         do ii = 1, nOrb
@@ -546,7 +549,7 @@ contains
             & workLocal(nEmpty(iS, 1):, :nFilled(iS, 1)))
 
         if (allocated(dPsi)) then
-          dPsi(:, :, iS) = workLocal
+          dPsi(:, :, iS, iPerturb) = workLocal
         end if
 
         ! zero the uncalculated virtual states
@@ -758,7 +761,7 @@ contains
   subroutine dRhoCmplx(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
       & denseDesc, parallelKS, nFilled, nEmpty, eigVecsCplx, eigVals, Ef, tempElec, orb,&
       & dRhoSparse, kPoint, kWeight, iCellVec, cellVec, iKS, degenTransform, species, coord, dEi,&
-      & dPsi, errStatus, omega, isHelical, eta)
+      & dPsi, iPerturb, errStatus, omega, isHelical, eta)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -833,7 +836,10 @@ contains
     real(dp), allocatable, intent(inout) :: dEi(:,:,:)
 
     !> Optional derivatives of single particle wavefunctions
-    complex(dp), allocatable, intent(inout) :: dPsi(:,:,:,:)
+    complex(dp), allocatable, intent(inout) :: dPsi(:,:,:,:,:)
+
+    !> Perturbation index, if required to store wavefunctions
+    integer, intent(in) :: iPerturb
 
     !> Coordinates of all atoms including images
     real(dp), intent(in) :: coord(:,:)
@@ -891,7 +897,7 @@ contains
       dEi(:, iK, iS) = 0.0_dp
     end if
     if (allocated(dPsi)) then
-      dPsi(:, :, iK, iS) = cmplx(0,0,dp)
+      dPsi(:, :, iK, iS, iPerturb) = cmplx(0,0,dp)
     end if
 
     workLocal(:,:) = cmplx(0,0,dp)
@@ -1016,7 +1022,7 @@ contains
           & denseDesc%blacsOrbSqr, dRho, denseDesc%blacsOrbSqr)
 
       if (allocated(dPsi)) then
-        dPsi(:, :, iK, iS) = workLocal
+        dPsi(:, :, iK, iS, iPerturb) = workLocal
       end if
 
       ! Form derivative of occupied density matrix
@@ -1122,7 +1128,7 @@ contains
           & workLocal(nEmpty(iS, iK):,:nFilled(iS, iK)))
 
       if (allocated(dPsi)) then
-        dPsi(:, :, iK, iS) = workLocal
+        dPsi(:, :, iK, iS, iPerturb) = workLocal
       end if
 
       ! zero the uncalculated virtual states
@@ -1326,7 +1332,7 @@ contains
   subroutine dRhoPauli(env, dHam, idHam, neighbourList, nNeighbourSK, iSparseStart,&
       & img2CentCell, denseDesc, parallelKS, nFilled, nEmpty, eigVecsCplx, eigVals, Ef, tempElec,&
       & orb, dRhoSparse, idRhoSparse, kPoint, kWeight, iCellVec, cellVec, iKS, degenTransform,&
-      & species, coord, dEi, dPsi, errStatus, omega, isHelical, eta)
+      & species, coord, dEi, dPsi, iPerturb, errStatus, omega, isHelical, eta)
 
     !> Environment settings
     type(TEnvironment), intent(in) :: env
@@ -1407,7 +1413,10 @@ contains
     real(dp), allocatable, intent(inout) :: dEi(:,:,:)
 
     !> Optional derivatives of single particle wavefunctions
-    complex(dp), allocatable, intent(inout) :: dPsi(:,:,:,:)
+    complex(dp), allocatable, intent(inout) :: dPsi(:,:,:,:,:)
+
+    !> Perturbation index, if required to store wavefunctions
+    integer, intent(in) :: iPerturb
 
     !> Coordinates of all atoms including images
     real(dp), intent(in) :: coord(:,:)
@@ -1470,7 +1479,7 @@ contains
       dEi(:, iK, iS) = 0.0_dp
     end if
     if (allocated(dPsi)) then
-      dPsi(:, :, iK, iS) = cmplx(0,0,dp)
+      dPsi(:, :, iK, iS, iPerturb) = cmplx(0,0,dp)
     end if
 
     cWorkLocal(:,:) = cmplx(0,0,dp)
@@ -1588,7 +1597,7 @@ contains
           & denseDesc%blacsOrbSqr, dRho, denseDesc%blacsOrbSqr)
 
       if (allocated(dPsi)) then
-        dPsi(:, :, iK, iS) = cWorkLocal
+        dPsi(:, :, iK, iS, iPerturb) = cWorkLocal
       end if
 
       ! Form derivative of occupied density matrix
@@ -1680,7 +1689,7 @@ contains
           & cWorkLocal(nEmpty(iS, iK):,:nFilled(iS, iK)))
 
       if (allocated(dPsi)) then
-        dPsi(:, :, iK, iS) = cWorkLocal
+        dPsi(:, :, iK, iS, iPerturb) = cWorkLocal
       end if
 
       ! zero the uncalculated virtual states
