@@ -5158,7 +5158,7 @@ contains
       ctrl%lrespini%iLinRespSolver = linRespSolverTypes%None
 
       call renameChildren(child, "Diagonalizer", "Diagonaliser")
-      call getChildValue(child, "Diagonaliser", child2, "", allowEmptyValue=.true.)
+      call getChildValue(child, "Diagonaliser", child2, allowEmptyValue=.true.)
       call getNodeName(child2, buffer)
       select case(char(buffer))
       case ("arpack")
