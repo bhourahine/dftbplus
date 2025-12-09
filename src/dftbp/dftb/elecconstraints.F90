@@ -360,7 +360,7 @@ contains
 
 
   !> Applies electronic constraints to system.
-  subroutine TElecConstraint_propagateConstraints(this, qq, energy, tConverged)
+  subroutine TElecConstraint_propagateConstraints(this, qq, energy, tConverged, coord)
 
     !> Class instance
     class(TElecConstraint), intent(inout) :: this
@@ -374,6 +374,8 @@ contains
     !> Gradient convergence achieved
     logical, intent(out) :: tConverged
 
+    real(dp), intent(in), optional :: coord(:,:)
+
     ! Summed up contribution to free energy functional from constraints
     real(dp) :: deltaWTotal
 
@@ -383,7 +385,7 @@ contains
     ! Potential displacement proposed by optimizer
     real(dp) :: potDisplace(size(this%Vc))
 
-    call this%mullikenConstr%getEnergyAndPot(this%Vc, qq, this%deltaW, this%dWdVc)
+    call this%mullikenConstr%getEnergyAndPot(this%Vc, qq, this%deltaW, this%dWdVc, coord)
 
     ! Sum up all free energy contributions
     deltaWTotal = this%getFreeEnergy()
@@ -402,7 +404,7 @@ contains
 
 
   !> Get total shift of all constraints.
-  subroutine TElecConstraint_getConstraintShift(this, shift)
+  subroutine TElecConstraint_getConstraintShift(this, shift, coord)
 
     !> Class instance
     class(TElecConstraint), intent(inout) :: this
@@ -410,8 +412,10 @@ contains
     !> Total shift of all constraints
     real(dp), intent(out) :: shift(:,:,:,:)
 
+    real(dp), intent(in), optional :: coord(:,:)
+
     shift(:,:,:,:) = 0.0_dp
-    call this%mullikenConstr%addShift(this%Vc(1:this%nConstr), shift)
+    call this%mullikenConstr%addShift(this%Vc(1:this%nConstr), shift, coord)
 
   end subroutine TElecConstraint_getConstraintShift
 
@@ -517,7 +521,7 @@ contains
 
 
   !> Calculate Mulliken population constraints.
-  subroutine TMullikenConstr_getEnergyAndPot(this, Vc, qq, deltaW, dWdV)
+  subroutine TMullikenConstr_getEnergyAndPot(this, Vc, qq, deltaW, dWdV, coord)
 
     !> Class instance
     class(TMullikenConstr), intent(in) :: this
@@ -534,6 +538,8 @@ contains
     !> Derivative of energy functional with respect to Vc
     real(dp), intent(out) :: dWdV(:)
 
+    real(dp), intent(in), optional :: coord(:,:)
+
     integer :: iConstr
 
     @:ASSERT(size(Vc) == this%nConstr)
@@ -543,14 +549,14 @@ contains
     do iConstr = 1, this%nConstr
       call getConstraintEnergyAndPotQ_(Vc(iConstr), this%Nc(iConstr), this%wAt(iConstr)%data,&
           & this%wAtOrb(iConstr)%data, this%wAtSpin(iConstr)%data, qq, deltaW(iConstr),&
-          & dWdV(iConstr))
+          & dWdV(iConstr), coord)
     end do
 
   end subroutine TMullikenConstr_getEnergyAndPot
 
 
   !> Add shift to Mulliken population constraints.
-  subroutine TMullikenConstr_addShift(this, Vc, shift)
+  subroutine TMullikenConstr_addShift(this, Vc, shift, coord)
 
     !> Class instance
     class(TMullikenConstr), intent(in) :: this
@@ -561,13 +567,15 @@ contains
     !> Shift to be updated
     real(dp), intent(inout) :: shift(:,:,:,:)
 
+    real(dp), intent(in), optional :: coord(:,:)
+
     integer :: iConstr
 
     @:ASSERT(size(Vc) == this%nConstr)
 
     do iConstr = 1, this%nConstr
       call addConstraintsShiftQ_(shift, Vc(iConstr), this%wAt(iConstr)%data,&
-          & this%wAtOrb(iConstr)%data, this%wAtSpin(iConstr)%data)
+          & this%wAtOrb(iConstr)%data, this%wAtSpin(iConstr)%data, coord)
     end do
 
   end subroutine TMullikenConstr_addShift
@@ -588,7 +596,7 @@ contains
 
 
   !> Calculate artificial potential to realize constraint(s) on atomic charge.
-  subroutine getConstraintEnergyAndPotQ_(Vc, Nc, wAt, wOrb, wSp, qq, deltaW, dWdV)
+  subroutine getConstraintEnergyAndPotQ_(Vc, Nc, wAt, wOrb, wSp, qq, deltaW, dWdV, coord)
 
     !> Constraint potential value
     real(dp), intent(in) :: Vc
@@ -614,16 +622,28 @@ contains
     !> Derivative of energy functional with respect to Vc
     real(dp), intent(out) :: dWdV
 
+    real(dp), intent(in), optional :: coord(:,:)
+
     integer :: nSpin, iSpin, iW
     real(dp) :: wn
 
     nSpin = size(wSp, dim=2)
     wn = 0.0_dp
-    do iSpin = 1, nSpin
-      do iW = 1, size(wAt)
-        wn = wn + wSp(iW, iSpin) * qq(wOrb(iW), wAt(iW), iSpin)
+    if (present(coord)) then
+      do iSpin = 1, nSpin
+        do iW = 1, size(wAt)
+          wn = wn + wSp(iW, iSpin) * (qq(wOrb(iW), wAt(iW), iSpin)) * coord(2, wAt(iW))
+        end do
       end do
-    end do
+      wn = wn - 6*coord(2,1) - coord(2,2) - coord(2,3)
+      write(*,*)'Dipole y:',wn, Nc
+    else
+      do iSpin = 1, nSpin
+        do iW = 1, size(wAt)
+          wn = wn + wSp(iW, iSpin) * qq(wOrb(iW), wAt(iW), iSpin)
+        end do
+      end do
+    end if
 
     dWdV = wn - Nc
     deltaW = Vc * dWdV
@@ -632,7 +652,7 @@ contains
 
 
   !> Get shift for atomic charge constraint.
-  subroutine addConstraintsShiftQ_(shift, Vc, wAt, wOrb, wSp)
+  subroutine addConstraintsShiftQ_(shift, Vc, wAt, wOrb, wSp, coord)
 
     !> Shift vector to modify
     real(dp), intent(inout) :: shift(:,:,:,:)
@@ -649,16 +669,27 @@ contains
     !> Spin channel factors
     real(dp), intent(in) :: wSp(:,:)
 
+    real(dp), intent(in), optional :: coord(:,:)
+
     integer :: nSpin, iSpin, iW
 
     nSpin = size(wSp, dim=2)
 
-    do iSpin = 1, nSpin
-      do iW = 1, size(wAt)
-        shift(wOrb(iW), wOrb(iW), wAt(iW), iSpin) = shift(wOrb(iW), wOrb(iW), wAt(iW), iSpin)&
-            & + Vc * wSp(iW, iSpin)
+    if (present(coord)) then
+      do iSpin = 1, nSpin
+        do iW = 1, size(wAt)
+          shift(wOrb(iW), wOrb(iW), wAt(iW), iSpin) = shift(wOrb(iW), wOrb(iW), wAt(iW), iSpin)&
+              & + Vc * wSp(iW, iSpin) * coord(2,wAt(iW))
+        end do
       end do
-    end do
+    else
+      do iSpin = 1, nSpin
+        do iW = 1, size(wAt)
+          shift(wOrb(iW), wOrb(iW), wAt(iW), iSpin) = shift(wOrb(iW), wOrb(iW), wAt(iW), iSpin)&
+              & + Vc * wSp(iW, iSpin)
+        end do
+      end do
+    end if
 
   end subroutine addConstraintsShiftQ_
 

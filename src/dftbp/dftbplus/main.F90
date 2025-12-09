@@ -805,7 +805,7 @@ contains
     end if
 
     if (allocated(this%elecConstraint)) then
-      call this%elecConstraint%getConstraintShift(constrShift)
+      call this%elecConstraint%getConstraintShift(constrShift, this%coord0)
       this%potential%intBlock(:,:,:,:) = this%potential%intBlock + constrShift
     end if
 
@@ -1152,7 +1152,7 @@ contains
     real(dp), allocatable :: dipoleTmp(:)
 
     !! Whether constraints are converged
-    logical :: constrConverged
+    logical :: isConstrConverged
 
     integer :: iKS, iConstrIter, nConstrIter
     logical :: isFirstDet
@@ -1546,9 +1546,10 @@ contains
           if (allocated(this%elecConstraint)) then
             call sumEnergies(this%dftbEnergy(this%deltaDftb%iDeterminant))
             call this%elecConstraint%propagateConstraints(this%qOutput,&
-                & this%dftbEnergy(this%deltaDftb%iDeterminant)%Eelec, constrConverged)
+                & this%dftbEnergy(this%deltaDftb%iDeterminant)%Eelec, isConstrConverged,&
+                & this%coord0)
           else
-            constrConverged = .true.
+            isConstrConverged = .true.
           end if
 
           if (allocated(this%elecConstraint)) then
@@ -1556,7 +1557,7 @@ contains
                 & this%dftbEnergy(this%deltaDftb%iDeterminant)%Eelec)
           end if
 
-          if (constrConverged) exit lpConstrInner
+          if (isConstrConverged) exit lpConstrInner
 
         end do lpConstrInner
 
@@ -1660,7 +1661,7 @@ contains
     end if
 
     if (allocated(this%elecConstraint)) then
-      if (.not. constrConverged) then
+      if (.not. isConstrConverged) then
         block
           character(len=*), parameter :: msg = "Electronic constraints did NOT converge, maximal&
               & micro-iterations exceeded"
@@ -1851,7 +1852,7 @@ contains
 
     if (this%tWriteDetailedOut .and. this%deltaDftb%nDeterminant() == 1) then
       call writeDetailedOut4(this%fdDetailedOut%unit, this%tSccCalc,&
-          & allocated(this%elecConstraint), tConverged, constrConverged, this%isXlbomd,&
+          & allocated(this%elecConstraint), tConverged, isConstrConverged, this%isXlbomd,&
           & this%isLinResp, this%isGeoOpt .or. allocated(this%geoOpt), this%tMD, this%tPrintForces,&
           & this%tStress, this%tPeriodic, this%dftbEnergy(this%deltaDftb%iDeterminant),&
           & this%totalStress, this%totalLatDeriv, this%derivs, this%chrgForces, this%indMovedAtom,&
