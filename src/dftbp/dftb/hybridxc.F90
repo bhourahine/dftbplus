@@ -32,7 +32,7 @@ module dftbp_dftb_hybridxc
   use dftbp_math_simplealgebra, only : determinant33
   use dftbp_math_sorting, only : heap_sort, index_heap_sort
   use dftbp_math_wignerseitz, only : generateWignerSeitzGrid
-  use dftbp_type_commontypes, only : TOrbitals, TParallelKS
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_integral, only : TIntegral
   use dftbp_type_wrappedintr, only : TWrappedInt1, TWrappedReal1, TWrappedReal2
@@ -5390,7 +5390,7 @@ contains
     real(dp), allocatable :: localLine(:)
 
     nOrb = denseDesc%fullSize
-    nSpin = maxval(parallelKS%groupKS(2, :, 0:))
+    nSpin = maxval(parallelKS%groupKS(indxS, :, 0:))
     allocate(localLine(nOrb))
     if (env%mpi%tGlobalLead) allocate(collected(nOrb, nOrb, nSpin), source=0.0_dp)
 
@@ -5402,7 +5402,7 @@ contains
           if (iKS > parallelKS%nGroupKS(iGroup)) then
             cycle group
           end if
-          iSpin = parallelKS%groupKS(2, iKS, iGroup)
+          iSpin = parallelKS%groupKS(indxS, iKS, iGroup)
           do iEig = 1, nOrb
             if (iGroup == 0) then
               call collector%getline_lead(env%blacs%orbitalGrid, iEig, distrib(:,:,iKS),&
@@ -5473,7 +5473,7 @@ contains
           if (iKS > parallelKS%nGroupKS(iGroup)) then
             cycle group
           end if
-          iSpin = parallelKS%groupKS(2, iKS, iGroup)
+          iSpin = parallelKS%groupKS(indxS, iKS, iGroup)
           do iEig = 1, nOrb
             if (iGroup == 0) then
               call collector%setline_lead(env%blacs%orbitalGrid, iEig, collected(:, iEig, iSpin),&

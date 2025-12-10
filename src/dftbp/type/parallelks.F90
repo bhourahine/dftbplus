@@ -21,6 +21,7 @@ module dftbp_type_parallelks
 
     !> The k-point and spin-channels to be processed by each processor group
     !! (groupKS(1:2,iKS,iGroup)).  Note: third index (group index) starts from 0
+    !! Order of the leading index is determined by indxS and indxK
     integer, allocatable :: groupKS(:,:,:)
 
     !> Number of (K, S) tuples to process for each group.

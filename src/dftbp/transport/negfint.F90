@@ -33,7 +33,7 @@ module dftbp_transport_negfint
   use dftbp_math_matrixops, only : adjointLowerTriangle
   use dftbp_transport_matconv, only : destruct, foldToCSR, init, unfoldFromCSR
   use dftbp_transport_negfvars, only : TElph, TNEGFGreenDensInfo, TNEGFTunDos, TTranspar
-  use dftbp_type_commontypes, only : TOrbitals
+  use dftbp_type_commontypes, only : TOrbitals, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
 #:if WITH_MPI
   use dftbp_extlibs_mpifx, only : MPI_SUM, mpifx_allreduceip, mpifx_comm, mpifx_reduceip
@@ -1185,8 +1185,8 @@ contains
     write(stdOut, '(80("="))')
 
     do iKS = 1, nKS
-      iK = groupKS(1, iKS)
-      iS = groupKS(2, iKS)
+      iK = groupKS(indxK, iKS)
+      iS = groupKS(indxS, iKS)
 
     #:if WITH_MPI
       if (env%mpi%nGroup == 1) then
@@ -1336,8 +1336,8 @@ contains
     write(stdOut, '(80("="))')
 
     do iKS = 1, nKS
-      iK = groupKS(1, iKS)
-      iS = groupKS(2, iKS)
+      iK = groupKS(indxK, iKS)
+      iS = groupKS(indxS, iKS)
 
       write(stdOut,*) 'k-point',iK,'Spin',iS
 
@@ -1499,8 +1499,8 @@ contains
     end if
 
     do iKS = 1, nKS
-      iK = groupKS(1, iKS)
-      iS = groupKS(2, iKS)
+      iK = groupKS(indxK, iKS)
+      iS = groupKS(indxS, iKS)
 
       write(stdOut,*) 'Spin',iS,'k-point',iK,'k-weight',kWeights(iK)
 
@@ -1796,7 +1796,7 @@ contains
       write(fd%unit, '(A1)', ADVANCE='NO') '# '
 
       ! iKS = 1 2 3 4 5 6 7 8 9 10
-      ! iK=groupKS(1,iKS), iS=groupKS(2,iKS)
+      ! iK=groupKS(indxK,iKS), iS=groupKS(indxS,iKS)
       ! iK  = 1 2 3 4 5 1 2 3 4 5
       ! iS  = 1 1 1 1 1 2 2 2 2 2
       do iS = 1, nS
@@ -2045,8 +2045,8 @@ contains
     lcurr(:,:,:) = 0.0_dp
 
     looppKS: do iKS = 1, nKS
-      iK = groupKS(1, iKS)
-      iS = groupKS(2, iKS)
+      iK = groupKS(indxK, iKS)
+      iS = groupKS(indxS, iKS)
 
       write(stdOut,*) 'k-point',iK,'Spin',iS
 
