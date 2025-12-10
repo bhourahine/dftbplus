@@ -18,7 +18,7 @@ module dftbp_dftb_densitymatrix
   use dftbp_common_status, only : TStatus
   use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
   use dftbp_math_blasroutines, only : herk
-  use dftbp_type_commontypes, only : TParallelKS
+  use dftbp_type_commontypes, only : TParallelKS, indxS, indxK
 #:if WITH_SCALAPACK
   use dftbp_extlibs_scalapackfx, only : blacsgrid, blocklist, pblasfx_pgemm, pblasfx_ptranc, size
 #:endif
@@ -374,8 +374,8 @@ contains
     do iG = 1, size(bvKShifts, dim=2)
       bvKIndex(:) = nint(bvKShifts(:, iG)) + 1
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
-        iSpin = parallelKS%localKS(2, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
+        iSpin = parallelKS%localKS(indxS, iKS)
         phase = exp(-imag * dot_product(2.0_dp * pi * kPoint(:, iK), bvKShifts(:, iG)))
         rhoBvK(:,:, bvKIndex(1), bvKIndex(2), bvKIndex(3), iSpin)&
             & = rhoBvK(:,:, bvKIndex(1), bvKIndex(2), bvKIndex(3), iSpin)&

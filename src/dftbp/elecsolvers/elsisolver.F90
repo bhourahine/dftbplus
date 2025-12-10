@@ -24,7 +24,7 @@ module dftbp_elecsolvers_elsisolver
   use dftbp_extlibs_elsiiface, only : elsi_handle, elsi_rw_handle
   use dftbp_io_message, only : cleanshutdown, error, warning
   use dftbp_math_angmomentum, only : getLOnsite
-  use dftbp_type_commontypes, only : TOrbitals, TParallelKS
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
 #:if WITH_MPI
   use dftbp_dftb_sparse2dense, only : packERhoPauliBlacs, packRhoCplxBlacs,&
@@ -935,8 +935,8 @@ contains
 
     ! as each spin and k-point combination forms a separate group for this solver, then iKS = 1
     iKS = 1
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     nSpin = size(ham, dim=2)
     if (nSpin == 2 .and. .not. tSpinSharedEf) then
@@ -1323,7 +1323,7 @@ contains
 
     ! as each spin and k-point combination forms a separate group for this solver, then iKS = 1
     iKS = 1
-    iS = parallelKS%localKS(2, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     if (tHelical) then
       call unpackHSHelicalRealBlacs(env%blacs, ham(:,iS), neighbourList%iNeighbour, nNeighbourSK,&
@@ -1446,8 +1446,8 @@ contains
 
     ! as each spin and k-point combination forms a separate group for this solver, then iKS = 1
     iKS = 1
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     HSqrCplx(:,:) = 0.0_dp
     if (tHelical) then
@@ -1598,8 +1598,8 @@ contains
 
     ! as each spin and k-point combination forms a separate group for this solver, then iKS = 1
     iKS = 1
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     nAtom = size(nNeighbourSK)
 
@@ -1742,7 +1742,7 @@ contains
       this%tFirstCalc = .false.
     end if
 
-    iS = parallelKS%localKS(2, 1)
+    iS = parallelKS%localKS(indxS, 1)
 
     if (tHelical) then
       call this%elsiCsc%convertPackedToElsiReal(ham(:,iS), iNeighbour, nNeighbourSK, iAtomStart,&
@@ -1863,7 +1863,7 @@ contains
       this%tFirstCalc = .false.
     end if
 
-    iS = parallelKS%localKS(2, 1)
+    iS = parallelKS%localKS(indxS, 1)
 
     if (tHelical) then
       call this%elsiCsc%convertPackedToElsiCmplx(ham(:,iS), iNeighbour, nNeighbourSK, iAtomStart,&
@@ -2038,7 +2038,7 @@ contains
 
     ERhoPrim(:) = 0.0_dp
     ! iKS always 1
-    iK = parallelKS%localKS(1, 1)
+    iK = parallelKS%localKS(indxK, 1)
     if (this%isSparse) then
       allocate(EDMnzValLocal(this%elsiCsc%nnzLocal))
       call elsi_get_edm_complex_sparse(this%handle, EDMnzValLocal)
@@ -2125,7 +2125,7 @@ contains
       call error("EDensity via sparse ELSI solver not supported for Pauli-matrices")
     else
       ! iKS always 1, as number of groups matches the number of k-points
-      iK = parallelKS%localKS(1, 1)
+      iK = parallelKS%localKS(indxK, 1)
       call elsi_get_edm_complex(this%handle, SSqrCplx)
       call packERhoPauliBlacs(env%blacs, denseDesc, SSqrCplx, kPoint(:,iK), kWeight(iK),&
           & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, iCellVec, cellVec, iSparseStart,&

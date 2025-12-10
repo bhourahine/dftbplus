@@ -17,7 +17,7 @@ module dftbp_dftb_populations
   use dftbp_dftb_periodic, only : TNeighbourList
   use dftbp_dftb_sparse2dense, only : unpackHS
   use dftbp_math_matrixops, only : adjointLowerTriangle
-  use dftbp_type_commontypes, only : TOrbitals, TParallelKS
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_integral, only : TIntegral
 #:if WITH_SCALAPACK
@@ -489,7 +489,7 @@ contains
     nLocalKS = size(rhoSqr, dim=3)
 
     do iKS = 1, nLocalKS
-      iS = parallelKS%localKS(2, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
       do iLocCol = 1, nLocalCols
         iGlob = scalafx_indxl2g(iLocCol, desc(NB_), env%blacs%orbitalGrid%mycol, desc(CSRC_),&
             & env%blacs%orbitalGrid%ncol)
@@ -833,7 +833,7 @@ contains
     scale = populationScalingFactor(nSpin)
 
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
       ! Get full complex, square, k-space overlap and store for later q0 substraction
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
       call unpackHS(SSqrCplx, ints%overlap, kPoint(:, iK), neighbourList%iNeighbour,&

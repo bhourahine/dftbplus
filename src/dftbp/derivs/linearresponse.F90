@@ -17,7 +17,7 @@ module dftbp_derivs_linearresponse
   use dftbp_derivs_rotatedegen, only : TRotateDegen
   use dftbp_dftb_hybridxc, only : THybridXcFunc
   use dftbp_dftb_periodic, only : TNeighbourList
-  use dftbp_type_commontypes, only : TOrbitals
+  use dftbp_type_commontypes, only : TOrbitals, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_parallelks, only : TParallelKS
 #:if WITH_SCALAPACK
@@ -196,8 +196,8 @@ contains
       isFreqDep = .false.
     end if
 
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     if (allocated(dEi)) then
       dEi(:, iK, iS) = 0.0_dp
@@ -689,7 +689,7 @@ contains
       isHelical_ = .false.
     end if
 
-    iS = parallelKS%localKS(2, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     workReal(:,:) = 0.0_dp
 
@@ -884,8 +884,8 @@ contains
     allocate(workLocal(size(eigVecsCplx,dim=1), size(eigVecsCplx,dim=2)))
     allocate(dRho(size(eigVecsCplx,dim=1), size(eigVecsCplx,dim=2)))
 
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     if (allocated(dEi)) then
       dEi(:, iK, iS) = 0.0_dp
@@ -1260,8 +1260,8 @@ contains
 
     workLocal(:,:) = cmplx(0,0,dp)
 
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
   #:if WITH_SCALAPACK
 
@@ -1463,8 +1463,8 @@ contains
     allocate(cWorkLocal(size(eigVecsCplx,dim=1), size(eigVecsCplx,dim=2)))
     allocate(dRho(size(eigVecsCplx,dim=1), size(eigVecsCplx,dim=2)))
 
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
     if (allocated(dEi)) then
       dEi(:, iK, iS) = 0.0_dp
@@ -1837,8 +1837,8 @@ contains
 
     workLocal(:,:) = cmplx(0,0,dp)
 
-    iK = parallelKS%localKS(1, iKS)
-    iS = parallelKS%localKS(2, iKS)
+    iK = parallelKS%localKS(indxK, iKS)
+    iS = parallelKS%localKS(indxS, iKS)
 
   #:if WITH_SCALAPACK
 

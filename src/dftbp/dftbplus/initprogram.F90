@@ -116,7 +116,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_timedep_linresptypes, only : linRespSolverTypes, TLinResp
   use dftbp_timedep_pprpa, only : TppRPAcal
   use dftbp_timedep_timeprop, only : tdSpinTypes, TElecDynamics, TElecDynamics_init
-  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, TParallelKS_init
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, TParallelKS_init, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_eleccutoffs, only : TCutoffs
   use dftbp_type_integral, only : TIntegral, TIntegral_init
@@ -1011,7 +1011,7 @@ module dftbp_dftbplus_initprogram
     !> File descriptor for extra MD output
     type(TFileDescr) :: fdMd
 
-    !> Contains (iK, iS) tuples to be processed in parallel by various processor groups
+    !> Contains k and spin tuples to be processed in parallel by various processor groups
     type(TParallelKS) :: parallelKS
 
     !> True, if electron dynamics input block is present
@@ -1300,6 +1300,9 @@ contains
 
     !> Spin loop index
     integer :: iSpin
+
+    !> Index for k-point
+    integer :: iK
 
     !> Nr. of buffered Cholesky-decompositions
     integer :: nBufferedCholesky
@@ -2002,10 +2005,12 @@ contains
       ! Would be using the ELSI matrix writing mechanism, so set this as always false
       this%tWriteHS = .false.
 
+      ! ELSI requires single k-point and spin in local group
+      iSpin = this%parallelKS%localKS(indxS, 1)
+      iK = this%parallelKS%localKS(indxK, 1)
       call TElsiSolver_init(this%electronicSolver%elsi, input%ctrl%solver%elsi, env,&
-          & this%denseDesc%fullSize, this%nEl, this%iDistribFn, this%nSpin,&
-          & this%parallelKS%localKS(2, 1), this%nKPoint, this%parallelKS%localKS(1, 1),&
-          & this%kWeight(this%parallelKS%localKS(1, 1)), input%ctrl%tWriteHS,&
+          & this%denseDesc%fullSize, this%nEl, this%iDistribFn, this%nSpin, iSpin, this%nKPoint,&
+          & iK, this%kWeight(iK), input%ctrl%tWriteHS,&
           & this%electronicSolver%providesElectronEntropy)
 
     end if

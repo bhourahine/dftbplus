@@ -113,7 +113,7 @@ module dftbp_dftbplus_main
   use dftbp_timedep_linrespgrad, only : conicalIntersectionOptimizer
   use dftbp_timedep_pprpa, only : ppRpaEnergies
   use dftbp_timedep_timeprop, only : runDynamics
-  use dftbp_type_commontypes, only : TOrbitals, TParallelKS
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_eleccutoffs, only : TCutoffs
   use dftbp_type_integral, only : TIntegral
@@ -3321,7 +3321,7 @@ contains
     eigen(:,:) = 0.0_dp
 
     do iKS = 1, parallelKS%nLocalKS
-      iSpin = parallelKS%localKS(2, iKS)
+      iSpin = parallelKS%localKS(indxS, iKS)
     #:if WITH_SCALAPACK
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
       if (tHelical) then
@@ -3497,10 +3497,10 @@ contains
             & size(densityMatrix%deltaRhoInCplx, dim=2), size(kPoint, dim=2)),&
             & source=(0.0_dp, 0.0_dp))
         do iKS = 1, parallelKS%nLocalKS
-          iSpin = parallelKS%localKS(2, iKS)
+          iSpin = parallelKS%localKS(indxS, iKS)
           ! cycling in this case is crucial, since we allow more MPI groups than k-points
           if (iSpin == 2) cycle
-          iK = parallelKS%localKS(1, iKS)
+          iK = parallelKS%localKS(indxK, iKS)
           call env%globalTimer%startTimer(globalTimers%sparseToDense)
           call unpackHS(SSqrCplxCam(:,:, iK), ints%overlap, kPoint(:, iK),&
               & neighbourList%iNeighbour, nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart,&
@@ -3524,9 +3524,9 @@ contains
     ! Loop over all spins/k-points associated with MPI group
     do iKS = 1, parallelKS%nLocalKS
       ! Get global k-point index from local iKS composite
-      iK = parallelKS%localKS(1, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
       ! Get global spin index from local iKS composite
-      iSpin = parallelKS%localKS(2, iKS)
+      iSpin = parallelKS%localKS(indxS, iKS)
     #:if WITH_SCALAPACK
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
       if (tHelical) then
@@ -3678,7 +3678,7 @@ contains
 
     eigen(:,:) = 0.0_dp
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
       call env%globalTimer%startTimer(globalTimers%sparseToDense)
     #:if WITH_SCALAPACK
       if (allocated(ints%iHamiltonian)) then
@@ -3805,7 +3805,7 @@ contains
     rhoPrim(:,:) = 0.0_dp
 
     do iKS = 1, parallelKS%nLocalKS
-      iSpin = parallelKS%localKS(2, iKS)
+      iSpin = parallelKS%localKS(indxS, iKS)
 
     #:if WITH_SCALAPACK
       if (.not. allocated(densityMatrix%deltaRhoOut)) then
@@ -3984,8 +3984,8 @@ contains
     end if
 
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
-      iSpin = parallelKS%localKS(2, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
+      iSpin = parallelKS%localKS(indxS, iKS)
     #:if WITH_SCALAPACK
       call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,iK&
           &,iSpin), eigvecs(:,:,iKS), work)
@@ -4154,7 +4154,7 @@ contains
     end if
 
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
 
     #:if WITH_SCALAPACK
       call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,iK),&
@@ -5032,8 +5032,8 @@ contains
           allocate(rhoPrim(size(ints%overlap), nSpin), source=0.0_dp)
 
           do iKS = 1, parallelKS%nLocalKS
-            iK = parallelKS%localKS(1, iKS)
-            iSpin = parallelKS%localKS(2, iKS)
+            iK = parallelKS%localKS(indxK, iKS)
+            iSpin = parallelKS%localKS(indxS, iKS)
           #:if WITH_SCALAPACK
             call env%globalTimer%startTimer(globalTimers%denseToSparse)
             call packRhoCplxBlacs(env%blacs, denseDesc,&
@@ -6248,7 +6248,7 @@ contains
 
     ERhoPrim(:) = 0.0_dp
     do iKS = 1, parallelKS%nLocalKS
-      iS = parallelKS%localKS(2, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
 
       select case (forceType)
 
@@ -6480,8 +6480,8 @@ contains
 
     ERhoPrim(:) = 0.0_dp
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
-      iS = parallelKS%localKS(2, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
 
       select case (forceType)
 
@@ -6707,7 +6707,7 @@ contains
 
     ERhoPrim(:) = 0.0_dp
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
     #:if WITH_SCALAPACK
       call makeDensityMtxCplxBlacs(env%blacs%orbitalGrid, denseDesc%blacsOrbSqr, filling(:,iK,1),&
           & eigvecsCplx(:,:,iKS), work, eigen(:,iK,1))
@@ -7868,7 +7868,7 @@ contains
             & denseDesc%iAtomStart, iSparseStart, img2CentCell)
       end if
       do iKS = 1, parallelKS%nLocalKS
-        iSpin = parallelKS%localKS(2, iKS)
+        iSpin = parallelKS%localKS(indxS, iKS)
         nFilledLev = nint(nEl(iSpin) / real(3 - nSpin, dp))
         localisation = pipekMezey%getLocalisation(eigvecsReal(:, 1:nFilledLev, iKS), SSqrReal,&
             & denseDesc%iAtomStart)
@@ -7887,8 +7887,8 @@ contains
 
       localisation = 0.0_dp
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
-        iSpin = parallelKS%localKS(2, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
+        iSpin = parallelKS%localKS(indxS, iKS)
         nFilledLev = nint(nEl(iSpin) / real( 3 - nSpin, dp))
         localisation = localisation + pipekMezey%getLocalisation(&
             & eigvecsCplx(:,:nFilledLev,iKS), SSqrCplx, ints%overlap, kpoint(:,iK), neighbourList,&
@@ -7898,8 +7898,8 @@ contains
 
       ! actual localisation calls
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
-        iSpin = parallelKS%localKS(2, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
+        iSpin = parallelKS%localKS(indxS, iKS)
         nFilledLev = nint(nEl(iSpin) / real( 3 - nSpin, dp))
         call pipekMezey%calcCoeffs(eigvecsCplx(:,:nFilledLev,iKS), SSqrCplx, ints%overlap,&
             & kpoint(:,iK), neighbourList, nNeighbourSK, iCellVec, cellVec, denseDesc%iAtomStart,&
@@ -7908,8 +7908,8 @@ contains
 
       localisation = 0.0_dp
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
-        iSpin = parallelKS%localKS(2, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
+        iSpin = parallelKS%localKS(indxS, iKS)
         nFilledLev = nint(nEl(iSpin) / real( 3 - nSpin, dp))
         localisation = localisation + pipekMezey%getLocalisation(&
             & eigvecsCplx(:,:nFilledLev,iKS), SSqrCplx, ints%overlap, kpoint(:,iK), neighbourList,&

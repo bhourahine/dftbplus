@@ -44,7 +44,7 @@ module dftbp_derivs_perturb
   use dftbp_io_message, only : warning
   use dftbp_io_taggedoutput, only : tagLabels, TTaggedWriter
   use dftbp_mixer_mixer, only : TMixerReal
-  use dftbp_type_commontypes, only : TOrbitals
+  use dftbp_type_commontypes, only : TOrbitals, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_parallelks, only : TParallelKS
 #:if WITH_SCALAPACK
@@ -1251,7 +1251,7 @@ contains
 
         do iKS = 1, parallelKS%nLocalKS
 
-          iS = parallelKS%localKS(2, iKS)
+          iS = parallelKS%localKS(indxS, iKS)
 
           if (allocated(dRhoOut)) then
             ! replace with case that will get updated in dRhoReal
@@ -1273,7 +1273,7 @@ contains
 
         do iKS = 1, parallelKS%nLocalKS
 
-          iK = parallelKS%localKS(1, iKS)
+          iK = parallelKS%localKS(indxK, iKS)
 
           call dRhoPauli(env, dHam, idHam, neighbourList, nNeighbourSK, iSparseStart,&
               & img2CentCell, denseDesc, parallelKS, nFilled, nEmpty, eigvecsCplx, eigVals, Ef,&
@@ -1296,7 +1296,7 @@ contains
 
         do iKS = 1, parallelKS%nLocalKS
 
-          iK = parallelKS%localKS(1, iKS)
+          iK = parallelKS%localKS(indxK, iKS)
 
           call dRhoCmplx(env, dHam, neighbourList, nNeighbourSK, iSparseStart, img2CentCell,&
               & denseDesc, parallelKS, nFilled, nEmpty, eigvecsCplx, eigVals, Ef, tempElec, orb,&
@@ -1326,8 +1326,8 @@ contains
           idRhoExtra(:,:) = 0.0_dp
         end if
         do iKS = 1, parallelKS%nLocalKS
-          iK = parallelKS%localKS(1, iKS)
-          iS = parallelKS%localKS(2, iKS)
+          iK = parallelKS%localKS(indxK, iKS)
+          iS = parallelKS%localKS(indxS, iKS)
 
           if (.not.tMetallic(iS,iK)) then
             cycle
@@ -2068,8 +2068,8 @@ contains
     end if
 
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
-      iS = parallelKS%localKS(2, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
       if (degenTransform(iKS)%isAnyDegenerate(eigvals(:, iK, iS))) then
         @:RAISE_ERROR(errStatus, -1, "Atom derivative perturbations are not currently supported for&
             & high-symmetry/degenerate systems")
@@ -2089,12 +2089,12 @@ contains
 
       ! e_i |c_i>
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
-        iS = parallelKS%localKS(2, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
+        iS = parallelKS%localKS(indxS, iKS)
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
-          iK = parallelKS%localKS(1, iKS)
-          iS = parallelKS%localKS(2, iKS)
+          iK = parallelKS%localKS(indxK, iKS)
+          iS = parallelKS%localKS(indxS, iKS)
           do jj = 0, min(blockSize - 1, nOrbs - iGlob)
             eCiReal(:, iLoc + jj, iKS) = eigVals(iGlob + jj, iK, iS)&
                 & * eigVecsReal(:, iLoc + jj, iKS)
@@ -2108,8 +2108,8 @@ contains
 
       ! e_i |c_i>
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
-        iS = parallelKS%localKS(2, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
+        iS = parallelKS%localKS(indxS, iKS)
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, min(blockSize - 1, nOrbs - iGlob)
@@ -2133,8 +2133,8 @@ contains
     else
       allocate(eCiCplx(size(eigVecsCplx,dim=1), size(eigVecsCplx,dim=2), size(eigVecsCplx,dim=3)))
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
-        iS = parallelKS%localKS(2, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
+        iS = parallelKS%localKS(indxS, iKS)
         do iOrb = 1, size(eigVecsCplx,dim=2)
           eCiCplx(:,iOrb, iKS) = eigVecsCplx(:,iOrb, iKS) * eigVals(iOrb, iK, iS)
         end do
@@ -2354,7 +2354,7 @@ contains
             drho(:,:) = 0.0_dp
             do iKS = 1, parallelKS%nLocalKS
 
-              iS = parallelKS%localKS(2, iKS)
+              iS = parallelKS%localKS(indxS, iKS)
 
               if (allocated(dRhoOut)) then
                 ! replace with case that will get updated in dRhoReal
@@ -2376,7 +2376,7 @@ contains
 
             do iKS = 1, parallelKS%nLocalKS
 
-              iK = parallelKS%localKS(1, iKS)
+              iK = parallelKS%localKS(indxK, iKS)
 
 !              call dRhoPauli(env, dHam, idHam, dOver(:,igotgotCart), neighbourList, nNeighbourSK,&
 !                  & iSparseStart, img2CentCell, denseDesc, parallelKS, nFilled(:, iK),&

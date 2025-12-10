@@ -13,7 +13,7 @@ module dftbp_type_parallelks
   implicit none
 
   private
-  public :: TParallelKS, TParallelKS_init
+  public :: TParallelKS, TParallelKS_init, indxS, indxK
 
 
   !> Contains information about which k-points and spins must be processed by which processor group
@@ -31,13 +31,19 @@ module dftbp_type_parallelks
     integer :: maxGroupKS
 
     !> The (K, S) tuples of the local processor group (localKS(1:2,iKS))
-    !> Usage: iK = localKS(1, iKS); iS = localKS(2, iKS)
+    !> Usage: iK = localKS(indxK, iKS); iS = localKS(indxS, iKS)
     integer, allocatable :: localKS(:,:)
 
     !> Number of local (K, S) tuples to process
     integer :: nLocalKS
 
   end type TParallelKS
+
+  !> Index for where to find k in first dimension of localKS
+  integer, parameter :: indxK = 1
+
+  !> Index for where to find spin in first dimension of localKS
+  integer, parameter :: indxS = 2
 
 contains
 
@@ -73,15 +79,26 @@ contains
 
     allocate(this%nGroupKS(0 : nGroup - 1))
     this%nGroupKS(:) = 0
-    allocate(this%groupKS(2, maxGroupKS, 0 : nGroup - 1))
-    this%groupKS(:,:,:) = 0
-    do iS = 1, nSpin
-      do iK = 1, nKpoint
-        iGroup = mod((iS - 1) * nKpoint + iK - 1, nGroup)
-        this%nGroupKS(iGroup) = this%nGroupKS(iGroup) + 1
-        this%groupKS(:, this%nGroupKS(iGroup), iGroup) = [iK, iS]
+    allocate(this%groupKS(2, maxGroupKS, 0 : nGroup - 1), source=0)
+
+    if (indxK < indxS) then
+      do iS = 1, nSpin
+        do iK = 1, nKpoint
+          iGroup = mod((iS - 1) * nKpoint + iK - 1, nGroup)
+          this%nGroupKS(iGroup) = this%nGroupKS(iGroup) + 1
+          this%groupKS(:, this%nGroupKS(iGroup), iGroup) = [iK, iS]
+        end do
       end do
-    end do
+    else
+      do iK = 1, nKpoint
+        do iS = 1, nSpin
+          iGroup = mod((iK - 1) * nSpin + iS - 1, nGroup)
+          this%nGroupKS(iGroup) = this%nGroupKS(iGroup) + 1
+          this%groupKS(:, this%nGroupKS(iGroup), iGroup) = [iS, iK]
+        end do
+      end do
+    end if
+
     this%maxGroupKS = maxGroupKS
     this%nLocalKS = this%nGroupKS(myGroup)
     this%localKS = this%groupKS(:, 1:this%nLocalKS, myGroup)

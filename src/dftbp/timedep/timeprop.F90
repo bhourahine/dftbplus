@@ -67,7 +67,7 @@ module dftbp_timedep_timeprop
   use dftbp_solvation_fieldscaling, only : TScaleExtEField
   use dftbp_solvation_solvation, only : TSolvation
   use dftbp_timedep_dynamicsrestart, only : readRestartFile, writeRestartFile
-  use dftbp_type_commontypes, only : TOrbitals, TParallelKS
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, indxS, indxK
   use dftbp_type_eleccutoffs, only : TCutoffs
   use dftbp_type_integral, only : TIntegral
   use dftbp_type_multipole, only : TMultipole, TMultipole_init
@@ -1541,8 +1541,8 @@ contains
     end if
 
     do iKS = 1, this%parallelKS%nLocalKS
-      iK = this%parallelKS%localKS(1, iKS)
-      iSpin = this%parallelKS%localKS(2, iKS)
+      iK = this%parallelKS%localKS(indxK, iKS)
+      iSpin = this%parallelKS%localKS(indxS, iKS)
       if (this%tRealHS) then
         call unpackHS(T2, ints%hamiltonian(:,iSpin), neighbourList%iNeighbour, nNeighbourSK,&
             & iSquare, iSparseStart, img2CentCell)
@@ -1629,7 +1629,7 @@ contains
     end if
 
     do iKS = 1, this%parallelKS%nLocalKS
-      iSpin = this%parallelKS%localKS(2, iKS)
+      iSpin = this%parallelKS%localKS(indxS, iKS)
       do iAt = 1, this%nAtom
         iStart = iSquare(iAt)
         iEnd = iSquare(iAt + 1) - 1
@@ -1793,8 +1793,8 @@ contains
     else
 
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
 
         do iAt = 1, this%nAtom
           iOrb1 = iSquare(iAt)
@@ -1822,8 +1822,8 @@ contains
         end do
       else
         do iKS = 1, this%parallelKS%nLocalKS
-          iK = this%parallelKS%localKS(1, iKS)
-          iSpin = this%parallelKS%localKS(2, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
+          iSpin = this%parallelKS%localKS(indxS, iKS)
 
           do iAt = 1, this%nAtom
             iOrb1 = iSquare(iAt)
@@ -1852,8 +1852,8 @@ contains
         end do
       else
         do iKS = 1, this%parallelKS%nLocalKS
-          iK = this%parallelKS%localKS(1, iKS)
-          iSpin = this%parallelKS%localKS(2, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
+          iSpin = this%parallelKS%localKS(indxS, iKS)
 
           do iAt = 1, this%nAtom
             iOrb1 = iSquare(iAt)
@@ -1881,8 +1881,8 @@ contains
       end if
       qBlock(:,:,:,:) = 0.0_dp
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         do iAt = 1, this%nAtom
           iOrb1 = iSquare(iAt)
           iOrb2 = iSquare(iAt+1)
@@ -1905,7 +1905,7 @@ contains
     if (allocated(qNetAtom)) then
       qNetAtom(:) = 0.0_dp
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
         do iAt = 1, this%nAtom
           iOrb1 = iSquare(iAt)
           iOrb2 = iSquare(iAt+1)-1
@@ -2031,12 +2031,12 @@ contains
     if (.not. this%tForces) then
       rhoPrim(:,:) = 0.0_dp
       do iKS = 1, this%parallelKS%nLocalKS
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         if (this%tRealHS) then
           call packHS(rhoPrim(:,iSpin), real(rho(:,:,iSpin), dp), neighbourlist%iNeighbour,&
               & nNeighbourSK, orb%mOrb, iSquare, iSparseStart, img2CentCell)
         else
-          iK = this%parallelKS%localKS(1, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
           call packHS(rhoPrim(:,iSpin), rho(:,:,iKS), this%kPoint(:,iK), this%kWeight(iK),&
               & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, this%iCellVec, this%cellVec,&
               & iSquare, iSparseStart, img2CentCell)
@@ -2218,8 +2218,8 @@ contains
           call gesv(T2, T3)
           Sinv(:,:,iKS) = cmplx(T3, 0, dp)
         else
-          iK = this%parallelKS%localKS(1, iKS)
-          iSpin = this%parallelKS%localKS(2, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
+          iSpin = this%parallelKS%localKS(indxS, iKS)
           T4(:,:) = cmplx(0,0,dp)
           call unpackHS(T4, ints%overlap, this%kPoint(:,iK), iNeighbour, nNeighbourSK,&
               & this%iCellVec, this%cellVec, iSquare, iSparseStart, img2CentCell)
@@ -2235,8 +2235,8 @@ contains
       write(stdOut,"(A)")'S inverted'
 
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         if (this%tRealHS) then
           call unpackHS(T3, ints%hamiltonian(:,iSpin), iNeighbour, nNeighbourSK, iSquare,&
               & iSparseStart, img2CentCell)
@@ -2281,8 +2281,8 @@ contains
     if (.not.this%tReadRestart) then
       rho(:,:,:) = 0.0_dp
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         if (this%tRealHS) then
           T2(:,:) = 0.0_dp
           call densityMatrix%getDensityMatrix(T2, eigvecsReal(:,:,iKS), filling(:,1,iSpin),&
@@ -2603,14 +2603,14 @@ contains
 
     if (this%tPopulations) then
       do iKS = 1, this%parallelKS%nLocalKS
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         write(strSpin,'(i1)')iSpin
         if (this%tRealHS) then
           call openOutputFile(this, populDat(iKS), 'molpopul' // trim(strSpin) // '.dat')
           write(populDat(iKS)%unit, "(A,A)")&
               & "#  GS molecular orbital populations, spin channel : ", trim(strSpin)
         else
-          iK = this%parallelKS%localKS(1, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
           write(strK,'(i0.3)')iK
           call openOutputFile(this, populDat(iKS),&
               & 'molpopul' // trim(strSpin) // '-' // trim(strK) // '.dat')
@@ -3240,8 +3240,8 @@ contains
       allocate(T4(this%nOrbs,this%nOrbs))
       Ssqr(:,:,:) = cmplx(0, 0, dp)
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         T4(:,:) = cmplx(0, 0, dp)
         call unpackHS(T4, ints%overlap, this%kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
             & this%iCellVec, this%cellVec, iSquare, iSparseStart, img2CentCell)
@@ -3302,16 +3302,16 @@ contains
       if (this%tRealHS) then
         allocate(M3(this%nDipole, this%nOrbs, this%nOrbs))
         do iKS = 1, this%parallelKS%nLocalKS
-          iK = this%parallelKS%localKS(1, iKS)
-          iSpin = this%parallelKS%localKS(2, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
+          iSpin = this%parallelKS%localKS(indxS, iKS)
           call unpackDQ(M3, ints%dipoleBra, ints%dipoleKet, iNeighbour,&
               & nNeighbourSK, iSquare, iSparseStart, img2CentCell)
           Dsqr(:,:,:,iKS) = cmplx(M3, 0, dp)
         end do
       else
         do iKS = 1, this%parallelKS%nLocalKS
-          iK = this%parallelKS%localKS(1, iKS)
-          iSpin = this%parallelKS%localKS(2, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
+          iSpin = this%parallelKS%localKS(indxS, iKS)
           call unpackDQ(Dsqr(:,:,:,iKS), ints%dipoleBra, ints%dipoleKet,&
               & this%kPoint(:,iK), iNeighbour, nNeighbourSK, this%iCellVec, this%cellVec,&
               & iSquare, iSparseStart, img2CentCell)
@@ -3325,16 +3325,16 @@ contains
         if (allocated(M3)) deallocate(M3)
         allocate(M3(this%nQuadrupole, this%nOrbs, this%nOrbs))
         do iKS = 1, this%parallelKS%nLocalKS
-          iK = this%parallelKS%localKS(1, iKS)
-          iSpin = this%parallelKS%localKS(2, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
+          iSpin = this%parallelKS%localKS(indxS, iKS)
           call unpackDQ(M3, ints%quadrupoleBra, ints%quadrupoleKet, iNeighbour,&
               & nNeighbourSK, iSquare, iSparseStart, img2CentCell)
           Qsqr(:,:,:,iKS) = cmplx(M3, 0, dp)
         end do
       else
         do iKS = 1, this%parallelKS%nLocalKS
-          iK = this%parallelKS%localKS(1, iKS)
-          iSpin = this%parallelKS%localKS(2, iKS)
+          iK = this%parallelKS%localKS(indxK, iKS)
+          iSpin = this%parallelKS%localKS(indxS, iKS)
           call unpackDQ(Qsqr(:,:,:,iKS), ints%quadrupoleBra, ints%quadrupoleKet,&
               & this%kPoint(:,iK), iNeighbour, nNeighbourSK, this%iCellVec, this%cellVec,&
               & iSquare, iSparseStart, img2CentCell)
@@ -3459,8 +3459,8 @@ contains
       allocate(T1R(this%nOrbs,this%nOrbs))
       allocate(T2R(this%nOrbs,this%nOrbs))
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         call packHS(rhoPrim(:,iSpin), real(rho(:,:,iKS), dp), neighbourList%iNeighbour,&
             & nNeighbourSK, orb%mOrb, iSquare, iSparseStart, img2CentCell)
         call gemm(T1R, real(rho(:,:,iKS), dp), real(H1(:,:,iKS), dp))
@@ -3472,8 +3472,8 @@ contains
       allocate(T1C(this%nOrbs,this%nOrbs))
       allocate(T2C(this%nOrbs,this%nOrbs))
       do iKS = 1, this%parallelKS%nLocalKS
-        iK = this%parallelKS%localKS(1, iKS)
-        iSpin = this%parallelKS%localKS(2, iKS)
+        iK = this%parallelKS%localKS(indxK, iKS)
+        iSpin = this%parallelKS%localKS(indxS, iKS)
         call packHS(rhoPrim(:,iSpin), rho(:,:,iKS), this%kPoint(:,iK), this%kWeight(iK),&
             & neighbourList%iNeighbour, nNeighbourSK, orb%mOrb, this%iCellVec, this%cellVec,&
             & iSquare, iSparseStart, img2CentCell)

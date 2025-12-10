@@ -52,7 +52,7 @@ module dftbp_dftbplus_mainio
   use dftbp_solvation_cosmo, only : TCosmo
   use dftbp_solvation_fieldscaling, only : TScaleExtEField
   use dftbp_solvation_solvation, only : TSolvation
-  use dftbp_type_commontypes, only : TOrbitals, TParallelKS
+  use dftbp_type_commontypes, only : TOrbitals, TParallelKS, indxS, indxK
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_linkedlist, only : elemShape, get, intoArray, len, TListCharLc, TListIntR1
   use dftbp_type_multipole, only : TMultipole
@@ -667,7 +667,7 @@ contains
     call unpackHS(SSqr, over, neighlist%iNeighbour, nNeighbourSK, denseDesc%iAtomStart, iPair,&
         & img2CentCell)
     do iKS = 1, parallelKS%nLocalKS
-      iS = parallelKS%localKS(2, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
       do iEig = 1, denseDesc%nOrb
         call hemv(rVecTemp, SSqr, eigvecs(:,iEig,iS))
         rVecTemp = rVecTemp * eigvecs(:,iEig,iS)
@@ -791,7 +791,7 @@ contains
       end do
     else
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
         call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK, iCellVec,&
             & cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -884,8 +884,8 @@ contains
     allocate(fracs(nEigvecs))
 
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
-      iS = parallelKS%localKS(2, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
       call unpackHS(SSqr, over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, denseDesc%iAtomStart, iPair, img2CentCell)
       do iEig = 1, nEigvecs
@@ -1016,7 +1016,7 @@ contains
     else
       ! All processes except the global lead process
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
         call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), iNeighbour, nNeighbourSK, iCellVec,&
             & cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc, globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1108,7 +1108,7 @@ contains
     allocate(fracs(4, nEigvecs / 2))
 
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
       call unpackSPauli(over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iPair, img2CentCell, iCellVec, cellVec, SSqr)
       do iEig = 1, nEigvecs
@@ -1396,7 +1396,7 @@ contains
     call unpackHS(work, over, neighlist%iNeighbour, nNeighbourSK, denseDesc%iAtomStart, iPair,&
         & img2CentCell)
     do iKS = 1, parallelKS%nLocalKS
-      iS = parallelKS%localKS(2, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
       call writeProjEigvecHeader(fd, iS)
       do iEig = 1, denseDesc%nOrb
         call hemv(rVecTemp, work, eigvecs(:,iEig,iKS))
@@ -1523,7 +1523,7 @@ contains
     else
       ! All processes except the global lead process
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
         call unpackHSCplxBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc, globalS)
         call pblasfx_phemm(globalS, denseDesc%blacsOrbSqr, eigvecs(:,:,iKS),&
@@ -1610,8 +1610,8 @@ contains
 
     allocate(cVecTemp(size(eigvecs, dim=1)))
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
-      iS = parallelKS%localKS(2, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
+      iS = parallelKS%localKS(indxS, iKS)
       call writeProjEigvecHeader(fd, iS, iK, kWeights(iK))
       call unpackHS(work, over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK, iCellVec,&
           & cellVec, denseDesc%iAtomStart, iPair, img2CentCell)
@@ -1749,7 +1749,7 @@ contains
     else
       ! All processes except the global lead process
       do iKS = 1, parallelKS%nLocalKS
-        iK = parallelKS%localKS(1, iKS)
+        iK = parallelKS%localKS(indxK, iKS)
         call unpackSPauliBlacs(env%blacs, over, kPoints(:,iK), neighbourList%iNeighbour,&
             & nNeighbourSK, iCellVec, cellVec, iSparseStart, img2CentCell, orb%mOrb, denseDesc,&
             & globalS)
@@ -1844,7 +1844,7 @@ contains
     allocate(fracs(4, nOrb / 2))
 
     do iKS = 1, parallelKS%nLocalKS
-      iK = parallelKS%localKS(1, iKS)
+      iK = parallelKS%localKS(indxK, iKS)
       call writeProjEigvecHeader(fd, 1, iK, kWeights(iK))
       call unpackSPauli(over, kPoints(:,iK), neighlist%iNeighbour, nNeighbourSK,&
           & denseDesc%iAtomStart, iPair, img2CentCell, iCellVec, cellVec, work)
