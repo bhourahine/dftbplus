@@ -351,4 +351,15 @@ contains
   end subroutine getLSOperatorsForSpecies
 
 
+  !> Spin-orbit product for L.S
+  !! hbar/2 [j(j+1) - l(l+1) - s(s+1)]
+  function ls(J, L, S)
+
+    real(dp), intent(in) :: J, L, S
+    real(dp) :: ls
+
+    ls = 0.5_dp * (J**2 - L**2 -S**2)
+
+  end function ls
+
 end module dftbp_dftb_spinorbit

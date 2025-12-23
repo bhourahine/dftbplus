@@ -21,7 +21,9 @@ module dftbp_math_angmomentum
   implicit none
 
   private
-  public :: getLOperators, getLOperatorsForSpecies, getLOnsite, getLDual, rotateZ
+  public :: clebschGordan, coupledBasis, getLDual, getLOnsite, getLOperators
+  public :: getLOperatorsForSpecies, rotateZ, wigner3j
+
 
   !> Construct matrix for rotation of orbitals around the z axis in the tesseral spherical hamonics
   !> basis
@@ -399,5 +401,146 @@ contains
     end do
 
   end subroutine zrot_manyl
+
+
+  !> Factorial (note, will overflow eventually)
+  pure function factorial(ii)
+
+    !> Value
+    integer, intent(in) :: ii
+
+    !> Result
+    real(dp) :: factorial
+
+    integer :: jj
+
+    factorial = 1.0_dp
+    do jj = 1, ii
+      factorial = factorial * real(jj, dp)
+    end do
+
+  end function factorial
+
+
+  !> Kronecker delta
+  pure function delta (i1,i2)
+
+    !> First value
+    integer, intent(in) :: i1
+
+    !> Second value
+    integer, intent(in) :: i2
+
+    !> Kronecker delta
+    integer :: delta
+
+    delta = 0
+    if (i1 == -i2) delta = 1
+
+  end function delta
+
+
+  !>
+  pure function firstSqrt(j1, j2, j3)
+
+    real(dp), intent(in) :: j1,j2,j3
+
+    real(dp) :: firstSqrt
+
+    firstSqrt = sqrt(factorial(nint(j1-j3+j2))*factorial(nint(j1-j2+j3))*factorial(nint(-j1+j3+j2))&
+        & / factorial(nint(j1+j3+j2+1)))
+
+  end function firstSqrt
+
+
+
+  pure function part(j1,j2,m2,j3,m3)
+
+    real(dp), intent(in) :: j1,j2,m2,j3,m3
+
+    real(dp) :: part
+    real(dp) :: term1, term2, term3, term4, term5, term6
+
+    term1 = factorial(nint(j2-m2))
+    term2 = factorial(nint(j2+m2))
+    term3 = factorial(nint(j3+m3))
+    term4 = factorial(nint(j3-m3))
+    term5 = factorial(nint(j1-m3-m2))
+    term6 = factorial(nint(j1+m3+m2))
+    part = sqrt(term1 * term2 / (term3 * term4 * term5 * term6))
+
+  end function part
+
+  !> Wigner 3j symbols
+  pure function wigner3j(j1,m1,j2,m2,j3,m3)
+
+    real(dp), intent(in) :: j1, m1, j2, m2, j3, m3
+
+    real(dp) :: wigner3j
+
+    integer :: term1, term2, term3, term4, term5, term6, term7
+    integer :: iu, nmin, nmax, kk
+    real(dp) :: sum
+
+    select case(delta(nint(m1+m2), nint(m3)))
+    case(0)
+       wigner3j = 0.0_dp
+    case(1)
+      iu = nint(j3-j1+j2)
+      nmin = max(0, iu-nint(j2+m2), nint(-j1-m3-m2))
+      nmax = min(nint(j3+j2-m3-m2), nint(j2-m2), iu)
+      sum = 0.0_dp
+      do kk = nmin, nmax
+        term1 = -1.0_dp * (-1)**(mod(kk, 2)) ! nint(2 * j3 - j1 - m1) +
+        term2 = factorial(nint(j3 + j2 - m3 - m2) - kk)
+        term3 = factorial(nint(j1 + m3 + m2) + kk)
+        term4 = factorial(nint(j2 - m2) - kk)
+        term5 = factorial(iu - kk)
+        term6 = factorial(nint(j2 + m2) - iu + kk)
+        term7 = factorial(kk)
+        sum = sum + term1 * term2 * term3 / (term4 * term5 * term6 * term7)
+      end do
+      wigner3j = (-1)**mod(nint(j1+j2+j3), 2) * firstSqrt(j1,j2,j3) * part(j1,j2,m2,j3,m3) * sum
+    end select
+
+  end function wigner3j
+
+
+  !> < j1 m1 j2 m2 | j3 m3 >
+  pure function clebschGordan(j1, m1, j2, m2, j3, m3)
+
+    real(dp), intent(in) :: j1, m1, j2, m2, j3, m3
+    real(dp) :: clebschGordan
+
+    clebschGordan = (-1)**mod(nint(j1-j2+m3),2)*sqrt(2.0_dp*j3+1.0_dp)*wigner3j(j1,m1,j2,m2,j3,-m3)
+
+  end function clebschGordan
+
+
+  !> spin 1/2
+  subroutine coupledBasis(U, l)
+
+    real(dp), intent(out) :: U(:,:)
+
+    integer, intent(in) :: l
+
+    integer :: il, is, ij
+    real(dp) :: ms, mj, ml, j
+
+    write(*,*)"L    m_l     s       m_s     J       m_J"
+    do il = -l, l
+      ml = real(il, dp)
+      do is = -1, 1, 2
+        ms = 0.5_dp * real(is, dp)
+        mj = ml + ms
+        do ij = -1, 1, 2
+          j = abs(real(l, dp) + 0.5_dp * real(ij))
+          write(*,"(I2,5F8.2,F20.12)")l, ml, 0.5_dp, ms, j, mj,&
+              & clebschGordan(real(l,dp), ml, 0.5_dp, ms, j, mj)
+        end do
+      end do
+    end do
+
+  end subroutine coupledBasis
 
 end module dftbp_math_angmomentum
