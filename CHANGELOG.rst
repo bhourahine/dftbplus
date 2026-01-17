@@ -11,6 +11,7 @@ Unreleased
 Added
 -----
 
+- Langevin thermostat added
 
 
 Changed
