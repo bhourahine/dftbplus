@@ -7,9 +7,9 @@
 
 
 !> Demonstrates the API with population dependant external potentials.
-!>
-!> Use it with the input in the test/api/mm/qdepextpot/ folder.
-!>
+!!
+!! Use it with the input in the test/api/mm/qdepextpot/ folder.
+!!
 program test_qdepextpot
   use dftbplus, only : getDftbPlusApi, getDftbPlusBuild, TDftbPlus, TDftbPlus_init, TDftbPlusInput
   use extchargepot, only : getPointChargePotential
@@ -44,7 +44,8 @@ contains
   !! Main test routine
   !!
   !! All non-constant variables must be defined here to ensure that they are all explicitely
-  !! deallocated before the program finishes (avoiding residual memory that tools like valgrind notice).
+  !! deallocated before the program finishes (avoiding residual memory that tools like valgrind
+  !! notice).
   !!
   subroutine main_()
 
@@ -55,9 +56,10 @@ contains
     real(dp), allocatable :: extPot(:), extPotGrad(:,:)
     real(dp) :: merminEnergy
     real(dp) :: gradients(3, nQmAtom), grossCharges(nQmAtom)
+    real(dp), allocatable :: dqdx(:,:,:)
 
     character(:), allocatable :: DftbVersion
-    integer :: major, minor, patch
+    integer :: major, minor, patch, iAt, jAt, nAtom
 
     !integer :: devNull
 
@@ -70,7 +72,8 @@ contains
     ! while the 2nd charge will be set as constant electrostatic potential
     call TExtChargePotGen_init(potGen, coords, extChargeCoords(:,1:1), extCharges(1:1))
 
-    ! Note: setting the global standard output to /dev/null will also suppress run-time error messages
+    ! Note: setting the global standard output to /dev/null will also suppress run-time error
+    ! messages
     !open(newunit=devNull, file="/dev/null", action="write")
     !call TDftbPlus_init(dftbp, outputUnit=devNull)
 
@@ -85,7 +88,8 @@ contains
     ! add an extra fixed external charge
     allocate(extPot(nQmAtom))
     allocate(extPotGrad(3, nQmAtom))
-    call getPointChargePotential(extChargeCoords(:,2:2), extCharges(2:2), coords, extPot, extPotGrad)
+    call getPointChargePotential(extChargeCoords(:,2:2), extCharges(2:2), coords, extPot,&
+        & extPotGrad)
     call dftbp%setExternalPotential(extPot, extPotGrad)
 
     ! set the geometry from this program, replacing the dftb_in.hsd values
@@ -98,6 +102,19 @@ contains
     print "(A,F15.10)", 'Obtained Mermin Energy:', merminEnergy
     print "(A,3F15.10)", 'Obtained gradient of atom 1:', gradients(:,1)
     print "(A,3F15.10)", 'Obtained gross charges:', grossCharges
+
+    nAtom = dftbp%nrOfAtoms()
+    allocate(dqdx(nAtom,3,nAtom))
+    call dftbp%getChargeDerivatives(dqdx)
+
+    print *, "Coupled-perturbed derivatives of atom charges wrt positions"
+    do iAt = 1, nAtom
+      print "(A,I0)","dAt", iAt
+      do jAt = 1, nAtom
+        print "(3F15.10)", dqdx(jAt, :, iAt)
+      end do
+    end do
+    deallocate(dqdx)
 
     ! Write file for internal test system
     call writeAutotestTag(merminEnergy=merminEnergy, gradients=gradients, grossCharges=grossCharges)

@@ -5275,6 +5275,13 @@ contains
         call freqRanges(child, ctrl%perturbInp%dynKernelFreq)
       end if
 
+      call getChild(node, "ExternalChargeDerivatives", child=child, requested=.false.)
+      if (associated(child)) then
+        if (.not.allocated(ctrl%perturbInp)) allocate(ctrl%perturbInp)
+        ctrl%perturbInp%isExtChargeDeriv = .true.
+        if (.not.allocated(ctrl%perturbInp)) allocate(ctrl%perturbInp)
+      end if
+
       ! Perturbation with respect to atom positions
       call getChild(node, "CoordDerivatives", child=child, requested=.false.)
       if (associated(child)) then

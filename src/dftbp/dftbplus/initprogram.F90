@@ -570,6 +570,9 @@ module dftbp_dftbplus_initprogram
     !> Dynamic polarisability at finite frequencies
     real(dp), allocatable :: dynKernelFreq(:)
 
+    !> Derivatives with respect to positions of external charges
+    logical :: isExtChargeDeriv
+
     !> Electric static polarisability
     real(dp), allocatable :: polarisability(:,:,:)
 
@@ -584,6 +587,20 @@ module dftbp_dftbplus_initprogram
 
     !> Derivatives of Mulliken charges with respect to perturbation
     real(dp), allocatable :: dqOut(:,:,:,:)
+
+    !> derivatives of atomic charges w.r.t. atom coordinates
+    real(dp), allocatable :: dQdX(:,:,:)
+
+    !> derivatives of atomic charges w.r.t. coordinates of MM atoms
+    real(dp), allocatable :: dQdXext(:,:,:)
+
+    !> number of MM atoms for whith the derivatives of atomic charges w.r.t. coordinates of those
+    !>   MM atoms shall be calculated
+    integer :: nExtChrgWRT
+
+    !> list of MM atoms for whith the derivatives of atomic charges w.r.t. coordinates of those MM
+    !>   atoms shall be calculated
+    integer, allocatable :: extChrgWRT(:)
 
     !> Use commands from socket communication to control the run
     logical :: tSocket
@@ -2482,6 +2499,8 @@ contains
           call error("RPA option only relevant for SCC calculations of response kernel")
         end if
       end if
+
+      this%isExtChargeDeriv = input%ctrl%perturbInp%isExtChargeDeriv
 
       this%isAtomCoordPerturb = input%ctrl%perturbInp%isAtomCoordPerturb
       if (this%isAtomCoordPerturb) then

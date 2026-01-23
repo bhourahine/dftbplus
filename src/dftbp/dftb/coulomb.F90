@@ -35,7 +35,7 @@ module dftbp_dftb_coulomb
   private
   public :: TCoulombInput, TCoulomb, TCoulomb_init
   public :: invRCluster, invRPeriodic, sumInvR, addInvRPrime, getOptimalAlphaEwald, getMaxGEwald
-  public :: getMaxREwald, invRStress
+  public :: getMaxREwald, invRStress, calcInvRPrimeAsymm
   public :: addInvRPrimeXlbomd, invRPrime
   public :: ewaldReal, ewaldReciprocal, derivEwaldReal, derivEwaldReciprocal, derivStressEwaldRec
 
@@ -201,6 +201,12 @@ module dftbp_dftb_coulomb
     ! To do :
     !module procedure invRPrimePeriodic
   end interface invRPrime
+
+
+  !> 1/r^2 potential, derivatives for interaction between atoms and ext. charges
+  interface calcInvRPrimeAsymm
+    module procedure calcInvRPrimeExtCluster
+  end interface calcInvRPrimeAsymm
 
 
   !> Maximal argument value of erf, after which it is constant
@@ -1300,15 +1306,15 @@ contains
         !$OMP& REDUCTION(+:localDeriv0) SCHEDULE(RUNTIME)
         do iAt0 = iAtFirst0, iAtLast0
           do iAt1 = iAtFirst1, iAtLast1
-            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            vect(:) = coord1(:,iAt1) - coord0(:,iAt0)
             dist = norm2(vect)
-            fTmp = -vect / (dist**3)
+            fTmp(:) = vect / (dist**3)
             if (dist < erfArgLimit_ * blurWidths1(iAt1)) then
               sigma = blurWidths1(iAt1)
               rs = dist / sigma
-              fTmp = fTmp * (erfwrap(rs) - 2.0_dp / (sqrt(pi) * sigma) * dist * exp(-rs**2))
+              fTmp(:) = fTmp * (erfwrap(rs) - 2.0_dp / (sqrt(pi) * sigma) * dist * exp(-rs**2))
             end if
-            fTmp = charge1(iAt1) * fTmp
+            fTmp(:) = charge1(iAt1) * fTmp
             localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp
           end do
         end do
@@ -1319,15 +1325,15 @@ contains
         !$OMP& REDUCTION(+:localDeriv0, localDeriv1) SCHEDULE(RUNTIME)
         do iAt0 = iAtFirst0, iAtLast0
           do iAt1 = iAtFirst1, iAtLast1
-            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            vect(:) = coord1(:,iAt1) - coord0(:,iAt0)
             dist = norm2(vect)
-            fTmp = -vect / (dist**3)
+            fTmp(:) = vect / (dist**3)
             if (dist < erfArgLimit_ * blurWidths1(iAt1)) then
               sigma = blurWidths1(iAt1)
               rs = dist / sigma
-              fTmp = fTmp * (erfwrap(rs) - 2.0_dp / (sqrt(pi) * sigma) * dist * exp(-rs**2))
+              fTmp(:) = fTmp * (erfwrap(rs) - 2.0_dp / (sqrt(pi) * sigma) * dist * exp(-rs**2))
             end if
-            fTmp = charge0(iAt0) * charge1(iAt1) * fTmp
+            fTmp(:) = charge0(iAt0) * charge1(iAt1) * fTmp
             localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp
             localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp
           end do
@@ -1341,9 +1347,9 @@ contains
         !$OMP& REDUCTION(+:localDeriv0) SCHEDULE(RUNTIME)
         do iAt0 = iAtFirst0, iAtLast0
           do iAt1 = iAtFirst1, iAtLast1
-            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            vect(:) = coord1(:,iAt1) - coord0(:,iAt0)
             dist = norm2(vect)
-            fTmp = -charge1(iAt1) / (dist**3) * vect
+            fTmp(:) = charge1(iAt1) * vect / dist**3
             localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp
           end do
         end do
@@ -1354,9 +1360,9 @@ contains
         !$OMP& REDUCTION(+:localDeriv0, localDeriv1) SCHEDULE(RUNTIME)
         do iAt0 = iAtFirst0, iAtLast0
           do iAt1 = iAtFirst1, iAtLast1
-            vect(:) = coord0(:,iAt0) - coord1(:,iAt1)
+            vect(:) = coord1(:,iAt1) - coord0(:,iAt0)
             dist = norm2(vect)
-            fTmp = -charge0(iAt0) * charge1(iAt1) / (dist**3) * vect
+            fTmp(:) = charge0(iAt0) * charge1(iAt1) * vect / dist**3
             localDeriv0(:,iAt0) = localDeriv0(:,iAt0) + fTmp
             localDeriv1(:,iAt1) = localDeriv1(:,iAt1) - fTmp
           end do
@@ -2680,8 +2686,8 @@ contains
 
 
   !> Adds the forces created by the external charges on charged atoms
-  subroutine addExternalPotGrad(this, env, atomCoords, extChargeCoords, atomCharges,&
-      & extCharges, atomGrads, extChargeGrads, tHamDeriv, extChargeBlurWidths)
+  subroutine addExternalPotGrad(this, env, atomCoords, extChargeCoords, atomCharges, extCharges,&
+      & atomGrads, extChargeGrads, tHamDeriv, extChargeBlurWidths)
 
     !> Instance
     class(TCoulomb), intent(in) :: this
@@ -2755,15 +2761,88 @@ contains
 
       if (iAt == jj) cycle
 
-      vect(:) = coord(:,iAt) - coord(:,jj)
+      vect(:) = coord(:, jj) - coord(:, iAt)
       dist = sqrt(sum(vect(:)**2))
-      fTmp = -vect(iCart) / (dist**3)
+      fTmp = vect(iCart) / (dist**3)
 
-      vprime(iAt) = vprime(iAt) + deltaQAtom(jj)*fTmp
-      vprime(jj) = vprime(jj) + deltaQAtom(iAt)*fTmp
+      vprime(iAt) = vprime(iAt) + deltaQAtom(jj) * fTmp
+      vprime(jj) = vprime(jj) + deltaQAtom(iAt) * fTmp
 
     end do
 
   end subroutine invRPrimeCluster
+
+
+  !> Calculates the -1/R**2 deriv contribution for potential from external charge iParticle
+  subroutine calcInvRPrimeExtCluster(nAtom, coord, nChargeExt, coordExt, chargeExt, iParticle,&
+      & deriv, blurWidths)
+
+    !> Number of atoms
+    integer, intent(in) :: nAtom
+
+    !> List of atomic coordinates (3, nAtom)
+    real(dp), intent(in) :: coord(:,:)
+
+    !> Number of external charges
+    integer, intent(in) :: nChargeExt
+
+    !> Coordinates of external charges (3, nChargeExt)
+    real(dp), intent(in) :: coordExt(:,:)
+
+    !> Magnitudes of external charges (nChargeExt)
+    real(dp), intent(in) :: chargeExt(:)
+
+    !> Atom or external charge to differentiate wrt to
+    integer, intent(in) :: iParticle
+
+    !> Contains the derivative of potential (3, nAtom) or (3, nChargeExt)
+    real(dp), intent(out) :: deriv(:,:)
+
+    !> Smearing of external charges
+    real(dp), intent(in), optional :: blurWidths(:)
+
+    integer :: iAtom
+    real(dp) :: dist, dist3, vect(3), fTmp(3), sigma, rs
+
+    @:ASSERT(size(coord, dim=1) == 3)
+    @:ASSERT(size(coord, dim=2) == nAtom)
+    @:ASSERT(size(coordExt, dim=1) == 3)
+    @:ASSERT(size(coordExt, dim=2) == nChargeExt)
+    @:ASSERT(size(chargeExt) == nChargeExt)
+    @:ASSERT(size(deriv, dim=1) == 3)
+    @:ASSERT(size(deriv, dim=2) == nAtom)
+    @:ASSERT(iParticle > 0 .and. iParticle <= nChargeExt)
+    if (present(blurWidths)) then
+      @:ASSERT(size(blurWidths) == nChargeExt)
+    end if
+
+    deriv(:, :) = 0.0_dp
+
+    if (present(blurWidths)) then
+
+      do iAtom = 1, nAtom
+        vect(:) = coord(:,iAtom) - coordExt(:,iParticle)
+        dist = norm2(vect)
+        fTmp(:) = vect / (dist**3)
+        if (dist < erfArgLimit_ * blurWidths(iParticle)) then
+          sigma = blurWidths(iParticle)
+          rs = dist / sigma
+          fTmp(:) = fTmp * (erfwrap(rs) - 2.0_dp / (sqrt(pi) * sigma) * dist * exp(-rs**2))
+        end if
+        deriv(:,iAtom) = chargeExt(iParticle) * fTmp
+      end do
+
+    else
+
+      do iAtom = 1, nAtom
+        vect(:) = coord(:,iAtom) - coordExt(:,iParticle)
+        dist3 = sqrt(sum(vect(:)**2)) ** 3
+        deriv(:,iAtom) = chargeExt(iParticle) * vect(:) / dist3
+      end do
+
+    end if
+
+  end subroutine calcInvRPrimeExtCluster
+
 
 end module dftbp_dftb_coulomb

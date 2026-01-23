@@ -15,16 +15,6 @@ extern "C" {
 #endif
 
 /**
- * Type containing the list of atoms and species to be passed to DFTB+.
- *
- * Used by DFTB+ as an opaque handler. Do not manipulate the content of this type directly!
- */
-typedef struct DftbPlusAtomList {
-  void *pDftbPlusAtomList;
-} DftbPlusAtomList;
-
-
-/**
  * Type containing the DFTB+ input tree.
  *
  * Used by DFTB+ as an opaque handler. Do not manipulate the content of this type directly!
@@ -68,6 +58,7 @@ typedef struct
     DftbPlusMatrixDescr::matrix_type */
 #define DFTBP_MATRIX_TYPE_HERMSYM 1
 
+
 /** Dense matrix storage for \ref DftbPlusMatrixDescr::storage_type */
 #define DFTBP_STORAGE_TYPE_DENSE_FULL 0
 /** Only lower triangle stored in column-major order (upper for
@@ -76,6 +67,16 @@ typedef struct
 /** Only upper triangle stored in column-major order (lower for
     row-major). For \ref DftbPlusMatrixDescr::storage_type */
 #define DFTBP_STORAGE_TYPE_TRIU  2
+
+
+/**
+ * Type containing the list of atoms and species to be passed to DFTB+.
+ *
+ * Used by DFTB+ as an opaque handler. Do not manipulate the content of this type directly!
+ */
+typedef struct DftbPlusAtomList {
+  void *pDftbPlusAtomList;
+} DftbPlusAtomList;
 
 
 /**
@@ -621,6 +622,36 @@ void dftbp_set_ref_charges(DftbPlus *instance, double *charges);
 
 
 /**
+ * Sets external charges.
+ *
+ * \param[inout] instance Handler of the DFTB+ instance.
+ *
+ * \param[in] nExtCharges Number of external charges.
+ *
+ * \param[in] chargeCoords Coordinates of the atoms. Shape: [nExtCharges, 3]. Unit: Bohr.
+ *
+ * \param[in] Charges Charges. Shape: [nExtCharges]. Unit: e.
+ */
+void dftbp_set_external_charge(DftbPlus *instance, const int nExtCharges, const double *chargeCoords, const double *Charges);
+
+
+/**
+ * Sets blurred external charges.
+ *
+ * \param[inout] instance Handler of the DFTB+ instance.
+ *
+ * \param[in] nExtCharges Number of external charges.
+ *
+ * \param[in] chargeCoords Coordinates of the atoms. Shape: [nExtCharges, 3]. Unit: Bohr.
+ *
+ * \param[in] Charges Charges. Shape: [nExtCharges]. Unit: e.
+ *
+ * \param[in] blurWidths Width of each charge. Shape: [nExtCharges]. Unit: Bohr.
+ */
+void dftbp_set_blurred_external_charge(DftbPlus *instance, const int nExtCharges, const double *chargeCoords, const double *charges, const double *blurWidths);
+
+
+/**
  * Queries electrostatic potential in specific points.
  *
  * \param[inout] instance Handler of the DFTB+ instance.
@@ -632,6 +663,26 @@ void dftbp_set_ref_charges(DftbPlus *instance, double *charges);
  * \param[in] locations Coordinates of requested points. Shape: [nLocations, 3]. Unit: Bohr.
  */
 void dftbp_get_elstat_potential(DftbPlus *instance, int nLocations, double *potential, const double *locations);
+
+/**
+ * Runs a calculation of derivatives of atomic gross charges with respect to coordinates of atoms.
+ *   With QM/MM, also derivatives w.r.t. coordinates of external point charges are calculated,
+ *   where only the external point charges from the list extChrgWRT are considered.
+ *
+ * \param[inout] instance Handler of the DFTB+ instance.
+ *
+ * \param[out] dQdX Derivatives w.r.t. atom coordinates.  Shape [natom, 3, natom].
+ *
+ * \param[out] dQdXext Derivatives w.r.t. external point charges.  Shape [natom, 3, nextcharge].
+ *
+ * \param[in] nExtChrgWRT Number of external point charges to calculate derivatives w.r.t.
+ *
+ * \param[in] extChrgWRT List of indexes of these external point charges.  Shape [nExtChrgWRT].
+ *
+ * Sign convention: Electron has negative charge.
+ */
+void dftbp_get_charge_derivatives_select(DftbPlus *instance, double *dQdX, double *dQdXext,
+                                         const int *nExtChrgWRT, const int *extChrgWRT);
 
 #ifdef __cplusplus
 }
