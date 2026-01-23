@@ -13,7 +13,8 @@ module dftbp_mmapi
   use dftbp_common_accuracy, only : dp
   use dftbp_common_environment, only : TEnvironment, TEnvironment_init
   use dftbp_common_file, only : closeFile, openFile, TFileDescr
-  use dftbp_common_globalenv, only : destructGlobalEnv, initGlobalEnv, instanceSafeBuild, withMpi
+  use dftbp_common_globalenv, only : destructGlobalEnv, initGlobalEnv, instanceSafeBuild, withMpi,&
+      & stdOut
   use dftbp_dftbplus_hsdhelpers, only : doPostParseJobs
   use dftbp_dftbplus_initprogram, only : TDftbPlusMain
   use dftbp_dftbplus_inputdata, only : TInputData
@@ -23,7 +24,7 @@ module dftbp_mmapi
       & getStressTensor, getTdForces, initializeTimeProp, nrOfAtoms, nrOfKPoints, nrOfLocalKS,&
       & nrOfSpin, setExternalCharges, setExternalEfield, setExternalPotential, setGeometry,&
       & setNeighbourList, setQDepExtPotProxy, setRefCharges, setTdCoordsAndVelos,&
-      & setTdElectricField, updateDataDependentOnSpeciesOrdering
+      & setTdElectricField, updateDataDependentOnSpeciesOrdering, getChargeDerivatives
   use dftbp_dftbplus_parser, only : parseHsdTree, readHsdFile, rootTag, TParserFlags
   use dftbp_dftbplus_qdepextpotgen, only : TQDepExtPotGen, TQDepExtPotGenWrapper
   use dftbp_dftbplus_qdepextpotproxy, only : TQDepExtPotProxy, TQDepExtPotProxy_init
@@ -172,6 +173,8 @@ module dftbp_mmapi
     procedure :: getNOrbitalsOnAtoms => TDftbPlus_getNOrbAtoms
     !> Get the maximum cutoff distance
     procedure :: getCutOff => TDftbPlus_getCutOff
+    !> obtain the derivatives of atomic charges w.r.t. coordinates of atoms and ext. point charges
+    procedure :: getChargeDerivatives => TDftbPlus_getChargeDerivatives
     !> Finalizer
     final :: TDftbPlus_final
   end type TDftbPlus
@@ -281,15 +284,15 @@ contains
     !> Array of species for each atom, size=nAtom
     integer, intent(in) :: species(:)
 
-    integer :: i
-    character(3) :: s
+    integer :: ii
+    character(3) :: name
 
     instance%nAtom = nAtom
 
     call init(instance%speciesNames)
-    do i=1,len(speciesNames)
-      call get(speciesNames, s, i)
-      call append(instance%speciesNames, s)
+    do ii = 1, len(speciesNames)
+      call get(speciesNames, name, ii)
+      call append(instance%speciesNames, name)
     end do
 
     allocate(instance%species(nAtom))
@@ -353,10 +356,8 @@ contains
     integer, intent(in), optional :: mpiComm
 
     !> Unit of the null device (you must open the null device and pass its unit number, if you open
-    !> multiple TDftbPlus instances within an MPI-process)
+    !! multiple TDftbPlus instances within an MPI-process)
     integer, intent(in), optional :: devNull
-
-    integer :: stdOut
 
   #:if not INSTANCE_SAFE_BUILD
     if (nInstance_ /= 0) then
@@ -367,12 +368,6 @@ contains
 
     if (present(mpiComm) .and. .not. withMpi) then
       call error("MPI Communicator supplied to initialise a serial DFTB+ instance")
-    end if
-
-    if (present(outputUnit)) then
-      stdOut = outputUnit
-    else
-      stdOut = output_unit
     end if
 
     call initGlobalEnv(outputUnit=outputUnit, mpiComm=mpiComm, devNull=devNull)
@@ -1215,6 +1210,51 @@ contains
     call updateDataDependentOnSpeciesOrdering(this%env, this%main, inputSpecies)
 
   end subroutine TDftbPlus_setSpeciesAndDependents
+
+
+  !> Derivatives of atomic charges w.r.t. coordinates of atoms, and optionally, w.r.t. coordinates
+  !! of external point charges
+  subroutine TDftbPlus_getChargeDerivatives(this, dQdX, dQdXext, wrtExtCharges)
+    use dftbp_derivs_perturb, only : responseSolverTypes, TResponse_init
+
+    !> Instance
+    class(TDftbPlus), intent(inout) :: this
+
+    !> Output: charge derivatives w.r.t. coordinates of atoms
+    real(dp), intent(out) :: dQdX(:,:,:)
+
+    !> Output: charge derivatives w.r.t. coordinates of external point charges
+    real(dp), optional, intent(out) :: dQdXext(:,:,:)
+
+    !> List of MM atoms to calculate the derivatives of charges w.r.t. coordinates of those MM atoms
+    integer, optional, intent(in) :: wrtExtCharges(:)
+
+    call this%checkInit()
+    if (this%main%tCoordsChanged) then
+      call error("Charge derivatives require an updated ground state solution first")
+    end if
+    if (this%main%tPeriodic) then
+      if (this%main%tLatticeChanged) then
+        call error("Charge derivatives require an updated ground state solution first")
+      end if
+    end if
+
+    if (.not. allocated(this%main%response)) then
+      write(stdOut, *)"Generic initialization of settings for coupled-perturbed response"
+      allocate(this%main%response)
+      call TResponse_init(this%main%response, responseSolverTypes%spectralSum, .false., 1.0E-9_dp,&
+          & 0.0_dp)
+    end if
+
+    if (this%main%tExtChrg) then
+      call getChargeDerivatives(this%env, this%main, dQdX, dQdXext, wrtExtCharges)
+    else
+      if (present(dQdXext)) then
+        call error("Charge derivatives requested for external charges, but none present")
+      end if
+    end if
+
+  end subroutine TDftbPlus_getChargeDerivatives
 
 
   !> Initialise propagators for electron and nuclei dynamics

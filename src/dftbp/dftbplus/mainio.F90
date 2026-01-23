@@ -15,8 +15,8 @@
 !> Various I/O routines for the main program.
 module dftbp_dftbplus_mainio
   use dftbp_common_accuracy, only : dp, lc, mc, sc
-  use dftbp_common_constants, only : au__Debye, au__pascal, au__V_m, Bohr__AA, Boltzmann, gfac,&
-      & Hartree__eV, quaternionName, spinName
+  use dftbp_common_constants, only : AA__Bohr, au__Debye, au__pascal, au__V_m, Bohr__AA, Boltzmann,&
+      & gfac, Hartree__eV, quaternionName, spinName
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_file, only : closeFile, openFile, TFileDescr
   use dftbp_common_globalenv, only : abortProgram, destructGlobalEnv, stdOut
@@ -83,8 +83,9 @@ module dftbp_dftbplus_mainio
   public :: writeDerivBandOut, writeHessianOut, writeBornChargesOut, writeBornDerivs
   public :: openOutputFile
   public :: writeDetailedOut1, writeDetailedOut2, writeDetailedOut2Dets, writeDetailedOut3
-  public :: writeDetailedOut4, writeDetailedOut5, writeDetailedOut6, writeDetailedOut7
-  public :: writeDetailedOut8, writeDetailedOut9, writeDetailedOut10, permitivityPrint
+  public :: writeDetailedOut4, writeDetailedOut4a, writeDetailedOut5, writeDetailedOut6
+  public :: writeDetailedOut7, writeDetailedOut8, writeDetailedOut9, writeDetailedOut10
+  public :: permitivityPrint
   public :: writeMdOut1, writeMdOut2
   public :: writeCharges
   public :: writeEsp
@@ -3625,6 +3626,57 @@ contains
     end if
 
   end subroutine writeDetailedOut4
+
+
+  !> Extra group of data for detailed.out
+  subroutine writeDetailedOut4a(fd, dQdX, dQdXext)
+
+    !> File ID
+    integer, intent(in) :: fd
+
+    !> Derivatives of charges w.r.t. atom coordinates
+    real(dp), intent(in), optional :: dQdX(:,:,:)
+
+    !> Derivatives of charges w.r.t. coordinates of ext. charges
+    real(dp), intent(in), optional :: dQdXext(:,:,:)
+
+    !> Are there derivatives w.r.t. coordinates of ext. charges?
+    logical :: tExtChg
+
+    integer :: nAtom, nExtChg, iAtom, iExtChgWRT, iAtWRT
+
+    if (present(dQdX)) then
+
+      nAtom = size(dQdX, dim=3)
+      @:ASSERT(size(dQdX, dim=2) == 3)
+      @:ASSERT(size(dQdX, dim=1) == nAtom)
+
+      write (fd, "(A)") "Derivatives of atomic Mulliken charges w.r.t. atomic coordinates"
+      do iAtWRT = 1, nAtom
+        write (fd, "(A,I5)") "   -- w.r.t. coordinates of atom ", iAtWRT
+        do iAtom = 1, nAtom
+          write (fd, "(I5,3F12.7)") iAtom, -dQdX(iAtom, :, iAtWRT) * AA__Bohr
+        end do
+      end do
+      write (fd, *)
+
+    end if
+
+    if (present(dQdXext)) then
+      nExtChg = size(dQdXext, dim=3)
+      @:ASSERT(size(dQdXext, dim=2) == 3)
+      @:ASSERT(size(dQdXext, dim=1) == nAtom)
+      write (fd, "(A)") "Derivatives of atomic charges w.r.t. coordinates of ext. charges"
+      do iExtChgWRT = 1, nExtChg
+        write (fd, "(A,I5)") "   -- w.r.t. coordinates of ext. charge ", iExtChgWRT
+        do iAtom = 1, nAtom
+          write (fd, "(I5,3F12.7)") iAtom, -dQdXext(iAtom, :, iExtChgWRT)
+        end do
+      end do
+      write (fd, *)
+    end if
+
+  end subroutine writeDetailedOut4a
 
 
   !> Fifth group of data for detailed.out
