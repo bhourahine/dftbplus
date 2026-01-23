@@ -16,7 +16,7 @@ module dftbp_dftbplus_mainapi
   use dftbp_dftb_periodic, only : setNeighbourListOrig => setNeighbourList
   use dftbp_dftbplus_initprogram, only : initElectronNumber, initReferenceCharges, TDftbPlusMain,&
       & updateReferenceShellCharges
-  use dftbp_dftbplus_main, only : processGeometry
+  use dftbp_dftbplus_main, only : processChargeDerivatives, processGeometry
   use dftbp_dftbplus_qdepextpotproxy, only : TQDepExtPotProxy
   use dftbp_io_charmanip, only : newline
   use dftbp_io_message, only : error
@@ -35,7 +35,7 @@ module dftbp_dftbplus_mainapi
   public :: initializeTimeProp, nrOfAtoms, nrOfKPoints, nrOfLocalKS, nrOfSpin, setElectronNumber
   public :: setExternalCharges, setExternalEfield, setExternalPotential, setGeometry
   public :: setNeighbourList, setQDepExtPotProxy, setRefCharges, setTdCoordsAndVelos
-  public :: setTdElectricField, updateDataDependentOnSpeciesOrdering
+  public :: setTdElectricField, updateDataDependentOnSpeciesOrdering, getChargeDerivatives
 
 contains
 
@@ -373,9 +373,9 @@ contains
 
 
   !> Sets up an external population independent electrostatic potential.
-  !>
-  !> Sign convention: charge of electron is considered to be positive.
-  !>
+  !!
+  !! Sign convention: charge of electron is considered to be positive.
+  !!
   subroutine setExternalPotential(main, atomPot, shellPot, potGrad)
 
     !> Instance
@@ -590,10 +590,10 @@ contains
 
 
   !> Check that the order of speciesName remains constant Keeping speciesNames constant avoids the
-  !> need to reset all of atomEigVal, referenceN0, speciesMass and SK parameters
-  !>
-  !> Even if nAtom is not conserved, it should be possible to know the total number of species
-  !> types, nTypes, in a simulation and hence always keep speciesName constant
+  !! need to reset all of atomEigVal, referenceN0, speciesMass and SK parameters
+  !!
+  !! Even if nAtom is not conserved, it should be possible to know the total number of species
+  !! types, nTypes, in a simulation and hence always keep speciesName constant
   function checkSpeciesNames(env, main, inputSpeciesName) result(tSpeciesNameChanged)
 
     !> dftb+ environment
@@ -699,7 +699,7 @@ contains
 
 
   !> After calculation of the ground state, this subroutine initializes the variables
-  !> and the initial step of the propagators for electron and nuclear dynamics
+  !! and the initial step of the propagators for electron and nuclear dynamics
   subroutine initializeTimeProp(env, main, dt, tdFieldThroughAPI, tdCoordsAndVelosThroughAPI)
 
     !> dftb+ environment
@@ -769,7 +769,7 @@ contains
 
 
   !> After calling initializeTimeProp, this subroutine performs one timestep of
-  !> electron and nuclear (if IonDynamics enabled) dynamics.
+  !! electron and nuclear (if IonDynamics enabled) dynamics.
   subroutine doOneTdStep(env, main, iStep, dipole, energy, atomNetCharges,&
       & coordOut, force, occ)
 
@@ -917,6 +917,80 @@ contains
   end function getCutOff
 
 
+  !> Get the derivatives of Mulliken charges for atoms w.r.t. coordinates of atoms and of external
+  !! point charges
+  subroutine getChargeDerivatives(env, main, dQdX, dQdXext, wrtExtCharges)
+
+    !> instance
+    type(TEnvironment), intent(inout) :: env
+
+    !> Instance
+    type(TDftbPlusMain), intent(inout) :: main
+
+    !> Output: charge derivatives w.r.t. coordinates of atoms
+    real(dp), intent(out) :: dQdX(:,:,:)
+
+    !> Output: charge derivatives w.r.t. coordinates of external point charges
+    real(dp), optional, intent(out) :: dQdXext(:,:,:)
+
+    !> List of MM atoms to calculate the derivatives of charges w.r.t. coordinates of those MM atoms
+    integer, optional, intent(in) :: wrtExtCharges(:)
+
+    integer :: iAtomWRT, iExtChgWRT, iAtom
+    !> Status of operation
+    type(TStatus) :: errStatus
+
+    @:ASSERT(size(dQdX, dim=1) == 3)
+    @:ASSERT(size(dQdX, dim=2) == main%nAtom)
+    @:ASSERT(size(dQdX, dim=3) == main%nAtom)
+    @:ASSERT(present(dQdXext) .eqv. present(wrtExtCharges))
+
+!    if (main%nExtChrg > 0) then
+!      @:ASSERT(size(dQdXext, dim=1) == 3)
+!      if (present(nExtChrgWRT)) then
+!        @:ASSERT(size(dQdXext, dim=2) == nExtChrgWRT)
+!        @:ASSERT(size(wrtExtCharges) == nExtChrgWRT)
+!      else
+!        @:ASSERT(size(dQdXext, dim=2) == main%nExtChrg)
+!      end if
+!      @:ASSERT(size(dQdXext, dim=3) == main%nAtom)
+!    end if
+!    ! run the calculation
+!    if (present(nExtChrgWRT)) then
+!      call processChargeDerivatives(env, main, errStatus, wrtExtCharges)
+!    else
+!      call processChargeDerivatives(env, main, errStatus)
+!    end if
+!    if (errStatus%hasError()) then
+!      call error(errStatus%message)
+!    end if
+!
+!    ! dQdX(:,:,:) = - main%dQdX(:,:,:)
+!    do iAtomWRT = 1, main%nAtom
+!      do iAtom = 1, main%nAtom
+!        dQdX(:, iAtomWRT, iAtom) = - main%dQdX(iAtom, :, iAtomWRT)
+!      end do
+!    end do
+!
+!    if (present(dQdXext) .and. main%nExtChrg > 0) then
+!    ! dQdXext(:,:,:) = - main%dQdXext(:,:,:)
+!      if (present(nExtChrgWRT)) then
+!        do iExtChgWRT = 1, nExtChrgWRT
+!          do iAtom = 1, main%nAtom
+!            dQdXext(:, iExtChgWRT, iAtom) = - main%dQdXext(iAtom, :, iExtChgWRT)
+!          end do
+!        end do
+!      else
+!        do iExtChgWRT = 1, main%nExtChrg
+!          do iAtom = 1, main%nAtom
+!            dQdXext(:, iExtChgWRT, iAtom) = - main%dQdXext(iAtom, :, iExtChgWRT)
+!          end do
+!        end do
+!      end if
+!    end if
+
+  end subroutine getChargeDerivatives
+
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!!  Private routines
@@ -974,10 +1048,10 @@ contains
 
 
   !> Reassign Hamiltonian, overlap and eigenvector arrays
-  !
-  ! If nAtom is constant and one is running without BLACS, this should not be required
-  ! hence preprocessed out
-  ! May require extending if ((nAtom not constant) and (not BLACS))
+  !!
+  !! If nAtom is constant and one is running without BLACS, this should not be required
+  !! hence preprocessed out.
+  !! May require extending if ((nAtom not constant) and (not BLACS))
   subroutine reallocateHSArrays(env, main, denseDesc, HSqrCplx, SSqrCplx, eigVecsCplx,&
       & HSqrReal, SSqrReal, eigVecsReal)
 

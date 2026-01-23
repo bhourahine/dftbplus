@@ -74,11 +74,11 @@ module dftbp_dftbplus_main
       & writeBornChargesOut, writeBornDerivs, writeCharges, writeCosmoFile, writeCplxEigVecs,&
       & writeCurrentGeometry, writeExtendedGeometry, writeDerivBandOut, writeDetailedOut1,&
       & writeDetailedOut10, writeDetailedOut2, writeDetailedOut2dets, writeDetailedOut3,&
-      & writeDetailedOut4, writeDetailedOut5, writeDetailedOut6, writeDetailedOut7,&
-      & writeDetailedOut8, writeDetailedOut9, writeDetailedXml, writeEigenVectors, writeEsp,&
-      & writeFinalDriverstatus, writeHessianout, writehsandstop, writeMdOut1, writeMdOut2,&
-      & writeProjectedEigenvectors, writeRealEigvecs, writeReksDetailedOut1, writeResultsTag,&
-      & writeExcitedStateForces
+      & writeDetailedOut4, writeDetailedOut4a, writeDetailedOut5, writeDetailedOut6,&
+      & writeDetailedOut7, writeDetailedOut8, writeDetailedOut9, writeDetailedXml,&
+      & writeEigenVectors, writeEsp, writeFinalDriverstatus, writeHessianout, writehsandstop,&
+      & writeMdOut1, writeMdOut2, writeProjectedEigenvectors, writeRealEigvecs,&
+      & writeReksDetailedOut1, writeResultsTag, writeExcitedStateForces
   use dftbp_dftbplus_outputfiles, only : autotestTag, bandOut, bornChargesOut, bornDerivativesOut,&
       & derivEBandOut, fCharges, fShifts, fStopDriver, fStopScc, hessianOut, mdOut, resultsTag,&
       & userOut, excFrcOut
@@ -146,8 +146,8 @@ module dftbp_dftbplus_main
   implicit none
 
   private
-  public :: runDftbPlus
-  public :: processGeometry
+  public :: processChargeDerivatives, processGeometry, runDftbPlus
+
   !> Should further output be appended to detailed.out?
   logical, parameter :: tAppendDetailedOut = .false.
 
@@ -284,6 +284,17 @@ contains
           & this%totalLatDeriv, this%extLatDerivs, this%normOrigLatVec, this%tLatOptFixAng,&
           & this%tLatOptFixLen, this%tLatOptIsotropic, constrLatDerivs)
 
+      if ((this%isAtomCoordPerturb .or. this%isExtChargeDeriv) .and. this%doPerturbEachGeom) then
+        call env%globalTimer%startTimer(globalTimers%perturb)
+
+        call processChargeDerivatives(env, this, errStatus)
+        if (errStatus%hasError()) then
+          call error(errStatus%message)
+        end if
+
+        call env%globalTimer%stopTimer(globalTimers%perturb)
+      end if
+
       if (tExitGeoOpt) then
         exit geoOpt
       end if
@@ -317,6 +328,8 @@ contains
 
       if (this%doPerturbEachGeom.and.allocated(this%derivDriver)) then
 
+        call env%globalTimer%startTimer(globalTimers%perturb)
+
         if (this%isEResp) then
           call this%response%wrtEField(env, this%parallelKS, this%filling, this%eigen,&
               & this%eigVecsReal, this%eigvecsCplx, this%ints%hamiltonian, this%ints%overlap,&
@@ -334,6 +347,9 @@ contains
           end if
           call polAdd(this%derivDriver, this%polarisability(:,:,1))
         end if
+
+        call env%globalTimer%stopTimer(globalTimers%perturb)
+
       end if
 
       if (this%tForces) then
@@ -495,6 +511,8 @@ contains
 
     if (this%doPerturbation .and. .not. this%doPerturbEachGeom) then
 
+      call env%globalTimer%startTimer(globalTimers%perturb)
+
       if (this%isEResp) then
         call this%response%wrtEField(env, this%parallelKS, this%filling, this%eigen,&
             & this%eigVecsReal, this%eigvecsCplx, this%ints%hamiltonian, this%ints%overlap,&
@@ -540,24 +558,45 @@ contains
         end if
       end if
 
-      if (this%isAtomCoordPerturb) then
+      if ((this%isAtomCoordPerturb.or.this%isExtChargeDeriv) .and. .not.this%doPerturbEachGeom) then
 
-        call this%response%dxAtom(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
-            & this%eigvecsCplx, this%rhoPrim, this%potential, this%qOutput, this%q0,&
-            & this%ints%hamiltonian, this%ints%overlap, this%skHamCont, this%skOverCont,&
-            & this%nonSccDeriv, this%orb, this%nAtom, this%species, this%speciesName,&
-            & this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
-            & this%img2CentCell, this%coord, this%scc, this%maxPerturbIter, this%perturbSccTol,&
-            & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
-            & this%tFixEf, this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu,&
-            & this%onSiteElements, this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam,&
-            & this%chrgMixerReal, this%tWriteBandDat, this%taggedWriter, this%tWriteAutotest,&
-            & autotestTag, this%tWriteResultsTag, resultsTag, this%tWriteDetailedOut,&
-            & this%fdDetailedOut%unit, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
-            & this%tPeriodic, this%tHelical, this%tMulliken, errStatus)
+        call processChargeDerivatives(env, this, errStatus)!, nExtChrgWRT, extChrgWRT)
+
         if (errStatus%hasError()) then
           call error(errStatus%message)
         end if
+
+      end if
+
+      call env%globalTimer%stopTimer(globalTimers%perturb)
+
+      !if (this%tWriteDetailedOut) then
+      !  call writeDetailedOut4a(this%fdDetailedOut%unit, this%dQdX, this%dQdXext)
+      !end if
+
+      if (this%nExtChrg > 0 .and. this%isExtChargeDeriv) then
+        block
+          integer :: iExt
+          integer, allocatable :: extChrgWrt(:), wrtCombinedCharges(:,:), nCombinedCharges(:)
+          real(dp), allocatable :: freq(:), dqdxExt(:,:,:), jacobian(:,:,:)
+          allocate(extChrgWrt(this%nExtChrg))
+          allocate(freq(1), source=0.0_dp)
+          do iExt = 1, this%nExtChrg
+            extChrgWrt(iExt) = iExt
+          end do
+          call this%response%wrtExtCharges(env, this%parallelKS, this%tWriteAutotest, autotestTag,&
+              & this%tWriteResultsTag, resultsTag, this%taggedWriter, this%tWriteBandDat,&
+              & this%fdDetailedOut, this%filling, this%eigen, this%eigVecsReal, this%eigvecsCplx,&
+              & this%ints%hamiltonian, this%ints%overlap, this%orb, this%nAtom, this%species,&
+              & this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
+              & this%img2CentCell, this%scc, this%maxPerturbIter, this%perturbSccTol,&
+              & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
+              & this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu, this%onSiteElements,&
+              & this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam, this%chrgMixerReal,&
+              & this%tPeriodic, this%coord, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
+              & this%nEFermi, extChrgWrt, nCombinedCharges, wrtCombinedCharges, jacobian, dqdxExt,&
+              & errStatus, freq, this%tHelical)
+        end block
       end if
 
     end if
@@ -1873,6 +1912,104 @@ contains
     end if
 
   end subroutine processGeometry
+
+
+  !> Process perturbation derivatives with respect current geometry
+  subroutine processChargeDerivatives(env, this, errStatus, nExtChrgWRT, extChrgWRT)
+
+    !> Environment settings
+    type(TEnvironment), intent(inout) :: env
+
+    !> Global variables
+    type(TDftbPlusMain), intent(inout) :: this
+
+    !> Status of operation
+    type(TStatus), intent(out) :: errStatus
+
+    !> Number of MM atoms for whith the derivatives of atomic charges w.r.t. coordinates of those MM
+    !! atoms shall be calculated
+    integer, intent(in), optional :: nExtChrgWRT
+
+    !> list of MM atoms for whith the derivatives of atomic charges w.r.t. coordinates of those MM
+    !! atoms shall be calculated
+    integer, intent(in), optional :: extChrgWRT(:)
+
+    integer :: iExtChrgWRT
+    logical :: doPsidxQMMM
+    integer, allocatable :: atomWrt(:), nCombinedCharges(:), wrtCombinedCharges(:,:)
+    real(dp), allocatable :: jacobian(:,:,:)
+
+    if (present(nExtChrgWRT)) then
+      write (stdOut,*) "nExtChrgWRT is present and set to ", nExtChrgWRT
+    else
+      write (stdOut,*) "nExtChrgWRT is not present"
+    end if
+
+    if (this%isAtomCoordPerturb) then
+      if (allocated(this%dqdX)) then
+        deallocate(this%dqdX)
+      end if
+      allocate(this%dqdX(this%nAtom, 3, this%nAtom))
+      call env%globalTimer%startTimer(globalTimers%perturb_dx)
+      call this%response%dxAtom(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
+          & this%eigvecsCplx, this%rhoPrim, this%potential, this%qOutput, this%q0,&
+          & this%ints%hamiltonian, this%ints%overlap, this%skHamCont, this%skOverCont,&
+          & this%nonSccDeriv, this%orb, this%nAtom, this%species, this%speciesName,&
+          & this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
+          & this%img2CentCell, this%coord, this%scc, this%maxPerturbIter, this%perturbSccTol,&
+          & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
+          & this%tFixEf, this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu,&
+          & this%onSiteElements, this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam,&
+          & this%chrgMixerReal, this%tWriteBandDat, this%taggedWriter, this%tWriteAutotest,&
+          & autotestTag, this%tWriteResultsTag, resultsTag, this%tWriteDetailedOut,&
+          & this%fdDetailedOut%unit, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
+          & this%tPeriodic, this%tMulliken, atomWrt, nCombinedCharges, wrtCombinedCharges,&
+          & jacobian, errStatus, this%tHelical, this%dQdx)
+      @:PROPAGATE_ERROR(errStatus)
+      call env%globalTimer%stopTimer(globalTimers%perturb_dx)
+    end if
+
+    doPsidxQMMM = .false.
+    if (this%nExtChrg > 0) then
+      if (present(nExtChrgWRT)) then
+        if (nExtChrgWRT > 0) then
+          doPsidxQMMM = .true.
+        end if
+      else
+        doPsidxQMMM = .true.
+      end if
+    end if
+
+    if (doPsidxQMMM) then
+      !call env%globalTimer%startTimer(globalTimers%perturbMM)
+      if (allocated(this%dQdXext)) then
+        deallocate(this%dQdXext)
+      end if
+      if (allocated(this%extChrgWRT)) then
+        deallocate(this%extChrgWRT)
+      end if
+
+      if (present(nExtChrgWRT)) then
+        ! copy the list of MM atoms (to calculate derivatives with respect to) to main structure
+        this%nExtChrgWRT = nExtChrgWRT
+        allocate(this%extChrgWRT(this%nExtChrgWRT))
+        ! change from C to Fortran indexing
+        this%extChrgWRT(:) = extChrgWRT(:) + 1
+      else
+        ! create the main structure (list of MM atoms to calculate derivatives with respect to)
+        ! containing all of the MM atoms (DEFAULT if the list is not provided)
+        this%nExtChrgWRT = this%nExtChrg
+        allocate(this%extChrgWRT(this%nExtChrgWRT))
+        do iExtChrgWRT = 1, this%nExtChrgWRT
+          this%extChrgWRT(iExtChrgWRT) = iExtChrgWRT
+        end do
+      end if
+
+      allocate(this%dQdXext(this%nAtom, 3, this%nExtChrgWRT))
+
+    end if
+
+  end subroutine processChargeDerivatives
 
 
   !> Process geometry for constrains

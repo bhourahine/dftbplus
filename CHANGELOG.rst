@@ -8,16 +8,21 @@ Notable project changes since release 1.3.1 (2017-02-22).
 Unreleased
 ==========
 
+
 Added
 -----
 
 - Option (FromParameters) to automatically set spin-constants for xTB
   models
 
+- DFTB3 coupled-perturbed atom derivatives
+
+- Derivatives with respect to external charges, controlled both via
+  input and API
+
 
 Changed
 -------
-
 
 
 Fixed
