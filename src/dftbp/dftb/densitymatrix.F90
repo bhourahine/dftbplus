@@ -17,7 +17,7 @@ module dftbp_dftb_densitymatrix
   use dftbp_common_constants, only : imag, pi
   use dftbp_common_status, only : TStatus
   use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
-  use dftbp_math_blasroutines, only : herk
+  use dftbp_math_blasroutines, only : herk, her2k, gemm
   use dftbp_type_commontypes, only : TParallelKS
 #:if WITH_SCALAPACK
   use dftbp_extlibs_scalapackfx, only : blacsgrid, blocklist, pblasfx_pgemm, pblasfx_ptranc, size
@@ -387,75 +387,52 @@ contains
 
 
   !> Make a regular density matrix for the real wave-function case
-  !> Note: In order to save memory, the eigenvectors (which should be intent(in) parameters) are
-  !> overwritten and then restored again
+!  !! Note: In order to save memory, the eigenvectors (which should be intent(in) parameters) are
+!  !! overwritten and then restored again
   subroutine fullDensityMatrix_real(dm, eigenvecs, filling)
 
     !> The resulting nOrb*nOrb density matrix
     real(dp), intent(out) :: dm(:,:)
 
     !> The eigenvectors of the system
-    real(dp), intent(inout) :: eigenvecs(:,:)
+    real(dp), intent(in) :: eigenvecs(:,:)
 
     !> The occupation numbers of the orbitals
     real(dp), intent(in) :: filling(:)
 
     integer :: ii, nLevels
-    real(dp) :: shift
+    real(dp), allocatable :: work(:,:)
 
     @:ASSERT(all(shape(eigenvecs) == shape(dm)))
     @:ASSERT(size(eigenvecs,dim=1) == size(eigenvecs,dim=2))
     @:ASSERT(size(eigenvecs,dim=1) == size(filling))
 
     dm(:,:) = 0.0_dp
+
     do ii =  size(filling), 1, -1
       nLevels = ii
       if (abs(filling(ii)) >= epsilon(1.0_dp)) then
         exit
       end if
     end do
-    shift = minval(filling(1:nLevels))
-    if (shift > epsilon(1.0_dp)) then
-      ! all fillings are definitely positive
 
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = sqrt(filling(ii)) * eigenvecs(:,ii)
-      end do
-      !$OMP  END PARALLEL DO
+    allocate(work(size(eigenvecs,dim=1), nLevels), source = 0.0_dp)
+    work(:,:) = 0.0_dp
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
+    do ii = 1, nLevels
+      work(:,ii) = filling(ii) * eigenvecs(:,ii)
+    end do
+    !$OMP  END PARALLEL DO
 
-      call herk(dm, eigenvecs(:,1:nLevels))
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = eigenvecs(:,ii) / sqrt(filling(ii))
-      end do
-      !$OMP  END PARALLEL DO
+    !call her2k(dm, eigenvecs, work, alpha=0.5_dp)
+    call gemm(dm, eigenvecs(:,:nLevels), work, transB='T')
 
-    else
-
-      ! shift matrix so that filling operations are positive
-      call herk(dm, eigenvecs(:,1:nLevels))
-      shift = shift - arbitraryConstant
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = sqrt(filling(ii)-shift) * eigenvecs(:,ii)
-      end do
-      !$OMP  END PARALLEL DO
-
-      call herk(dm, eigenvecs(:,1:nLevels), beta=shift)
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = eigenvecs(:,ii) / sqrt(filling(ii)-shift)
-      end do
-      !$OMP  END PARALLEL DO
-
-    end if
   end subroutine fullDensityMatrix_real
 
 
   !> Make a regular density matrix for the complex wave-function case
-  !> Note: in order to save memory, the eigenvectors (which should be intent(in) parameters) are
-  !> overwritten and then restored again
+  !! Note: in order to save memory, the eigenvectors (which should be intent(in) parameters) are
+  !! overwritten and then restored again
   subroutine fullDensityMatrix_cmplx(dm, eigenvecs, filling)
 
     !> The resulting nOrb*nOrb density matrix
@@ -521,8 +498,8 @@ contains
 
 
   !> Make an energy weighted density matrix for the real wave-function case
-  !> Note: in order to save memory, the eigenvectors (which should be intent(in) parameters) are
-  !> overwritten and then restored again
+  !! Note: in order to save memory, the eigenvectors (which should be intent(in) parameters) are
+  !! overwritten and then restored again
   subroutine fullEnergyDensityMatrix_real(dm, eigenvecs, filling, eigen)
 
     !> The resulting nOrb*nOrb density matrix
@@ -538,8 +515,8 @@ contains
     real(dp), intent(in) :: eigen(:)
 
     integer :: ii, nLevels
-    real(dp) :: shift
-    real(dp) :: fillProduct(size(filling))
+    real(dp), allocatable :: work(:,:)
+    real(dp) :: products(size(filling))
 
     @:ASSERT(all(shape(eigenvecs) == shape(dm)))
     @:ASSERT(size(eigenvecs,dim=1) == size(eigenvecs,dim=2))
@@ -547,57 +524,31 @@ contains
     @:ASSERT(size(eigen) == size(filling))
 
     dm(:,:) = 0.0_dp
+    products(:) = filling * eigen
     do ii =  size(filling), 1, -1
       nLevels = ii
-      if (abs(filling(ii)) >= epsilon(1.0_dp)) then
+      if (abs(products(ii)) >= epsilon(1.0_dp)) then
         exit
       end if
     end do
-    fillProduct(1:nLevels) = filling(1:nLevels) * eigen(1:nLevels)
-    if ((minval(fillProduct(1:nLevels)) < 0.0_dp&
-        & .eqv. maxval(fillProduct(1:nLevels)) < 0.0_dp)&
-        & .and. abs(minval(fillProduct(1:nLevels))) > epsilon(1.0_dp)&
-        & .and. abs(maxval(fillProduct(1:nLevels))) > epsilon(1.0_dp)) then
-      ! all fillings the same sign, and fairly large
 
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = sqrt(abs(fillProduct(ii)))*eigenvecs(:,ii)
-      end do
-      !$OMP  END PARALLEL DO
+    allocate(work(size(eigenvecs,dim=1), nLevels), source = 0.0_dp)
+    work(:,:) = 0.0_dp
+    !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
+    do ii = 1, nLevels
+      work(:,ii) = products(ii) * eigenvecs(:,ii)
+    end do
+    !$OMP  END PARALLEL DO
 
-      call herk(dm, eigenvecs(:,1:nLevels), alpha=sign(1.0_dp, maxval(fillProduct(1:nLevels))))
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = eigenvecs(:,ii) / sqrt(abs(fillProduct(ii)))
-      end do
-      !$OMP  END PARALLEL DO
+    !call her2k(dm, eigenvecs, work, alpha=0.5_dp)
+    call gemm(dm, eigenvecs(:,:nLevels), work, transB='T')
 
-    else
-
-      ! shift matrix so that filling operations are positive
-      call herk(dm, eigenvecs(:,1:nLevels))
-      shift = minval(fillProduct(1:nLevels)) - arbitraryConstant
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = sqrt(fillProduct(ii)-shift) * eigenvecs(:,ii)
-      end do
-      !$OMP  END PARALLEL DO
-
-      call herk(dm, eigenvecs(:,1:nLevels), beta=shift)
-      !$OMP PARALLEL DO DEFAULT(SHARED) PRIVATE(ii) SCHEDULE(RUNTIME)
-      do ii = 1, nLevels
-        eigenvecs(:,ii) = eigenvecs(:,ii) / sqrt(fillProduct(ii)-shift)
-      end do
-      !$OMP  END PARALLEL DO
-
-    end if
   end subroutine fullEnergyDensityMatrix_real
 
 
   !> Make an energy weighted density matrix for the complex wave-function case
-  !> Note: in order to save memory, the eigenvectors (which should be intent(in) parameters) are
-  !> overwritten and then restored again
+  !! Note: in order to save memory, the eigenvectors (which should be intent(in) parameters) are
+  !! overwritten and then restored again
   subroutine fullEnergyDensityMatrix_cmplx(dm, eigenvecs, filling, eigen)
 
     !> The resulting nOrb*nOrb density matrix
