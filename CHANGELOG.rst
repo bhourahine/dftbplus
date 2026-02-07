@@ -14,6 +14,9 @@ Added
 
 - DFTB3 coupled-perturbed atom derivatives
 
+- Derivatives with respect to external charges, controlled both via
+  input and API
+
 
 Changed
 -------
