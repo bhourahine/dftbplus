@@ -578,7 +578,7 @@ contains
         block
           integer :: iExt
           integer, allocatable :: extChrgWrt(:)
-          real(dp), allocatable :: freq(:)
+          real(dp), allocatable :: freq(:), dqdxExt(:,:,:)
           allocate(extChrgWrt(this%nExtChrg))
           allocate(freq(1), source=0.0_dp)
           do iExt = 1, this%nExtChrg
@@ -593,8 +593,8 @@ contains
               & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
               & this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu, this%onSiteElements,&
               & this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam, this%chrgMixerReal,&
-              & this%kPoint, this%kWeight, this%iCellVec, this%cellVec, this%neFermi, extChrgWrt,&
-              & errStatus, freq, this%tHelical, this%coord)
+              & this%tPeriodic, this%coord, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
+              & this%nEFermi, extChrgWrt, dqdxExt, errStatus, freq, this%tHelical)
         end block
       end if
 

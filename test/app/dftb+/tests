@@ -291,6 +291,10 @@ derivatives/C2H4_dx                    #? not WITH_MPI
 derivatives/C2H4_scc_dx                #? not WITH_MPI
 derivatives/C2H4_3rd_dx                #? not WITH_MPI
 
+derivatives/H2Oext                     #? MPI_PROCS <= 1
+derivatives/H2Oext_gamma               #? MPI_PROCS <= 1
+derivatives/H2Oext_kpts                #? MPI_PROCS <= 1
+
 legacy/Si2_oldSKinterp                 #? MPI_PROCS <= 1
 legacy/Si2_polyRep                     #? MPI_PROCS <= 1
 legacy/file_access                     #? MPI_PROCS <= 1

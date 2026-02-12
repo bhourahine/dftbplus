@@ -105,7 +105,7 @@ module dftbp_derivs_perturb
   !> Namespace for possible perturbation solver methods
   type :: TPerturbSolverTypesEnum
 
-    ! coupled perturbed solved with sum over unperturbed spectra
+    !> Coupled perturbed equations solved by sum over unperturbed spectra
     integer :: spectralSum = 1
 
   end type TPerturbSolverTypesEnum
@@ -890,10 +890,9 @@ contains
       & eigvals, eigVecsReal, eigVecsCplx, ham, over, orb, nAtom, species, neighbourList,&
       & nNeighbourSK, denseDesc, iSparseStart, img2CentCell, sccCalc, maxSccIter, sccTol,&
       & nMixElements, nIneqMixElements, iEqOrbitals, tempElec, Ef, spinW, thirdOrd, dftbU,&
-      & iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc, nNeighbourCam, chrgMixerReal, kPoint,&
-      & kWeight, iCellVec, cellVec, nEFermi,&
-      !& dQdXext,&
-      & extChrgWRT, errStatus, omega, isHelical, coord)
+      & iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc, nNeighbourCam, chrgMixerReal, isPeriodic,&
+      & coord, kPoint, kWeight, iCellVec, cellVec, nEFermi, wrtExternalCharges, dqdxExt, errStatus,&
+      & omega, isHelical)
 
     !> Instance
     class(TResponse), intent(in) :: this
@@ -1019,6 +1018,12 @@ contains
     !> Charge mixing object
     class(TMixerReal), intent(inout), allocatable :: chrgMixerReal
 
+    !> Is this a periodic geometry
+    logical, intent(in) :: isPeriodic
+
+    !> Coordinates of all atoms including images
+    real(dp), intent(in) :: coord(:,:)
+
     !> The k-points
     real(dp), intent(in) :: kPoint(:,:)
 
@@ -1040,18 +1045,14 @@ contains
     !> Driving frequencies (including potentially 0 for static)
     real(dp), intent(in) :: omega(:)
 
-    !!> Output, charge derivatives
-    !real(dp), allocatable, intent(inout) :: dQdXext(:,:,:)
+    !> List of which external charge positions (MM atoms) the DFTB charges are to be differentiated
+    integer, intent(in), allocatable :: wrtExternalCharges(:)
 
-    !> list of MM atoms for which the derivatives of atomic charges w.r.t. coordinates of those MM
-    !! atoms shall be calculated
-    integer, intent(in), allocatable :: extChrgWRT(:)
+    !> Output, charge derivatives
+    real(dp), allocatable, intent(inout), target :: dqdxExt(:,:,:)
 
     !> Is the geometry helical
     logical, intent(in), optional :: isHelical
-
-    !> Coordinates of all atoms including images
-    real(dp), intent(in), optional :: coord(:,:)
 
     integer :: iS, iK, iExtChrgWRT, nExtChrgWRT, iCart, jAt
     integer :: nSpin, nKpts, nOrbs, nIndepHam
@@ -1079,7 +1080,7 @@ contains
     real(dp), allocatable :: dPsiReal(:,:,:)
     complex(dp), allocatable :: dPsiCmplx(:,:,:,:)
 
-    real(dp), allocatable :: dqNetAtom(:), dqNetAtomTmp(:,:,:)
+    real(dp), allocatable :: dqNetAtom(:)
 
     ! used for hybrid functional contributions, note this stays in the up/down representation
     ! throughout if spin polarised
@@ -1089,19 +1090,30 @@ contains
     !> For transformation in the  case of degeneracies
     type(TRotateDegen), allocatable :: degenTransform(:)
 
-    real(dp), allocatable :: dEf(:), dqOut(:,:,:), dqOutTmp(:,:,:,:,:)
+    real(dp), allocatable :: dEf(:), dqOut(:,:,:)
 
     integer :: nIter, iOmega
     character(mc) :: atLabel
 
     logical :: isSccRequired
 
-    type(TFileDescr) :: fd
+    integer :: fdResults
+    real(dp), allocatable, target :: dqdxExtWork(:,:,:)
+    real(dp), pointer :: pdqdxExt(:,:,:) => null()
 
     ! QM/MM specific
     ! coordinates and charges of MM atoms
     integer :: nExtCharge
     real(dp), allocatable :: extCoord(:,:), extCharge(:), dgammaQMMM(:,:), blurWidths(:)
+
+    if (isAutotestWritten .or. isTagResultsWritten) then
+      if (allocated(dqdxExt)) then
+        pdqdxExt => dqdxExt
+      else
+        allocate(dqdxExtWork(nAtom, 3, size(wrtExternalCharges)))
+        pdqdxExt => dqdxExtWork
+      end if
+    end if
 
     ! obtain the external charge coordinates and values
     call sccCalc%getExternalCharges(nExtCharge, extCoord, extCharge, blurWidths=blurWidths)
@@ -1111,12 +1123,13 @@ contains
       return
     end if
     nExtChrgWRT = 0
-    if (allocated(extChrgWRT)) nExtChrgWRT = size(extChrgWRT)
+    if (allocated(wrtExternalCharges)) nExtChrgWRT = size(wrtExternalCharges)
     if (nExtChrgWRT < 1) then
       write (stdOut,*) "No requested derivatives wrt to external charges, nothing to do in&
           & wrtExtCharges."
       return
     end if
+    @:ASSERT(allocated(wrtExternalCharges) .or. .not.allocated(dqdxExt))
     tSccCalc = allocated(sccCalc)
     if (.not. tSccCalc) then
       write (stdOut,*) "SCC currently required for external charge derivatives"
@@ -1136,15 +1149,14 @@ contains
         & dRhoOut, dRhoIn, dRhoInSqr, dRhoOutSqr, dPotential, orb, nAtom, tMetallic, neFermi,&
         & eigvals, tempElec, Ef, kWeight)
 
+  #:block DEBUG_CODE
+    if (allocated(dqdxExt)) then
+      @:ASSERT(all([nAtom, 3, size(wrtExternalCharges)] == shape(dqdxExt)))
+    end if
+  #:endblock
     allocate(dqOut(orb%mOrb, nAtom, nSpin))
     allocate(dqNetAtom(nAtom))
     allocate(dEi(nOrbs, nKpts, nSpin))
-    if (isAutotestWritten.or.isTagResultsWritten) then
-      allocate(dqOutTmp(orb%mOrb, nAtom, nSpin, nAtom, size(omega)))
-      allocate(dqNetAtomTmp(nAtom, nAtom, size(omega)))
-      dqOutTmp(:,:,:,:,:) = 0.0_dp
-      dqNetAtomTmp(:,:,:) = 0.0_dp
-    end if
     if (any(tMetallic)) then
       allocate(dEf(nIndepHam))
     end if
@@ -1163,10 +1175,19 @@ contains
 
     lpExtChrg: do iExtChrgWRT = 1, nExtChrgWRT
 
-      write(stdOut,"(A,I0)")'Derivative with respect to external charge ', extChrgWRT(iExtChrgWRT)
+      write(stdOut,"(A,I0)")'Derivative with respect to external charge ',&
+          & wrtExternalCharges(iExtChrgWRT)
 
-      call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
-          & extChrgWRT(iExtChrgWRT), dgammaQMMM, blurWidths=blurWidths)
+      if (isPeriodic) then
+
+        call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
+            & sccCalc%coulomb%rLatPoints_, sccCalc%coulomb%gLatPoints_, sccCalc%coulomb%alpha,&
+            & sccCalc%coulomb%volume_, wrtExternalCharges(iExtChrgWRT), dgammaQMMM,&
+            & blurWidths=blurWidths)
+      else
+        call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
+            & wrtExternalCharges(iExtChrgWRT), dgammaQMMM, blurWidths=blurWidths)
+      end if
 
       dqOut(:,:,:) = 0.0_dp
       dqIn(:,:,:) = 0.0_dp
@@ -1178,7 +1199,8 @@ contains
       ! perturbation direction
       lpCart: do iCart = 1, 3
 
-        write(stdOut,"(1X,A,I0,A,A)")'d Charge ', extChrgWRT(iExtChrgWRT), ' / d', direction(iCart)
+        write(stdOut,"(1X,A,I0,A,A)")'d Charge ', wrtExternalCharges(iExtChrgWRT), ' / d',&
+            & direction(iCart)
 
         dPotential%extAtom(:,:) = 0.0_dp
         dPotential%extAtom(:,1) = dgammaQMMM(iCart, :)
@@ -1212,11 +1234,26 @@ contains
             write(stdOut,*)jAt, -sum(dqOut(:,jAt,1)), -dqNetAtom(jAt)
           end do
 
+          if (associated(pdqdxExt)) then
+            pdqdxExt(:, iCart, iExtChrgWRT) = -sum(dqOut(:, :, 1), dim=1)
+          end if
+
         end do lpOmega
 
       end do lpCart
 
     end do lpExtChrg
+
+    if (isAutotestWritten) then
+      open(newunit=fdResults, file=autoTestTagFile, position="append")
+      call taggedWriter%write(fdResults, tagLabels%dqdxExt, pdqdxExt)
+      close(fdResults)
+    end if
+    if (isTagResultsWritten) then
+      open(newunit=fdResults, file=resultsTagFile, position="append")
+      call taggedWriter%write(fdResults, tagLabels%dqdxExt, pdqdxExt)
+      close(fdResults)
+    end if
 
   end subroutine wrtExtCharges
 
@@ -1229,7 +1266,7 @@ contains
       & tFixEf, spinW, thirdOrd, DftbU, iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc,&
       & nNeighbourLC, chrgMixerReal, isBandWritten, taggedWriter, isAutotestWritten,&
       & autoTestTagFile, isTagResultsWritten, taggedResultsFile, tWriteDetailedOut, fdDetailedOut,&
-      & kPoint, kWeight, iCellVec, cellVec, tPeriodic, isHelical, tMulliken, dqdx, errStatus)
+      & kPoint, kWeight, iCellVec, cellVec, isPeriodic, isHelical, tMulliken, dqdx, errStatus)
 
     !> Instance
     class(TResponse), intent(in) :: this
@@ -1402,7 +1439,7 @@ contains
     integer, intent(in) :: iCellVec(:)
 
     !> Is this a periodic geometry
-    logical, intent(in) :: tPeriodic
+    logical, intent(in) :: isPeriodic
 
     !> Is the geometry helical
     logical, intent(in), optional :: isHelical
@@ -1467,7 +1504,7 @@ contains
     real(dp), allocatable :: dPsiReal(:,:,:)
     complex(dp), allocatable :: dPsiCmplx(:,:,:,:)
 
-    integer :: fdResults, fdResponses
+    integer :: fdResults
 
     ! used for hybrid functional contributions, note this stays in the up/down representation
     ! throughout if spin polarised
