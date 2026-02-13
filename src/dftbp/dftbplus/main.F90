@@ -570,9 +570,9 @@ contains
 
       call env%globalTimer%stopTimer(globalTimers%perturb)
 
-      if (this%tWriteDetailedOut) then
-        call writeDetailedOut4a(this%fdDetailedOut%unit, this%dQdX, this%dQdXext)
-      end if
+      !if (this%tWriteDetailedOut) then
+      !  call writeDetailedOut4a(this%fdDetailedOut%unit, this%dQdX, this%dQdXext)
+      !end if
 
       if (this%nExtChrg > 0 .and. this%isExtChargeDeriv) then
         block
