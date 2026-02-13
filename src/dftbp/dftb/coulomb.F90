@@ -1416,7 +1416,7 @@ contains
 
     type(TDynNeighList), pointer :: pNeighList
     integer :: iAtom1, iAtom2
-    real(dp) :: r(3)
+    real(dp) :: r(3), tmp(3)
     real(dp), allocatable :: localDeriv(:,:)
     integer :: iAtFirst, iAtLast
 
@@ -1436,16 +1436,14 @@ contains
 
     ! d(1/R)/dr reciprocal space
     !$OMP PARALLEL DO&
-    !$OMP& DEFAULT(SHARED) PRIVATE(iAtom2, r) REDUCTION(+:localDeriv) SCHEDULE(RUNTIME)
+    !$OMP& DEFAULT(SHARED) PRIVATE(iAtom2, r, tmp) REDUCTION(+:localDeriv) SCHEDULE(RUNTIME)
     do iAtom1 = iAtFirst, iAtLast
       do iAtom2 = iAtom1+1, nAtom
         r(:) = coord(:,iAtom1) - coord(:,iAtom2)
-        localDeriv(:,iAtom1) = localDeriv(:,iAtom1)&
-            & + derivEwaldReciprocal(r, recPoint, alpha, volume) * deltaQAtom(iAtom1)&
+        tmp(:) = derivEwaldReciprocal(r, recPoint, alpha, volume) * deltaQAtom(iAtom1)&
             & * deltaQAtom(iAtom2)
-        localDeriv(:,iAtom2) = localDeriv(:,iAtom2)&
-            & - derivEwaldReciprocal(r, recPoint, alpha, volume) * deltaQAtom(iAtom1)&
-            & * deltaQAtom(iAtom2)
+        localDeriv(:,iAtom1) = localDeriv(:,iAtom1) + tmp
+        localDeriv(:,iAtom2) = localDeriv(:,iAtom2) - tmp
       end do
     end do
     !$OMP END PARALLEL DO
@@ -1494,7 +1492,7 @@ contains
 
     type(TDynNeighList), pointer :: pNeighList
     integer :: iAtom1, iAtom2
-    real(dp) :: r(3)
+    real(dp) :: r(3), tmp
     integer :: iAtFirst, iAtLast
 
     pNeighList => neighList
@@ -1512,14 +1510,14 @@ contains
 
     ! d(1/R)/dr reciprocal space
     !$OMP PARALLEL DO&
-    !$OMP& DEFAULT(SHARED) PRIVATE(iAtom2, r) REDUCTION(+:deriv) SCHEDULE(RUNTIME)
+    !$OMP& DEFAULT(SHARED) PRIVATE(iAtom2, r, tmp) REDUCTION(+:deriv) SCHEDULE(RUNTIME)
     do iAtom1 = iAtFirst, iAtLast
       do iAtom2 = iAtom1+1, nAtom
         r(:) = coord(:,iAtom1) - coord(:,iAtom2)
-        deriv(iAtom1) = deriv(iAtom1) + derivEwaldReciprocalComp(r, recPoint, alpha, volume, iCart)&
-            & * deltaQAtom(iAtom1) * deltaQAtom(iAtom2)
-        deriv(iAtom2) = deriv(iAtom2) - derivEwaldReciprocalComp(r, recPoint, alpha, volume, iCart)&
-            & * deltaQAtom(iAtom1) * deltaQAtom(iAtom2)
+        tmp = derivEwaldReciprocalComp(r, recPoint, alpha, volume, iCart) * deltaQAtom(iAtom1)&
+            & * deltaQAtom(iAtom2)
+        deriv(iAtom1) = deriv(iAtom1) + tmp
+        deriv(iAtom2) = deriv(iAtom2) - tmp
       end do
     end do
     !$OMP END PARALLEL DO
@@ -1554,7 +1552,7 @@ contains
     real(dp) :: neighCoords(3, iterChunkSize_)
     integer :: neighImages(iterChunkSize_)
     integer :: iAtom2f, iNeigh, nNeigh
-    real(dp) :: rr(3)
+    real(dp) :: rr(3), tmp(3)
 
     call TNeighIterator_init(neighIter, pNeighList, iAtom1)
     nNeigh = iterChunkSize_
@@ -1564,10 +1562,9 @@ contains
         iAtom2f = neighImages(iNeigh)
         if (iAtom2f /= iAtom1) then
           rr(:) = coords(:,iAtom1) - neighCoords(:,iNeigh)
-          deriv(:,iAtom1) = deriv(:,iAtom1)&
-              & + derivRTerm(rr, alpha) * deltaQAtom(iAtom1) * deltaQAtom(iAtom2f)
-          deriv(:,iAtom2f) = deriv(:,iAtom2f)&
-              & - derivRTerm(rr, alpha) * deltaQAtom(iAtom1) * deltaQAtom(iAtom2f)
+          tmp(:) = derivRTerm(rr, alpha) * deltaQAtom(iAtom1) * deltaQAtom(iAtom2f)
+          deriv(:,iAtom1) = deriv(:,iAtom1) + tmp
+          deriv(:,iAtom2f) = deriv(:,iAtom2f) - tmp
         end if
       end do
     end do
