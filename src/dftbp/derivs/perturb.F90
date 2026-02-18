@@ -891,8 +891,8 @@ contains
       & nNeighbourSK, denseDesc, iSparseStart, img2CentCell, sccCalc, maxSccIter, sccTol,&
       & nMixElements, nIneqMixElements, iEqOrbitals, tempElec, Ef, spinW, thirdOrd, dftbU,&
       & iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc, nNeighbourCam, chrgMixerReal, isPeriodic,&
-      & coord, kPoint, kWeight, iCellVec, cellVec, nEFermi, wrtExternalCharges, dqdxExt, errStatus,&
-      & omega, isHelical)
+      & coord, kPoint, kWeight, iCellVec, cellVec, nEFermi, wrtWhichCharges, wrtCombinedCharges,&
+      & nCombinedCharges, dqdxExt, errStatus, omega, isHelical)
 
     !> Instance
     class(TResponse), intent(in) :: this
@@ -1046,7 +1046,14 @@ contains
     real(dp), intent(in) :: omega(:)
 
     !> List of which external charge positions (MM atoms) the DFTB charges are to be differentiated
-    integer, intent(in), allocatable :: wrtExternalCharges(:)
+    integer, intent(in), allocatable :: wrtWhichCharges(:)
+
+    !> List of groups of external charge positions (MM atoms) the DFTB charges are to be
+    !! differentiated
+    integer, intent(in), allocatable :: wrtCombinedCharges(:,:)
+
+    !> Number of combined charges in each group
+    integer, intent(in), allocatable :: nCombinedCharges(:)
 
     !> Output, charge derivatives
     real(dp), allocatable, intent(inout), target :: dqdxExt(:,:,:)
@@ -1054,7 +1061,7 @@ contains
     !> Is the geometry helical
     logical, intent(in), optional :: isHelical
 
-    integer :: iS, iK, iExtChrgWRT, nExtChrgWRT, iCart, jAt
+    integer :: iS, iK, iExtChrgWRT, nDerivs, iCart, jAt
     integer :: nSpin, nKpts, nOrbs, nIndepHam
 
     ! maximum allowed number of electrons in a single particle state
@@ -1101,35 +1108,51 @@ contains
     real(dp), allocatable, target :: dqdxExtWork(:,:,:)
     real(dp), pointer :: pdqdxExt(:,:,:) => null()
 
-    ! QM/MM specific
-    ! coordinates and charges of MM atoms
-    integer :: nExtCharge
+    integer :: nExtCharge, iDeriv
     real(dp), allocatable :: extCoord(:,:), extCharge(:), dgammaQMMM(:,:), blurWidths(:)
 
-    if (isAutotestWritten .or. isTagResultsWritten) then
-      if (allocated(dqdxExt)) then
-        pdqdxExt => dqdxExt
-      else
-        allocate(dqdxExtWork(nAtom, 3, size(wrtExternalCharges)))
-        pdqdxExt => dqdxExtWork
-      end if
-    end if
+    @:ASSERT(.not.(allocated(wrtWhichCharges) .and. allocated(wrtCombinedCharges)))
+    @:ASSERT(allocated(wrtCombinedCharges) .eqv. allocated(nCombinedCharges))
 
-    ! obtain the external charge coordinates and values
+    ! obtain the external charge coordinates and their values
     call sccCalc%getExternalCharges(nExtCharge, extCoord, extCharge, blurWidths=blurWidths)
-
     if (nExtCharge < 1) then
       write (stdOut,*) "No external charges, nothing to do in wrtExtCharges."
       return
     end if
-    nExtChrgWRT = 0
-    if (allocated(wrtExternalCharges)) nExtChrgWRT = size(wrtExternalCharges)
-    if (nExtChrgWRT < 1) then
+
+    nDerivs = 0
+    if (allocated(wrtWhichCharges)) then
+      nDerivs = size(wrtWhichCharges)
+    else if (allocated(wrtCombinedCharges)) then
+      @:ASSERT(size(nCombinedCharges) == nDerivs)
+      @:ASSERT(maxval(nCombinedCharges) <= size(wrtCombinedCharges, dim=1))
+      nDerivs = size(wrtCombinedCharges, dim=2)
+    else
+      nDerivs = nExtCharge
+    end if
+
+    if (nDerivs < 1) then
       write (stdOut,*) "No requested derivatives wrt to external charges, nothing to do in&
           & wrtExtCharges."
       return
     end if
-    @:ASSERT(allocated(wrtExternalCharges) .or. .not.allocated(dqdxExt))
+
+    if (isAutotestWritten .or. isTagResultsWritten) then
+      if (allocated(dqdxExt)) then
+        @:ASSERT(all(shape(dqdxExt) >= [nAtom, 3, nDerivs]))
+        pdqdxExt => dqdxExt
+      else
+        allocate(dqdxExtWork(nAtom, 3, nDerivs))
+        pdqdxExt => dqdxExtWork
+      end if
+    else
+      if (allocated(dqdxExt)) then
+        @:ASSERT(all(shape(dqdxExt) >= [nAtom, 3, nDerivs]))
+        pdqdxExt => dqdxExt
+      end if
+    end if
+
     tSccCalc = allocated(sccCalc)
     if (.not. tSccCalc) then
       write (stdOut,*) "SCC currently required for external charge derivatives"
@@ -1149,11 +1172,6 @@ contains
         & dRhoOut, dRhoIn, dRhoInSqr, dRhoOutSqr, dPotential, orb, nAtom, tMetallic, neFermi,&
         & eigvals, tempElec, Ef, kWeight)
 
-  #:block DEBUG_CODE
-    if (allocated(dqdxExt)) then
-      @:ASSERT(all([nAtom, 3, size(wrtExternalCharges)] == shape(dqdxExt)))
-    end if
-  #:endblock
     allocate(dqOut(orb%mOrb, nAtom, nSpin))
     allocate(dqNetAtom(nAtom))
     allocate(dEi(nOrbs, nKpts, nSpin))
@@ -1173,20 +1191,27 @@ contains
     ! derivatives of QM--MM 1/r w.r.t. coordinates of MM atoms
     allocate(dgammaQMMM(3, nAtom))
 
-    lpExtChrg: do iExtChrgWRT = 1, nExtChrgWRT
+    lpExtChrg: do iDeriv = 1, nDerivs
 
-      write(stdOut,"(A,I0)")'Derivative with respect to external charge ',&
-          & wrtExternalCharges(iExtChrgWRT)
+      if (allocated(wrtWhichCharges)) then
+        write(stdOut,"(A,I0)")'Derivative with respect to external charge ', wrtWhichCharges(iDeriv)
+        iExtChrgWrt = wrtWhichCharges(iDeriv)
+      else if (allocated(wrtCombinedCharges)) then
+        write(stdOut,"(A,I0,A)")'Derivative with respect to external charge group ',iDeriv, ':'
+        write(stdOut,*)wrtCombinedCharges(:nCombinedCharges(iDeriv), iDeriv)
+      else
+        iExtChrgWRT = iDeriv
+        write(stdOut,"(A,I0)")'Derivative with respect to external charge ', iExtChrgWRT
+      end if
 
       if (isPeriodic) then
 
         call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
             & sccCalc%coulomb%rLatPoints_, sccCalc%coulomb%gLatPoints_, sccCalc%coulomb%alpha,&
-            & sccCalc%coulomb%volume_, wrtExternalCharges(iExtChrgWRT), dgammaQMMM,&
-            & blurWidths=blurWidths)
+            & sccCalc%coulomb%volume_, iExtChrgWRT, dgammaQMMM, blurWidths=blurWidths)
       else
-        call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
-            & wrtExternalCharges(iExtChrgWRT), dgammaQMMM, blurWidths=blurWidths)
+        call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge, iExtChrgWRT,&
+            & dgammaQMMM, blurWidths=blurWidths)
       end if
 
       dqOut(:,:,:) = 0.0_dp
@@ -1199,7 +1224,7 @@ contains
       ! perturbation direction
       lpCart: do iCart = 1, 3
 
-        write(stdOut,"(1X,A,I0,A,A)")'d Charge ', wrtExternalCharges(iExtChrgWRT), ' / d',&
+        write(stdOut,"(1X,A,I0,A,A)")'d Charge ', iExtChrgWRT, ' / d',&
             & direction(iCart)
 
         dPotential%extAtom(:,:) = 0.0_dp
@@ -1235,7 +1260,7 @@ contains
           end do
 
           if (associated(pdqdxExt)) then
-            pdqdxExt(:, iCart, iExtChrgWRT) = -sum(dqOut(:, :, 1), dim=1)
+            pdqdxExt(:, iCart, iDeriv) = -sum(dqOut(:, :, 1), dim=1)
           end if
 
         end do lpOmega
