@@ -1897,76 +1897,6 @@ contains
   end subroutine addInvRPrimePeriodicAsymm
 
 
-  !> Calculates the -1/R**2 deriv contribution for potential from external charge, iPart
-  subroutine calcInvRPrimeAsymmPeriodic(nAtom, coord, nChargeExt, coordExt, chargeExt, rVec, gVec,&
-      & alpha, vol, iPart, deriv, blurWidths)
-
-    !> Number of atoms in the first group
-    integer, intent(in) :: nAtom
-
-    !> List of atomic coordinates (first group)
-    real(dp), intent(in) :: coord(:,:)
-
-    !> Number of atoms in the second group
-    integer, intent(in) :: nChargeExt
-
-    !> List of the point charge coordinates (second group)
-    real(dp), intent(in) :: coordExt(:,:)
-
-    !> Charge of the point charges
-    real(dp), intent(in) :: chargeExt(:)
-
-    !> Lattice vectors to be used for the real Ewald summation
-    real(dp), intent(in) :: rVec(:,:)
-
-    !> Lattice vectors to be used for the reciprocal Ewald summation
-    real(dp), intent(in) :: gVec(:,:)
-
-    !> Parameter of the Ewald summation
-    real(dp), intent(in) :: alpha
-
-    !> Volume of the supercell
-    real(dp), intent(in) :: vol
-
-    !> Atom or external charge to differentiate wrt to
-    integer, intent(in) :: iPart
-
-    !> Contains the derivative for the potential at the atom sites
-    real(dp), intent(inout) :: deriv(:, :)
-
-    !> Gaussian blur width of the charges in the 2nd group
-    real(dp), intent(in), optional :: blurWidths(:)
-
-    integer :: iAtom
-    real(dp) :: vect(3), fTmp(3)
-
-    deriv(:, :) = 0.0_dp
-
-    ! real space part
-    if (present(blurWidths)) then
-      do iAtom = 1, nAtom
-        vect(:) = coord(:,iAtom) - coordExt(:,iPart)
-        fTmp = derivEwaldReal(vect, rVec, alpha, blurWidth=blurWidths(iPart)) * chargeExt(iPart)
-        deriv(:, iAtom) = deriv(:, iAtom) + fTmp
-      end do
-    else
-      do iAtom = 1, nAtom
-        vect(:) = coord(:,iAtom) - coordExt(:,iPart)
-        fTmp = derivEwaldReal(vect, rVec, alpha) * chargeExt(iPart)
-        deriv(:, iAtom) = deriv(:, iAtom) + fTmp
-      end do
-    end if
-
-    ! reciprocal space part
-    do iAtom = 1, nAtom
-      vect(:) = coord(:,iAtom) - coordExt(:,iPart)
-      fTmp(:) = derivEwaldReciprocal(vect, gVec, alpha, vol) * chargeExt(iPart)
-      deriv(:, iAtom) = deriv(:, iAtom) + fTmp
-    end do
-
-  end subroutine calcInvRPrimeAsymmPeriodic
-
-
   !> Get optimal alpha-parameter for the Ewald summation by finding alpha, where decline of real and
   !! reciprocal part of Ewald are equal.
   !! The function stops, if the optimal alpha cannot be found.
@@ -3142,6 +3072,76 @@ contains
     end if
 
   end subroutine calcInvRPrimeAsymmCluster
+
+
+  !> Calculates the -1/R**2 deriv contribution for potential from external charge, iPart
+  subroutine calcInvRPrimeAsymmPeriodic(nAtom, coord, nChargeExt, coordExt, chargeExt, rVec, gVec,&
+      & alpha, vol, iPart, deriv, blurWidths)
+
+    !> Number of atoms in the first group
+    integer, intent(in) :: nAtom
+
+    !> List of atomic coordinates (first group)
+    real(dp), intent(in) :: coord(:,:)
+
+    !> Number of atoms in the second group
+    integer, intent(in) :: nChargeExt
+
+    !> List of the point charge coordinates (second group)
+    real(dp), intent(in) :: coordExt(:,:)
+
+    !> Charge of the point charges
+    real(dp), intent(in) :: chargeExt(:)
+
+    !> Lattice vectors to be used for the real Ewald summation
+    real(dp), intent(in) :: rVec(:,:)
+
+    !> Lattice vectors to be used for the reciprocal Ewald summation
+    real(dp), intent(in) :: gVec(:,:)
+
+    !> Parameter of the Ewald summation
+    real(dp), intent(in) :: alpha
+
+    !> Volume of the supercell
+    real(dp), intent(in) :: vol
+
+    !> Atom or external charge to differentiate wrt to
+    integer, intent(in) :: iPart
+
+    !> Contains the derivative for the potential at the atom sites
+    real(dp), intent(inout) :: deriv(:, :)
+
+    !> Gaussian blur width of the charges in the 2nd group
+    real(dp), intent(in), optional :: blurWidths(:)
+
+    integer :: iAtom
+    real(dp) :: vect(3), fTmp(3)
+
+    deriv(:, :) = 0.0_dp
+
+    ! real space part
+    if (present(blurWidths)) then
+      do iAtom = 1, nAtom
+        vect(:) = coord(:,iAtom) - coordExt(:,iPart)
+        fTmp = derivEwaldReal(vect, rVec, alpha, blurWidth=blurWidths(iPart)) * chargeExt(iPart)
+        deriv(:, iAtom) = deriv(:, iAtom) + fTmp
+      end do
+    else
+      do iAtom = 1, nAtom
+        vect(:) = coord(:,iAtom) - coordExt(:,iPart)
+        fTmp = derivEwaldReal(vect, rVec, alpha) * chargeExt(iPart)
+        deriv(:, iAtom) = deriv(:, iAtom) + fTmp
+      end do
+    end if
+
+    ! reciprocal space part
+    do iAtom = 1, nAtom
+      vect(:) = coord(:,iAtom) - coordExt(:,iPart)
+      fTmp(:) = derivEwaldReciprocal(vect, gVec, alpha, vol) * chargeExt(iPart)
+      deriv(:, iAtom) = deriv(:, iAtom) + fTmp
+    end do
+
+  end subroutine calcInvRPrimeAsymmPeriodic
 
 
 end module dftbp_dftb_coulomb

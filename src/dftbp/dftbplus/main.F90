@@ -579,7 +579,7 @@ contains
           integer :: iExt
           integer, allocatable :: extChrgWrt(:)
           integer, allocatable :: wrtCombinedCharges(:,:), nCombinedCharges(:)
-          real(dp), allocatable :: freq(:), dqdxExt(:,:,:)
+          real(dp), allocatable :: freq(:), dqdxExt(:,:,:), jacobian(:,:,:)
           allocate(extChrgWrt(this%nExtChrg))
           allocate(freq(1), source=0.0_dp)
           do iExt = 1, this%nExtChrg
@@ -595,8 +595,8 @@ contains
               & this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu, this%onSiteElements,&
               & this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam, this%chrgMixerReal,&
               & this%tPeriodic, this%coord, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
-              & this%nEFermi, extChrgWrt, wrtCombinedCharges, nCombinedCharges, dqdxExt, errStatus,&
-              & freq, this%tHelical)
+              & this%nEFermi, extChrgWrt, nCombinedCharges, wrtCombinedCharges, jacobian, dqdxExt,&
+              & errStatus, freq, this%tHelical)
         end block
       end if
 

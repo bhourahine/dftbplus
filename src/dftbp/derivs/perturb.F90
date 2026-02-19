@@ -892,8 +892,8 @@ contains
       & nNeighbourSK, denseDesc, iSparseStart, img2CentCell, sccCalc, maxSccIter, sccTol,&
       & nMixElements, nIneqMixElements, iEqOrbitals, tempElec, Ef, spinW, thirdOrd, dftbU,&
       & iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc, nNeighbourCam, chrgMixerReal, isPeriodic,&
-      & coord, kPoint, kWeight, iCellVec, cellVec, nEFermi, wrtWhichCharges, wrtCombinedCharges,&
-      & nCombinedCharges, dqdxExt, errStatus, omega, isHelical)
+      & coord, kPoint, kWeight, iCellVec, cellVec, nEFermi, wrtWhichCharges, nCombinedCharges,&
+      & wrtCombinedCharges, combinedJacobian, dqdxExt, errStatus, omega, isHelical)
 
     !> Instance
     class(TResponse), intent(in) :: this
@@ -1046,15 +1046,19 @@ contains
     !> Driving frequencies (including potentially 0 for static)
     real(dp), intent(in) :: omega(:)
 
-    !> List of which external charge positions (MM atoms) the DFTB charges are to be differentiated
+    !> List of which specific external charge positions (MM atoms) the DFTB charges are to be
+    !! differentiated (note, incompatible with wrtCombinedCharges)
     integer, intent(in), allocatable :: wrtWhichCharges(:)
-
-    !> List of groups of external charge positions (MM atoms) the DFTB charges are to be
-    !! differentiated
-    integer, intent(in), allocatable :: wrtCombinedCharges(:,:)
 
     !> Number of combined charges in each group
     integer, intent(in), allocatable :: nCombinedCharges(:)
+
+    !> List of groups of external charge positions (MM atoms) the DFTB charges are to be
+    !! differentiated (note, incompatible with wrtWhichCharges)
+    integer, intent(in), allocatable :: wrtCombinedCharges(:,:)
+
+    !> Weights for external charge positions [nCharges, iCart, nDerivs]
+    real(dp), intent(in), allocatable :: combinedJacobian(:,:,:)
 
     !> Output, charge derivatives
     real(dp), allocatable, intent(inout), target :: dqdxExt(:,:,:)
@@ -1062,7 +1066,7 @@ contains
     !> Is the geometry helical
     logical, intent(in), optional :: isHelical
 
-    integer :: iS, iK, iExtChrgWRT, nDerivs, iCart, jAt
+    integer :: iS, iK, iExtChrgWRT, nDerivs, iCart, jAt, jCart
     integer :: nSpin, nKpts, nOrbs, nIndepHam
 
     ! maximum allowed number of electrons in a single particle state
@@ -1109,11 +1113,13 @@ contains
     real(dp), allocatable, target :: dqdxExtWork(:,:,:)
     real(dp), pointer :: pdqdxExt(:,:,:) => null()
 
-    integer :: nExtCharge, iDeriv
+    integer :: nExtCharge, iDeriv, jCharge
     real(dp), allocatable :: extCoord(:,:), extCharge(:), dgammaQMMM(:,:), blurWidths(:)
+    real(dp), allocatable :: dgammaTmp(:,:)
 
     @:ASSERT(.not.(allocated(wrtWhichCharges) .and. allocated(wrtCombinedCharges)))
     @:ASSERT(allocated(wrtCombinedCharges) .eqv. allocated(nCombinedCharges))
+    @:ASSERT(allocated(wrtCombinedCharges) .eqv. allocated(combinedJacobian))
 
     ! obtain the external charge coordinates and their values
     call sccCalc%getExternalCharges(nExtCharge, extCoord, extCharge, blurWidths=blurWidths)
@@ -1205,14 +1211,33 @@ contains
         write(stdOut,"(A,I0)")'Derivative with respect to external charge ', iExtChrgWRT
       end if
 
-      if (isPeriodic) then
-
-        call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
-            & sccCalc%coulomb%rLatPoints_, sccCalc%coulomb%gLatPoints_, sccCalc%coulomb%alpha,&
-            & sccCalc%coulomb%volume_, iExtChrgWRT, dgammaQMMM, blurWidths=blurWidths)
+      if (allocated(wrtCombinedCharges)) then
+        dgammaQMMM(:,:) = 0.0_dp
+        allocate(dgammaTmp, source=dgammaQMMM)
+        do jCharge = 1, nCombinedCharges(iDeriv)
+          if (isPeriodic) then
+            call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
+                & sccCalc%coulomb%rLatPoints_, sccCalc%coulomb%gLatPoints_, sccCalc%coulomb%alpha,&
+                & sccCalc%coulomb%volume_, wrtCombinedCharges(jCharge, iDeriv), dgammaTmp,&
+                & blurWidths=blurWidths)
+          else
+            call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
+                & wrtCombinedCharges(jCharge, iDeriv), dgammaTmp, blurWidths=blurWidths)
+          end if
+          do jCart = 1, 3
+            dgammaQMMM(jCart,:) = dgammaQMMM(jCart,:)&
+                & + combinedJacobian(jCharge, jCart, iDeriv) * dgammaTmp(jCart,:)
+          end do
+        end do
       else
-        call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge, iExtChrgWRT,&
-            & dgammaQMMM, blurWidths=blurWidths)
+        if (isPeriodic) then
+          call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
+              & sccCalc%coulomb%rLatPoints_, sccCalc%coulomb%gLatPoints_, sccCalc%coulomb%alpha,&
+              & sccCalc%coulomb%volume_, iExtChrgWRT, dgammaQMMM, blurWidths=blurWidths)
+        else
+          call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge, iExtChrgWRT,&
+              & dgammaQMMM, blurWidths=blurWidths)
+        end if
       end if
 
       dqOut(:,:,:) = 0.0_dp
@@ -1225,8 +1250,7 @@ contains
       ! perturbation direction
       lpCart: do iCart = 1, 3
 
-        write(stdOut,"(1X,A,I0,A,A)")'d Charge ', iExtChrgWRT, ' / d',&
-            & direction(iCart)
+        write(stdOut,"(1X,A,I0,A,A)")'d Charge ', iExtChrgWRT, ' / d', direction(iCart)
 
         dPotential%extAtom(:,:) = 0.0_dp
         dPotential%extAtom(:,1) = dgammaQMMM(iCart, :)
