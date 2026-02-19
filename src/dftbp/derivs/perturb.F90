@@ -1220,6 +1220,7 @@ contains
                 & + combinedJacobian(jCharge, jCart, iDeriv) * dgammaTmp(jCart,:)
           end do
         end do
+        deallocate(dgammaTmp)
       else
         if (isPeriodic) then
           call calcInvRPrimeAsymm(nAtom, coord, nExtCharge, extCoord, extCharge,&
@@ -1509,7 +1510,7 @@ contains
     real(dp), optional, intent(inout) :: dqdx(:,:,:)
 
     integer :: iS, iK, iKS, iNeigh, iCart, iSCC, iLev, iSh, iSp, jAt, jAtf, iOrb, jCart
-    integer :: iAt, nSpin, nKpts, nOrbs, nIndepHam, nDerivs, iDeriv
+    integer :: iAt, nSpin, nKpts, nOrbs, nIndepHam, nDerivs, iDeriv, jCharge
 
     ! maximum allowed number of electrons in a single particle state
     real(dp) :: maxFill
@@ -1522,7 +1523,7 @@ contains
 
     ! matrices for derivatives of terms in hamiltonian and outputs
     real(dp), allocatable :: dHam(:,:), idHam(:,:), dOver(:,:), dH0(:,:)
-    real(dp), allocatable :: dOverTmp(:)
+    real(dp), allocatable :: dOverTmp(:,:), dH0Tmp(:,:), dOverWork(:)
 
     ! overlap derivative terms in potential, omega dS + d(delta q gammma) S
     real(dp), allocatable :: sOmega(:,:,:)
@@ -1773,18 +1774,32 @@ contains
         write(stdOut,"(A,I0)")'Derivative with respect to external charge ', iAt
       end if
 
-      call nonSccDeriv%getFirstDeriv(dOver, env, skOverCont, coord, species, iAt, orb,&
-          & nNeighbourSK, neighbourList%iNeighbour, iSparseStart)
-      call nonSccDeriv%getFirstDeriv(dH0, env, skHamCont, coord, species, iAt, orb, nNeighbourSK,&
-          & neighbourList%iNeighbour, iSparseStart)
-
-      !if (tSccCalc) then
-      !  extShiftDerivative(:,:,:) = 0.0_dp
-      !  call sccCalc%getExtShiftDerivative(env, extShiftDerivative(:,:,1), iAt, coord)
-      !  do iS = 1, nSpin
-      !    extShiftDerivative(:,:,iS) = extShiftDerivative(:,:,1)
-      !  end do
-      !end if
+      if (allocated(wrtCombinedCharges)) then
+        dOver(:,:) = 0.0_dp
+        dH0(:,:) = 0.0_dp
+        allocate(dOverTmp, source=dOver)
+        allocate(dH0Tmp, source=dH0)
+        do jCharge = 1, nCombinedCharges(iDeriv)
+          call nonSccDeriv%getFirstDeriv(dOverTmp, env, skOverCont, coord, species,&
+              & wrtCombinedCharges(jCharge, iDeriv), orb, nNeighbourSK, neighbourList%iNeighbour,&
+              & iSparseStart)
+          call nonSccDeriv%getFirstDeriv(dH0Tmp, env, skHamCont, coord, species,&
+              & wrtCombinedCharges(jCharge, iDeriv), orb, nNeighbourSK, neighbourList%iNeighbour,&
+              & iSparseStart)
+          do jCart = 1, 3
+            dOver(:,jCart) = dOver(:,jCart) + combinedJacobian(jCharge, jCart, iDeriv)&
+                & * dOver(:,jCart)
+            dH0(:,jCart) = dH0(:,jCart) + combinedJacobian(jCharge, jCart, iDeriv) * dH0(:,jCart)
+          end do
+        end do
+        deallocate(dOverTmp)
+        deallocate(dH0Tmp)
+      else
+        call nonSccDeriv%getFirstDeriv(dOver, env, skOverCont, coord, species, iAt, orb,&
+            & nNeighbourSK, neighbourList%iNeighbour, iSparseStart)
+        call nonSccDeriv%getFirstDeriv(dH0, env, skHamCont, coord, species, iAt, orb, nNeighbourSK,&
+            & neighbourList%iNeighbour, iSparseStart)
+      end if
 
       ! perturbation direction
       lpCart: do iCart = 1, 3
@@ -1961,9 +1976,9 @@ contains
                 dRhoOutSqr(:,:,iS) = dRhoInSqr(:,:,iS)
               end if
 
-              dOverTmp = dOver(:,iCart)
+              dOverWork = dOver(:,iCart)
               dEiTmp(:,:,:) = 0.0_dp
-              call dRhoReal(env, dHam, dOverTmp, neighbourList, nNeighbourSK,&
+              call dRhoReal(env, dHam, dOverWork, neighbourList, nNeighbourSK,&
                   & iSparseStart, img2CentCell, denseDesc, iKS, parallelKS, nFilled(:,1:1),&
                   & nEmpty(:,1:1), eigVecsReal, eCiReal, eigVals, filling, Ef, tempElec, orb,&
                   & drho(:,iS), dRhoOutSqr, hybridXc, over, nNeighbourLC, degenTransform(iKS),&
