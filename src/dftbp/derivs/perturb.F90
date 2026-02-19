@@ -1128,16 +1128,7 @@ contains
       return
     end if
 
-    nDerivs = 0
-    if (allocated(wrtWhichCharges)) then
-      nDerivs = size(wrtWhichCharges)
-    else if (allocated(wrtCombinedCharges)) then
-      @:ASSERT(size(nCombinedCharges) == nDerivs)
-      @:ASSERT(maxval(nCombinedCharges) <= size(wrtCombinedCharges, dim=1))
-      nDerivs = size(wrtCombinedCharges, dim=2)
-    else
-      nDerivs = nExtCharge
-    end if
+    nDerivs =  countDerivs(wrtWhichCharges, nCombinedCharges, wrtCombinedCharges, nExtCharge)
 
     if (nDerivs < 1) then
       write (stdOut,*) "No requested derivatives wrt to external charges, nothing to do in&
@@ -1201,8 +1192,8 @@ contains
     lpExtChrg: do iDeriv = 1, nDerivs
 
       if (allocated(wrtWhichCharges)) then
-        write(stdOut,"(A,I0)")'Derivative with respect to external charge ', wrtWhichCharges(iDeriv)
         iExtChrgWrt = wrtWhichCharges(iDeriv)
+        write(stdOut,"(A,I0)")'Derivative with respect to external charge ', iExtChrgWrt
       else if (allocated(wrtCombinedCharges)) then
         write(stdOut,"(A,I0,A)")'Derivative with respect to external charge group ',iDeriv, ':'
         write(stdOut,*)wrtCombinedCharges(:nCombinedCharges(iDeriv), iDeriv)
@@ -1316,7 +1307,8 @@ contains
       & tFixEf, spinW, thirdOrd, DftbU, iEqBlockDftbu, onsMEs, iEqBlockOnSite, hybridXc,&
       & nNeighbourLC, chrgMixerReal, isBandWritten, taggedWriter, isAutotestWritten,&
       & autoTestTagFile, isTagResultsWritten, taggedResultsFile, tWriteDetailedOut, fdDetailedOut,&
-      & kPoint, kWeight, iCellVec, cellVec, isPeriodic, isHelical, tMulliken, dqdx, errStatus)
+      & kPoint, kWeight, iCellVec, cellVec, isPeriodic, tMulliken, wrtWhichCharges,&
+      & nCombinedCharges, wrtCombinedCharges, combinedJacobian, errStatus, isHelical, dqdx)
 
     !> Instance
     class(TResponse), intent(in) :: this
@@ -1491,19 +1483,33 @@ contains
     !> Is this a periodic geometry
     logical, intent(in) :: isPeriodic
 
-    !> Is the geometry helical
-    logical, intent(in), optional :: isHelical
-
     !> Should Mulliken populations be generated/output
     logical, intent(in) :: tMulliken
 
-    real(dp), optional, intent(inout) :: dqdx(:,:,:)
+        !> List of which specific external charge positions (MM atoms) the DFTB charges are to be
+    !! differentiated (note, incompatible with wrtCombinedCharges)
+    integer, intent(in), allocatable :: wrtWhichCharges(:)
+
+    !> Number of combined charges in each group
+    integer, intent(in), allocatable :: nCombinedCharges(:)
+
+    !> List of groups of external charge positions (MM atoms) the DFTB charges are to be
+    !! differentiated (note, incompatible with wrtWhichCharges)
+    integer, intent(in), allocatable :: wrtCombinedCharges(:,:)
+
+    !> Weights for external charge positions [nCharges, iCart, nDerivs]
+    real(dp), intent(in), allocatable :: combinedJacobian(:,:,:)
 
     !> Status of routine
     type(TStatus), intent(out) :: errStatus
 
+    !> Is the geometry helical
+    logical, intent(in), optional :: isHelical
+
+    real(dp), optional, intent(inout) :: dqdx(:,:,:)
+
     integer :: iS, iK, iKS, iNeigh, iCart, iSCC, iLev, iSh, iSp, jAt, jAtf, iOrb, jCart
-    integer :: iAt, nSpin, nKpts, nOrbs, nIndepHam
+    integer :: iAt, nSpin, nKpts, nOrbs, nIndepHam, nDerivs, iDeriv
 
     ! maximum allowed number of electrons in a single particle state
     real(dp) :: maxFill
@@ -1597,9 +1603,21 @@ contains
 
   #:endif
 
+    @:ASSERT(.not.(allocated(wrtWhichCharges) .and. allocated(wrtCombinedCharges)))
+    @:ASSERT(allocated(wrtCombinedCharges) .eqv. allocated(nCombinedCharges))
+    @:ASSERT(allocated(wrtCombinedCharges) .eqv. allocated(combinedJacobian))
+
+    nDerivs =  countDerivs(wrtWhichCharges, nCombinedCharges, wrtCombinedCharges, nAtom)
+
+    if (nDerivs < 1) then
+      write (stdOut,*) "No requested derivatives wrt to external charges, nothing to do in&
+          & wrtExtCharges."
+      return
+    end if
+
     areChargeDerivsNeeded = present(dqdx)
     if (areChargeDerivsNeeded) then
-      @:ASSERT(all(shape(dqdx) == [nAtom, 3, nAtom]))
+      @:ASSERT(all(shape(dqdx) == [nAtom, 3, nDerivs]))
     end if
 
     call init_perturbation(parallelKS, this%tolDegen, nOrbs, nKpts, nSpin, nIndepHam, maxFill,&
@@ -1742,7 +1760,18 @@ contains
     dEi(:,:,:,:,:) = 0.0_dp
 
     ! Displacement to differentiate wrt
-    do iAt = 1, nAtom
+    do iDeriv = 1, nDerivs
+
+      if (allocated(wrtWhichCharges)) then
+        iAt = wrtWhichCharges(iDeriv)
+        write(stdOut,"(A,I0)")'Derivative with respect to external charge ', iAt
+      else if (allocated(wrtCombinedCharges)) then
+        write(stdOut,"(A,I0,A)")'Derivative with respect to external charge group ',iDeriv, ':'
+        write(stdOut,*)wrtCombinedCharges(:nCombinedCharges(iDeriv), iDeriv)
+      else
+        iAt = iDeriv
+        write(stdOut,"(A,I0)")'Derivative with respect to external charge ', iAt
+      end if
 
       call nonSccDeriv%getFirstDeriv(dOver, env, skOverCont, coord, species, iAt, orb,&
           & nNeighbourSK, neighbourList%iNeighbour, iSparseStart)
@@ -3118,5 +3147,39 @@ contains
     write(fd, *)
 
   end subroutine writeBorn
+
+
+  !> Number of perturbation derivatives to perform
+  function countDerivs(wrtWhichCharges, nCombinedCharges, wrtCombinedCharges, nExtCharge)&
+      & result(nDerivs)
+
+    !> List of which specific external charge positions (MM atoms) the DFTB charges are to be
+    !! differentiated (note, incompatible with wrtCombinedCharges)
+    integer, intent(in), allocatable :: wrtWhichCharges(:)
+
+    !> Number of combined charges in each group
+    integer, intent(in), allocatable :: nCombinedCharges(:)
+
+    !> List of groups of external charge positions (MM atoms) the DFTB charges are to be
+    !! differentiated (note, incompatible with wrtWhichCharges)
+    integer, intent(in), allocatable :: wrtCombinedCharges(:,:)
+
+    !> Maximum number of possible derivatives
+    integer, intent(in) :: nExtCharge
+
+    integer :: nDerivs
+
+    nDerivs = 0
+    if (allocated(wrtWhichCharges)) then
+      nDerivs = size(wrtWhichCharges)
+    else if (allocated(wrtCombinedCharges)) then
+      nDerivs = size(wrtCombinedCharges, dim=2)
+      @:ASSERT(size(nCombinedCharges) == nDerivs)
+      @:ASSERT(maxval(nCombinedCharges) <= size(wrtCombinedCharges, dim=1))
+    else
+      nDerivs = nExtCharge
+    end if
+
+  end function countDerivs
 
 end module dftbp_derivs_perturb

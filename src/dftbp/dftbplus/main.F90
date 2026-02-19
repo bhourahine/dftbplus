@@ -577,8 +577,7 @@ contains
       if (this%nExtChrg > 0 .and. this%isExtChargeDeriv) then
         block
           integer :: iExt
-          integer, allocatable :: extChrgWrt(:)
-          integer, allocatable :: wrtCombinedCharges(:,:), nCombinedCharges(:)
+          integer, allocatable :: extChrgWrt(:), wrtCombinedCharges(:,:), nCombinedCharges(:)
           real(dp), allocatable :: freq(:), dqdxExt(:,:,:), jacobian(:,:,:)
           allocate(extChrgWrt(this%nExtChrg))
           allocate(freq(1), source=0.0_dp)
@@ -1942,20 +1941,25 @@ contains
       deallocate(this%dQdX)
     end if
     allocate(this%dQdX(this%nAtom, 3, this%nAtom))
-    call this%response%dxAtom(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
-        & this%eigvecsCplx, this%rhoPrim, this%potential, this%qOutput, this%q0,&
-        & this%ints%hamiltonian, this%ints%overlap, this%skHamCont, this%skOverCont,&
-        & this%nonSccDeriv, this%orb, this%nAtom, this%species, this%speciesName,&
-        & this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
-        & this%img2CentCell, this%coord, this%scc, this%maxPerturbIter, this%perturbSccTol,&
-        & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
-        & this%tFixEf, this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu,&
-        & this%onSiteElements, this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam,&
-        & this%chrgMixerReal, this%tWriteBandDat, this%taggedWriter, this%tWriteAutotest,&
-        & autotestTag, this%tWriteResultsTag, resultsTag, this%tWriteDetailedOut,&
-        & this%fdDetailedOut%unit, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
-        & this%tPeriodic, this%tHelical, this%tMulliken, this%dQdx, errStatus)
-    @:PROPAGATE_ERROR(errStatus)
+    block
+      integer, allocatable :: extChrgWrt(:), nCombinedCharges(:), wrtCombinedCharges(:,:)
+      real(dp), allocatable :: jacobian(:,:,:)
+      call this%response%dxAtom(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
+          & this%eigvecsCplx, this%rhoPrim, this%potential, this%qOutput, this%q0,&
+          & this%ints%hamiltonian, this%ints%overlap, this%skHamCont, this%skOverCont,&
+          & this%nonSccDeriv, this%orb, this%nAtom, this%species, this%speciesName,&
+          & this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
+          & this%img2CentCell, this%coord, this%scc, this%maxPerturbIter, this%perturbSccTol,&
+          & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
+          & this%tFixEf, this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu,&
+          & this%onSiteElements, this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam,&
+          & this%chrgMixerReal, this%tWriteBandDat, this%taggedWriter, this%tWriteAutotest,&
+          & autotestTag, this%tWriteResultsTag, resultsTag, this%tWriteDetailedOut,&
+          & this%fdDetailedOut%unit, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
+          & this%tPeriodic, this%tMulliken, extChrgWrt, nCombinedCharges, wrtCombinedCharges,&
+          & jacobian, errStatus, this%tHelical, this%dQdx)
+      @:PROPAGATE_ERROR(errStatus)
+    end block
 
     !call env%globalTimer%startTimer(globalTimers%perturbQM)
     !call dPsidx(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal, this%rhoPrim,&
