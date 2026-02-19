@@ -87,6 +87,7 @@ module dftbp_derivs_perturb
     !> Frequencies for perturbation (0 being static case)
     real(dp), allocatable :: dynKernelFreq(:)
 
+    !> Are this derivatives with respect to external charges required?
     logical :: isExtChargeDeriv = .false.
 
     !> Self-consistency tolerance for perturbation (if SCC)
