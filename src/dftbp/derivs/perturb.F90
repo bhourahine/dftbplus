@@ -8,8 +8,7 @@
 #:include 'common.fypp'
 #:include 'error.fypp'
 
-!> Module for linear response derivative calculations using perturbation methods at q=0 for fixed
-!! structures
+!> Module for linear response derivative calculations using perturbation methods at q=0
 module dftbp_derivs_perturb
   use, intrinsic :: ieee_arithmetic, only : ieee_quiet_nan, ieee_value
   use dftbp_common_accuracy, only : dp, lc, mc

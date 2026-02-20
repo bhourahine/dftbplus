@@ -990,8 +990,8 @@ contains
     ! 1/R contribution
     if (this%tPeriodic) then
       call error("Missing at moment")
-    !  call invRPrime(vAt, nAtom_, coord, nNeighEwald_, iNeighbour, img2CentCell, gLatPoint_,&
-    !      & alpha_, volume_, deltaQAtom_, iCart, iAt)
+      !call invRPrime(env, nAtom_, coord, nNeighEwald_, iNeighbour, gLatPoint_,&
+      !    & alpha_, volume_, deltaQAtom_, iCart, iAt, vAt)
     else
       call invRPrime(this%nAtom, this%coord, this%deltaQAtom, iCart, iAt, vAt)
     end if

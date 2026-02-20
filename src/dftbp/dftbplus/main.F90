@@ -284,11 +284,15 @@ contains
           & this%totalLatDeriv, this%extLatDerivs, this%normOrigLatVec, this%tLatOptFixAng,&
           & this%tLatOptFixLen, this%tLatOptIsotropic, constrLatDerivs)
 
-      if (this%isAtomCoordPerturb .and. this%doPerturbEachGeom) then
+      if ((this%isAtomCoordPerturb .or. this%isExtChargeDeriv) .and. this%doPerturbEachGeom) then
+        call env%globalTimer%startTimer(globalTimers%perturb)
+
         call processChargeDerivatives(env, this, errStatus)
         if (errStatus%hasError()) then
           call error(errStatus%message)
         end if
+
+        call env%globalTimer%stopTimer(globalTimers%perturb)
       end if
 
       if (tExitGeoOpt) then
@@ -554,17 +558,13 @@ contains
         end if
       end if
 
-      if (this%isAtomCoordPerturb .and. .not. this%doPerturbEachGeom) then
-
-        call env%globalTimer%startTimer(globalTimers%perturb_dx)
+      if ((this%isAtomCoordPerturb.or.this%isExtChargeDeriv) .and. .not.this%doPerturbEachGeom) then
 
         call processChargeDerivatives(env, this, errStatus)!, nExtChrgWRT, extChrgWRT)
 
         if (errStatus%hasError()) then
           call error(errStatus%message)
         end if
-
-        call env%globalTimer%stopTimer(globalTimers%perturb_dx)
 
       end if
 
@@ -1908,7 +1908,7 @@ contains
   end subroutine processGeometry
 
 
-  !> Process current geometry
+  !> Process perturbation derivatives with respect current geometry
   subroutine processChargeDerivatives(env, this, errStatus, nExtChrgWRT, extChrgWRT)
 
     !> Environment settings
@@ -1930,6 +1930,8 @@ contains
 
     integer :: iExtChrgWRT
     logical :: doPsidxQMMM
+    integer, allocatable :: atomWrt(:), nCombinedCharges(:), wrtCombinedCharges(:,:)
+    real(dp), allocatable :: jacobian(:,:,:)
 
     if (present(nExtChrgWRT)) then
       write (stdOut,*) "nExtChrgWRT is present and set to ", nExtChrgWRT
@@ -1937,13 +1939,12 @@ contains
       write (stdOut,*) "nExtChrgWRT is not present"
     end if
 
-    if (allocated(this%dQdX)) then
-      deallocate(this%dQdX)
-    end if
-    allocate(this%dQdX(this%nAtom, 3, this%nAtom))
-    block
-      integer, allocatable :: extChrgWrt(:), nCombinedCharges(:), wrtCombinedCharges(:,:)
-      real(dp), allocatable :: jacobian(:,:,:)
+    if (this%isAtomCoordPerturb) then
+      if (allocated(this%dqdX)) then
+        deallocate(this%dqdX)
+      end if
+      allocate(this%dqdX(this%nAtom, 3, this%nAtom))
+      call env%globalTimer%startTimer(globalTimers%perturb_dx)
       call this%response%dxAtom(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
           & this%eigvecsCplx, this%rhoPrim, this%potential, this%qOutput, this%q0,&
           & this%ints%hamiltonian, this%ints%overlap, this%skHamCont, this%skOverCont,&
@@ -1956,23 +1957,11 @@ contains
           & this%chrgMixerReal, this%tWriteBandDat, this%taggedWriter, this%tWriteAutotest,&
           & autotestTag, this%tWriteResultsTag, resultsTag, this%tWriteDetailedOut,&
           & this%fdDetailedOut%unit, this%kPoint, this%kWeight, this%iCellVec, this%cellVec,&
-          & this%tPeriodic, this%tMulliken, extChrgWrt, nCombinedCharges, wrtCombinedCharges,&
+          & this%tPeriodic, this%tMulliken, atomWrt, nCombinedCharges, wrtCombinedCharges,&
           & jacobian, errStatus, this%tHelical, this%dQdx)
       @:PROPAGATE_ERROR(errStatus)
-    end block
-
-    !call env%globalTimer%startTimer(globalTimers%perturbQM)
-    !call dPsidx(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal, this%rhoPrim,&
-    !    & this%potential, this%qOutput, this%q0, this%ints%hamiltonian, this%ints%overlap,&
-    !    & this%skHamCont, this%skOverCont, this%nonSccDeriv, this%orb, this%nAtom, this%species,&
-    !    & this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
-    !    & this%img2CentCell, this%coord, this%scc, this%maxSccIter, this%sccTol,&
-    !    & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
-    !    & this%tFixEf, this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu,&
-    !    & this%onSiteElements, this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam,&
-    !    & this%chrgMixerReal, this%taggedWriter, this%tWriteAutotest, autotestTag,&
-    !    & this%tWriteResultsTag, resultsTag, this%tMulliken, this%dQdX)
-    !call env%globalTimer%stopTimer(globalTimers%perturbQM)
+      call env%globalTimer%stopTimer(globalTimers%perturb_dx)
+    end if
 
     doPsidxQMMM = .false.
     if (this%nExtChrg > 0) then
@@ -2002,7 +1991,7 @@ contains
         this%extChrgWRT(:) = extChrgWRT(:) + 1
       else
         ! create the main structure (list of MM atoms to calculate derivatives with respect to)
-        !   containing all of the MM atoms (DEFAULT if the list is not provided)
+        ! containing all of the MM atoms (DEFAULT if the list is not provided)
         this%nExtChrgWRT = this%nExtChrg
         allocate(this%extChrgWRT(this%nExtChrgWRT))
         do iExtChrgWRT = 1, this%nExtChrgWRT
@@ -2011,39 +2000,8 @@ contains
       end if
 
       allocate(this%dQdXext(this%nAtom, 3, this%nExtChrgWRT))
-      !call dPsidxQMMM(env, this%parallelKS, this%filling, this%eigen, this%eigVecsReal,&
-      !    & this%qOutput, this%q0, this%ints%hamiltonian, this%ints%overlap, this%orb, this%nAtom,&
-      !    & this%species, this%neighbourList, this%nNeighbourSK, this%denseDesc, this%iSparseStart,&
-      !    & this%img2CentCell, this%coord, this%scc, this%maxSccIter, this%sccTol,&
-      !    & this%nMixElements, this%nIneqOrb, this%iEqOrbitals, this%tempElec, this%Ef,&
-      !    & this%tFixEf, this%spinW, this%thirdOrd, this%dftbU, this%iEqBlockDftbu,&
-      !    & this%onSiteElements, this%iEqBlockOnSite, this%hybridXc, this%nNeighbourCam,&
-      !    & this%chrgMixerReal, this%taggedWriter, this%tWriteAutotest, autotestTag,&
-      !    & this%tWriteResultsTag, resultsTag, this%tMulliken, this%dQdXext, this%nExtChrgWRT,&
-      !    & this%extChrgWRT)
-      !call env%globalTimer%stopTimer(globalTimers%perturbMM)
+
     end if
-
-  ! if (.not. allocated(this%sccCalc)) then
-  !   call error ("Can only run coupled-perturbed DFTB with SCC (DFTB2 or DFTB3)")
-  ! end if
-  ! call env%globalTimer%startTimer(globalTimers%perturbQM)
-  ! call dPsidx_TK(env, this%filling(:,1,1), this%eigen(:,1,1), this%eigVecsReal(:,:,1),&
-  !     & this%potential, this%qOutput, this%q0, this%over, this%skHamCont, this%skOverCont,&
-  !     & this%nonSccDeriv, this%orb, this%nAtom, this%species, this%neighbourList,&
-  !     & this%nNeighbourSK, this%denseDesc, this%iSparseStart, this%img2CentCell, this%coord,&
-  !     & this%sccCalc, this%maxSccIter, this%sccTol, this%tempElec, this%thirdOrd,&
-  !     & this%pChrgMixer)
-  ! call env%globalTimer%stopTimer(globalTimers%perturbQM)
-  ! call env%globalTimer%startTimer(globalTimers%perturbMM)
-  ! call dPsidxQMMM_TK(this%filling(:,1,1), this%eigen(:,1,1), this%eigVecsReal(:,:,1),&
-  !     & this%qOutput, this%q0, this%over, this%nAtom, this%species, this%neighbourList,&
-  !     & this%nNeighbourSK, this%denseDesc, this%iSparseStart, this%img2CentCell, this%coord,&
-  !     & this%sccCalc, this%maxSccIter, this%sccTol, this%tempElec, this%thirdOrd,&
-  !     & this%pChrgMixer)
-  ! call env%globalTimer%stopTimer(globalTimers%perturbMM)
-
-    !call env%globalTimer%stopTimer(globalTimers%perturb)
 
   end subroutine processChargeDerivatives
 
