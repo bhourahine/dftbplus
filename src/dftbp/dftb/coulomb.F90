@@ -36,7 +36,7 @@ module dftbp_dftb_coulomb
   public :: TCoulombInput, TCoulomb, TCoulomb_init
   public :: invRCluster, invRPeriodic, sumInvR, addInvRPrime, getOptimalAlphaEwald, getMaxGEwald
   public :: getMaxREwald, invRStress, calcInvRPrimeAsymm
-  public :: addInvRPrimeXlbomd, invRPrime
+  public :: addInvRPrimeXlbomd
   public :: ewaldReal, ewaldReciprocal, derivEwaldReal, derivEwaldReciprocal, derivStressEwaldRec
 
 
@@ -169,6 +169,11 @@ module dftbp_dftb_coulomb
     !> Adds the forces created by the external charges on charged atoms
     procedure :: addExternalPotGrad
 
+    !> Calculate -1/R**2 due to
+    procedure :: invRPrimeCluster
+    !procedure :: invRPrimePeriodic
+    generic :: invRPrime => invRPrimeCluster !, invRPrimePeriodic
+
   end type TCoulomb
 
 
@@ -193,13 +198,6 @@ module dftbp_dftb_coulomb
     module procedure addInvRPrimeXlbomdCluster
     module procedure addInvRPrimeXlbomdPeriodic
   end interface addInvRPrimeXlbomd
-
-
-  !> 1/r^2 potential
-  interface invRPrime
-    module procedure invRPrimeCluster
-    module procedure invRPrimePeriodicComp
-  end interface invRPrime
 
 
   !> 1/r^2 potential, derivatives for interaction between atoms and ext. charges
@@ -305,6 +303,7 @@ contains
     !> Central cell chemical species
     integer, intent(in) :: species(:)
 
+    this%coords_(:,:) = coords(:, 1:this%nAtom_)
     if (this%boundaryCond_ == boundaryCondsEnum%pbc3d) then
       call this%neighList_%updateCoords(coords(:, 1:this%nAtom_))
     end if
@@ -2767,6 +2766,37 @@ contains
   end subroutine addInvRPrimeClusterMat
 
 
+  !> Calculates the -1/R**2 deriv iCart contribution for atom iAt for the non-periodic case
+  subroutine invRPrimeCluster(this, iCart, iAt, invRDeriv)
+
+    !> Data structure
+    class(TCoulomb), intent(in) :: this
+
+    !> Cartesian component of derivative
+    integer, intent(in) :: iCart
+
+    !> Atom to differentiate wrt to
+    integer, intent(in) :: iAt
+
+    !> Derivative of inverse R potential
+    real(dp), intent(out) :: invRDeriv(:)
+
+    real(dp) :: dist, vect(3), fTmp
+    integer :: jj
+
+    invRDeriv(:) = 0.0_dp
+    do jj = 1, this%nAtom_
+      if (iAt == jj) cycle
+      vect(:) = this%coords_(:, jj) - this%coords_(:, iAt)
+      dist = sqrt(sum(vect(:)**2))
+      fTmp = vect(iCart) / (dist**3)
+      invRDeriv(jj) = this%deltaQAtom_(iAt) * fTmp
+      invRDeriv(iAt) = invRDeriv(iAt) + this%deltaQAtom_(jj) * fTmp
+    end do
+
+  end subroutine invRPrimeCluster
+
+
   !> Calculates the -1/R**2 deriv contribution for the periodic case, without storing anything.
   subroutine addInvRPrimePeriodicMat(this, env, coord, invRDeriv)
 
@@ -2959,47 +2989,6 @@ contains
     end if
 
   end subroutine addExternalPotGrad
-
-
-  !> Calculates the -1/R**2 deriv contribution for potentials for the non-periodic case, without
-  !! storing anything.
-  subroutine invRPrimeCluster(nAtom, coord, deltaQAtom, iCart, iAt, vPrime)
-
-    !> Number of atoms.
-    integer, intent(in) :: nAtom
-
-    !> List of atomic coordinates.
-    real(dp), intent(in) :: coord(:,:)
-
-    !> List of charges on each atom.
-    real(dp), intent(in) :: deltaQAtom(:)
-
-    !> Component of derivative
-    integer, intent(in) :: iCart
-
-    !> Atom to differentiate wrt to
-    integer, intent(in) :: iAt
-
-    !> Contains the derivative of potential
-    real(dp), intent(inout) :: vprime(:)
-
-    integer :: jj
-    real(dp) :: dist, vect(3), fTmp
-
-    do jj = 1, nAtom
-
-      if (iAt == jj) cycle
-
-      vect(:) = coord(:, jj) - coord(:, iAt)
-      dist = sqrt(sum(vect(:)**2))
-      fTmp = vect(iCart) / (dist**3)
-
-      vprime(iAt) = vprime(iAt) + deltaQAtom(jj) * fTmp
-      vprime(jj) = vprime(jj) + deltaQAtom(iAt) * fTmp
-
-    end do
-
-  end subroutine invRPrimeCluster
 
 
   !> Calculates the -1/R**2 deriv contribution for potential from external charge iParticle

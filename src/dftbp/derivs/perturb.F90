@@ -1486,7 +1486,7 @@ contains
     !> Should Mulliken populations be generated/output
     logical, intent(in) :: tMulliken
 
-        !> List of which specific external charge positions (MM atoms) the DFTB charges are to be
+    !> List of which specific external charge positions (MM atoms) the DFTB charges are to be
     !! differentiated (note, incompatible with wrtCombinedCharges)
     integer, intent(in), allocatable :: wrtWhichCharges(:)
 
@@ -1816,7 +1816,6 @@ contains
 
           vdgamma(:,:,:) = 0.0_dp
           vAt(:,:) = 0.0_dp
-
           call sccCalc%updateCoords(env, coord, coord, species, neighbourList)
           call sccCalc%updateCharges(env, qOrb, orb, species, q0)
           call sccCalc%addPotentialDeriv(env, vAt(:,1), vdgamma, species, neighbourList%iNeighbour,&

@@ -14,7 +14,7 @@ module dftbp_dftb_scc
   use dftbp_dftb_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_dftb_chargepenalty, only : TChrgPenalty, TChrgPenalty_init
   use dftbp_dftb_charges, only : getSummedCharges
-  use dftbp_dftb_coulomb, only : invRPrime, TCoulomb, TCoulomb_init, TCoulombInput
+  use dftbp_dftb_coulomb, only : TCoulomb, TCoulomb_init, TCoulombInput
   use dftbp_dftb_extcharges, only : TExtCharges, TExtCharges_init
   use dftbp_dftb_periodic, only : TNeighbourList
   use dftbp_dftb_shortgamma, only : TShortGamma, TShortGamma_init, TShortGammaInput
@@ -987,13 +987,13 @@ contains
     call this%shortGamma%getShiftPerShellDerivative(env, iAt, iCart, orb, this%coord, species,&
         & iNeighbour, img2CentCell, vShell)
 
+    vAt(:) = 0.0_dp
     ! 1/R contribution
     if (this%tPeriodic) then
-      call error("Missing at moment")
       !call invRPrime(env, nAtom_, coord, nNeighEwald_, iNeighbour, gLatPoint_,&
       !    & alpha_, volume_, deltaQAtom_, iCart, iAt, vAt)
     else
-      call invRPrime(this%nAtom, this%coord, this%deltaQAtom, iCart, iAt, vAt)
+      call this%coulomb%invRPrime(iCart, iAt, vAt)
     end if
 
   end subroutine addPotentialDeriv
