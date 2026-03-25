@@ -1445,78 +1445,6 @@ contains
   end subroutine addInvRPrimePeriodic
 
 
-  !> Calculates the -1/R**2 deriv contribution for the periodic case, without storing anything.
-  subroutine invRPrimePeriodicComp(env, nAtom, coord, neighList, recPoint, alpha, volume,&
-      & deltaQAtom, iCart, deriv)
-
-    !> Computational environment settings
-    type(TEnvironment), intent(in) :: env
-
-    !> Number of atoms
-    integer, intent(in) :: nAtom
-
-    !> List of atomic coordinates (all atoms)
-    real(dp), intent(in) :: coord(:,:)
-
-    !> Dynamic neighbour list to be used in the real part of Ewald
-    type(TDynNeighList), target, intent(in) :: neighList
-
-    !> Contains the points included in the reciprocal sum.
-    !! The set should not include the origin or inversion related points.
-    real(dp), intent(in) :: recPoint(:,:)
-
-    !> Parameter for Ewald summation
-    real(dp), intent(in) :: alpha
-
-    !> Volume of the real space unit cell
-    real(dp), intent(in) :: volume
-
-    !> List of charges on each atom
-    real(dp), intent(in) :: deltaQAtom(:)
-
-    !> Cartesian component of derivative
-    integer, intent(in) :: iCart
-
-    !> Derivative on exit
-    real(dp), intent(out) :: deriv(:)
-
-    type(TDynNeighList), pointer :: pNeighList
-    integer :: iAtom1, iAtom2
-    real(dp) :: r(3), tmp
-    integer :: iAtFirst, iAtLast
-
-    pNeighList => neighList
-
-    call distributeRangeInChunks(env, 1, nAtom, iAtFirst, iAtLast)
-    deriv(:) = 0.0_dp
-
-    ! d(1/R)/dr real space
-    !$OMP PARALLEL DO&
-    !$OMP& DEFAULT(SHARED) REDUCTION(+:deriv) SCHEDULE(RUNTIME)
-    do iAtom1 = iAtFirst, iAtLast
-      call addNeighbourContribsInvRPComp(iAtom1, pNeighList, coord, deltaQAtom, alpha, iCart, deriv)
-    end do
-    !$OMP END PARALLEL DO
-
-    ! d(1/R)/dr reciprocal space
-    !$OMP PARALLEL DO&
-    !$OMP& DEFAULT(SHARED) PRIVATE(iAtom2, r, tmp) REDUCTION(+:deriv) SCHEDULE(RUNTIME)
-    do iAtom1 = iAtFirst, iAtLast
-      do iAtom2 = iAtom1+1, nAtom
-        r(:) = coord(:,iAtom1) - coord(:,iAtom2)
-        tmp = derivEwaldReciprocalComp(r, recPoint, alpha, volume, iCart) * deltaQAtom(iAtom1)&
-            & * deltaQAtom(iAtom2)
-        deriv(iAtom1) = deriv(iAtom1) + tmp
-        deriv(iAtom2) = deriv(iAtom2) - tmp
-      end do
-    end do
-    !$OMP END PARALLEL DO
-
-    call assembleChunks(env, deriv)
-
-  end subroutine invRPrimePeriodicComp
-
-
   !> Real space neighbour summation with local scope for predictable OMP <= 4.0 behaviour
   subroutine addNeighbourContribsInvRP(iAtom1, pNeighList, coords, deltaQAtom, alpha, deriv)
 
@@ -1560,56 +1488,6 @@ contains
     end do
 
   end subroutine addNeighbourContribsInvRP
-
-
-  !> Component of real space neighbour summation with local scope for predictable OMP <= 4.0
-  !! behaviour
-  subroutine addNeighbourContribsInvRPComp(iAtom1, pNeighList, coords, deltaQAtom, alpha, iCart,&
-      & deriv)
-
-    !> Atom to differentiate with respect to
-    integer, intent(in) :: iAtom1
-
-    !> Neighbour list for the system
-    type(TDynNeighList), pointer, intent(in) :: pNeighList
-
-    !> Atomic coordinates
-    real(dp), intent(in) :: coords(:,:)
-
-    !> Atom charges
-    real(dp), intent(in) :: deltaQAtom(:)
-
-    !> Ewald alpha parameter
-    real(dp), intent(in) :: alpha
-
-    !> Cartesian component of derivative
-    integer, intent(in) :: iCart
-
-    !> Resulting derivatives (nAtom)
-    real(dp), intent(inout) :: deriv(:)
-
-    type(TNeighIterator) :: neighIter
-    real(dp) :: neighCoords(3, iterChunkSize_)
-    integer :: neighImages(iterChunkSize_)
-    integer :: iAtom2f, iNeigh, nNeigh
-    real(dp) :: rr(3), tmp(3)
-
-    call TNeighIterator_init(neighIter, pNeighList, iAtom1)
-    nNeigh = iterChunkSize_
-    do while (nNeigh == iterChunkSize_)
-      call neighIter%getNextNeighbours(nNeigh, coords=neighCoords, img2CentCell=neighImages)
-      do iNeigh = 1, nNeigh
-        iAtom2f = neighImages(iNeigh)
-        if (iAtom2f /= iAtom1) then
-          rr(:) = coords(:,iAtom1) - neighCoords(:,iNeigh)
-          tmp(:) = derivRTerm(rr, alpha) * deltaQAtom(iAtom1) * deltaQAtom(iAtom2f)
-          deriv(iAtom1) = deriv(iAtom1) + tmp(iCart)
-          deriv(iAtom2f) = deriv(iAtom2f) - tmp(iCart)
-        end if
-      end do
-    end do
-
-  end subroutine addNeighbourContribsInvRPComp
 
 
   !> Component of Real space neighbour summation of potential with local scope for predictable OMP
@@ -2915,6 +2793,7 @@ contains
     do jAt = 1, this%nAtom_
       call addNeighbourVInvRPComp(jAt, pNeighList, this%coords_, this%deltaQAtom_, this%alpha,&
           & iCart, invRDeriv)
+      write(*,*)invRDeriv
     end do
 
     ! d(1/R)/dr reciprocal space
@@ -2923,6 +2802,7 @@ contains
       fTmp(:) = derivEwaldReciprocal(r, this%gLatPoints_, this%alpha, this%volume_)
       invRDeriv(jAt) = invRDeriv(jAt) + this%deltaQAtom_(iAt) * fTmp(iCart)
       invRDeriv(iAt) = invRDeriv(iAt) + this%deltaQAtom_(jAt) * fTmp(iCart)
+      write(*,*)invRDeriv
     end do
 
   end subroutine invRPrimePeriodic
