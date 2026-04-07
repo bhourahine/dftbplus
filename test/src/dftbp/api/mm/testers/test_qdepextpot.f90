@@ -8,7 +8,7 @@
 
 !> Demonstrates the API with population dependant external potentials.
 !>
-!> Use it with the input in the test/api/mm/qdepextpot/ folder.
+!> Use it with the input in the test/src/dftbp/api/mm/testcases/qdepextpot/ folder.
 !>
 program test_qdepextpot
   use dftbplus, only : getDftbPlusApi, getDftbPlusBuild, TDftbPlus, TDftbPlus_init, TDftbPlusInput

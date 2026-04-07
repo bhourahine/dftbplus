@@ -8,7 +8,7 @@
 /**
  * Demonstrates the API with population dependant external potentials.
  *
- * Use it with the input in the qdepextpot/ folder.
+ * Use it with the input in the test/src/dftbp/api/mm/testcases/qdepextpotc/ folder.
  */
 
 #include <stdio.h>

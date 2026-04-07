@@ -7,4 +7,5 @@
 #------------------------------------------------------------------------------#
 
 RUN_CMD="$@"
+echo "$RUN_CMD ../../testers/test_extpot"
 exec $RUN_CMD ../../testers/test_extpot
