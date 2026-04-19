@@ -619,7 +619,7 @@ module dftbp_dftbplus_inputdata
 
 #:else
 
-  !> Dummy type replacement
+  !> Fake type replacement, as compiled without libNEGF
   type TNegfInfo
   end type TNegfInfo
 

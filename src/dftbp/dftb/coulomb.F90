@@ -248,8 +248,8 @@ contains
       this%autoEwald_ = this%alpha <= 0.0_dp
       this%tolEwald_ = input%tolEwald
       allocate(this%neighList_)
-      ! Using dummy cutoff for real space neighbour list. It will be updated with correct value once
-      ! lattice vectors and actual cutoff are known.
+      ! Using placeholder cutoff for real space neighbour list. It will be updated with correct
+      ! value once lattice vectors and actual cutoff are known.
       call TDynNeighList_init(this%neighList_, 0.0_dp, this%nAtom_, .true.)
     end if
 
@@ -336,7 +336,7 @@ contains
 
     real(dp) :: maxREwald, maxGEwald
 
-    real(dp), allocatable :: dummy(:,:)
+    real(dp), allocatable :: tempCellVecs(:,:)
 
     @:ASSERT(all(shape(latVecs) == shape(this%latVecs_)))
 
@@ -353,8 +353,9 @@ contains
 
     this%volume_ = volume
 
-    ! Fold charges back to unit cell
-    call getCellTranslations(dummy, this%rLatPoints_, latVecs, recVecs / (2.0_dp * pi), maxREwald)
+    ! Fold charges back to central cell
+    call getCellTranslations(tempCellVecs, this%rLatPoints_, latVecs, recVecs / (2.0_dp * pi),&
+        & maxREwald)
 
     call this%neighList_%updateLatVecs(latVecs, recVecs / (2.0_dp * pi))
 
