@@ -10,7 +10,10 @@
 !> Contains simple temperature profiles for molecular dynamics.
 module dftbp_md_tempprofile
   use dftbp_common_accuracy, only : dp, minTemp
+  use dftbp_common_constants, only : Boltzmann
+  use dftbp_common_globalenv, only : stdOut
   use dftbp_io_charmanip, only : tolower
+  use dftbp_io_commonformats, only : format2U
   implicit none
 
   private
@@ -169,7 +172,6 @@ contains
       this%incr = log(supVal/subVal) / real(sup - sub, dp)
       this%curTemp = subVal * exp(this%incr * real(this%iStep - sub, dp))
     end select
-    print *, "TempProfile:", this%iStep, this%curTemp
 
   end subroutine next
 
@@ -184,6 +186,8 @@ contains
     real(dp), intent(out) :: temp
 
     temp = this%curTemp
+    write(stdOut, format2U)"Target MD temperature", this%curTemp, 'a.u.', this%curTemp / Boltzmann,&
+        & 'K'
 
   end subroutine getTemperature
 
