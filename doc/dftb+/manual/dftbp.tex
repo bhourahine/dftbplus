@@ -883,7 +883,6 @@ selection expressions, as described in appendix \ref{sec:index_selection}.
 
 \item[\is{KeepStationary}] Remove translational motion from the system.
 
-
 \item[\is{TimeStep}]\modif{\modtype{time}} Time interval between two
   MD steps.
 
@@ -1074,7 +1073,8 @@ all of the atoms in the system.
 
 Langevin thermostat~\cite{} which samples close to the NVT\index{NVT
   ensemble} ensemble. Dynamics faster than the timescale of the
-thermostat are not sampling from this distribution.
+thermostat are not sampling from this distribution. Note: For this
+thermostat the default for \is{KeepStationary} is \is{No}.
 
 \begin{ptable}
   \kw{Temperature}      & r|m & & - & \\

@@ -623,18 +623,21 @@ contains
       end if
       call readInitialVelocities(node, ctrl, geom%nAtom)
 
-      call getChildValue(node, "KeepStationary", ctrl%tMDstill,.true.)
-      if (ctrl%tMDstill .and. geom%nAtom == 1) then
-        call error("Removing translational freedom with only one atom not&
-            & possible.")
-      end if
-
       call getChildValue(node, "TimeStep", ctrl%deltaT, modifier=modifier, &
           &child=field)
       call convertUnitHsd(char(modifier), timeUnits, field, ctrl%deltaT)
 
       call parseThermostat(node, ctrl%deltaT, ctrl%tReadMDVelocities, ctrl%maxRun,&
           & ctrl%thermostatInp, ctrl%tempProfileInp)
+
+      if (ctrl%thermostatInp%thermostatType == thermostatTypes%langevin) then
+        call getChildValue(node, "KeepStationary", ctrl%tMDstill, .false.)
+      else
+        call getChildValue(node, "KeepStationary", ctrl%tMDstill, .true.)
+      end if
+      if (ctrl%tMDstill .and. geom%nAtom == 1) then
+        call error("Removing translational freedom with only one atom not possible.")
+      end if
 
       if (ctrl%maxRun < -1) then
         call getChildValue(node, "Steps", ctrl%maxRun)
