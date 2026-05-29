@@ -513,81 +513,90 @@ contains
 
 
   !> Evaluate transition density matrix for time independent excitation
-  subroutine tiTDM(g, e, pt, gfilling, mfilling, overSqr)
+  subroutine tiTDM(cGround, cMixed, pTransition, gFilling, mFilling, overSqr)
 
     !> DFTB ground state MO eigenvectors
-    real(dp), intent(inout) :: g(:,:)
+    real(dp), intent(in) :: cGround(:,:)
 
     !> TI-DFTB mixed-determinant MO eigenvectors
-    real(dp), intent(inout) :: e(:,:)
+    real(dp), intent(in) :: cMixed(:,:)
 
     !> Transition density matrix in corresponding orbital basis
-    real(dp), intent(inout) :: pt(:,:)
+    real(dp), intent(inout) :: pTransition(:,:)
 
     !> DFTB ground state occupation numbers
-    real(dp), intent(in) :: gfilling(:)
+    real(dp), intent(in) :: gFilling(:)
 
     !> TI-DFTB mixed-determinant occupation numbers
-    real(dp), intent(in) :: mfilling(:)
+    real(dp), intent(in) :: mFilling(:)
 
-    !> Left eigenvectors (corresponding orbitals) from SVD
+    ! Left eigenvectors (corresponding orbitals) from SVD
     real(dp), allocatable :: u(:,:)
 
-    !> Right eigenvectors (corresponding orbitals) from SVD
-    real(dp), allocatable :: vt(:,:)
-
-    !> Temporary storage for matrix products in this subroutine
-    real(dp), allocatable :: M(:,:)
-
-    !> Singular values from SVD
+    ! Singular values from SVD
     real(dp), allocatable :: sigma(:)
 
-    !> DFTB ground state MO eigenvectors in transformed (CO) basis
-    real(dp), allocatable :: Cg(:,:)
+    ! Right eigenvectors (corresponding orbitals) from SVD
+    real(dp), allocatable :: vt(:,:)
 
-    !> TI-DFTB excited state MO eigenvectors in transformed (CO) basis
-    real(dp), allocatable :: Ce(:,:)
+    ! Temporary storage for matrix products in this subroutine
+    real(dp), allocatable :: M(:,:)
+
+    ! DFTB ground state MO eigenvectors in transformed (CO) basis
+    real(dp), allocatable :: cG(:,:)
+
+    ! TI-DFTB excited state MO eigenvectors in transformed (CO) basis
+    real(dp), allocatable :: cM(:,:)
 
     !> Overlap matrix between basis functions
     real(dp), intent(in) :: overSqr(:,:)
 
-    integer :: jj, nElec
+    integer :: ii
 
-    allocate(u(size(e,dim=1), size(e,dim=2)))
-    allocate(vt(size(e,dim=1), size(e,dim=2)))
-    allocate(M(size(e,dim=1), size(e,dim=2)))
-    allocate(sigma(size(e,dim=1)))
-    allocate(Ce(size(e,dim=1), size(e,dim=2)))
-    allocate(Cg(size(e,dim=1), size(e,dim=2)))
+    write(*,*)'G Filling', gFilling
+    write(*,*)'E Filling', mFilling
 
-    !! Determine how many orbitals with non-negligible occupations to track
-    do jj = size(gfilling), 1, -1
-      nElec = jj
-      if (abs(gfilling(jj)) >= epsilon(1.0_dp)) then
-        exit
-      end if
-    end do
-
+    allocate(cG(size(cGround,dim=1), size(cGround,dim=2)))
+    allocate(cM(size(cMixed,dim=1), size(cMixed,dim=2)))
     !! Compute singular value decomposition of non-orthogonal MO-MO overlap
-    M = matmul(transpose(g), matmul(overSqr, e))
+    do ii = 1, size(cGround, dim=2)
+      cG(:,ii) = cGround(:,ii) * gFilling(ii)
+    end do
+    do ii = 1, size(cMixed, dim=2)
+      cM(:,ii) = cMixed(:,ii) * mFilling(ii)
+    end do
+    allocate(M(size(cGround,dim=2), size(cMixed,dim=2)))
+    M(:,:) = matmul(transpose(cG), matmul(overSqr, cM))
+    deallocate(cG)
+    deallocate(cM)
+
+    allocate(u(size(cMixed,dim=2), size(cMixed,dim=2)))
+    allocate(sigma(min(size(cMixed,dim=2), size(cGround,dim=2))))
+    allocate(vt(size(cGround,dim=2), size(cGround,dim=2)))
     call gesvd(M,u,sigma,vt)
+    write(*,*)'SVs', sigma
+    deallocate(sigma)
+    deallocate(M)
 
-    !! Rotate g into corresponding orbital basis and isolate the occupied MOs
-    M(:,:) = 0.0_dp
-    do jj = 1, size(g, dim=2)
-      M(:,jj) = g(:,jj) * gFilling(jj)
+    ! Rotate ground into corresponding orbital basis and isolate the occupied MOs
+    allocate(cG(size(cGround,dim=1), size(cGround,dim=2)))
+    allocate(M(size(cGround,dim=1), size(cGround,dim=2)), source=0.0_dp)
+    do ii = 1, size(cGround, dim=2)
+      M(:,ii) = cGround(:,ii) * gFilling(ii)
     end do
-    Cg = matmul(M,u)
-    write(*,*)
+    cG(:,:) = matmul(M,u)
+    deallocate(M)
 
-    !! Rotate e into corresponding orbital basis and isolate the occupied MOs
-    M(:,:) = 0.0_dp
-    do jj = 1, size(e, dim=2)
-      M(:,jj) = e(:,jj) * mFilling(jj)
+    ! Rotate excited into corresponding orbital basis and isolate the occupied MOs
+    allocate(cM(size(cMixed,dim=1), size(cMixed,dim=2)))
+    allocate(M(size(cMixed,dim=1), size(cMixed,dim=2)), source=0.0_dp)
+    do ii = 1, size(cMixed, dim=2)
+      M(:,ii) = cMixed(:,ii) * mFilling(ii)
     end do
-    Ce = matmul(M,transpose(vt))
+    cM(:,:) = matmul(M,transpose(vt))
+    deallocate(M)
 
-    pt = matmul(Cg,transpose(Ce))
+    pTransition(:,:) = matmul(cG,transpose(cM))
 
   end subroutine tiTDM
 
@@ -691,10 +700,11 @@ contains
     ! Corresponding orbital transformation of stored ground and excited MOs
     do iSpin = 1, size(gfilling, dim=3)
 
+      write(*,*)'HERE', iSpin
       call tiTDM(tiMatG(:,:,iSpin), tiMatE(:,:,iSpin), tiMatPT, gfilling(:,1,iSpin),&
           & mfilling(:,1,iSpin), overSqr)
 
-      ! Matrix of transition density
+      ! Matrix of transition density matrix
       tiTransitionDensity(:,:, iSpin) = tiMatPT
       call adjointLowerTriangle(tiTransitionDensity(:,:, iSpin))
 
