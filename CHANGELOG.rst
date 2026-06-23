@@ -32,6 +32,8 @@ Added
 
 - API bindings for coupled-perturbed derivatives
 
+- Pairwise bond populations, bond energies and Mayer bond orders
+
 
 Changed
 -------
@@ -49,6 +51,10 @@ Fixed
   enforcement
 
 - API include file now can also be used for C++ codes
+
+- Removed incorrect scaling factor applied to spin-vectors (only) in
+  XYZ files containing both atomic populations and noncolinear spin
+  vectors.
 
 
 25.1 (2025-12-18)

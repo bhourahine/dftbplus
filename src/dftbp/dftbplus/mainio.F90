@@ -15,7 +15,7 @@
 !> Various I/O routines for the main program.
 module dftbp_dftbplus_mainio
   use dftbp_common_accuracy, only : dp, lc, mc, sc
-  use dftbp_common_constants, only : au__Debye, au__fs, au__pascal, au__V_m, Bohr__AA, Boltzmann,&
+  use dftbp_common_constants, only : au__Debye, au__pascal, au__V_m, Bohr__AA, Boltzmann,&
       & gfac, Hartree__eV, pi, quaternionName, spinName
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_file, only : closeFile, openFile, TFileDescr
@@ -40,7 +40,8 @@ module dftbp_dftbplus_mainio
   use dftbp_io_charmanip, only : i2c
   use dftbp_io_commonformats, only : format1U, format1U1e, format1Ue, format2U, format2Ue,&
       & formatBorn, formatdBorn, formatGeoOut, formatHessian
-  use dftbp_io_formatout, only : writeGenFormat, writeSparse, writeSparseAsSquare, writeXYZFormat
+  use dftbp_io_formatout, only : writeGenFormat, writeSparse, writeSparseAsSquare,&
+      & writeXYZFormat
   use dftbp_io_hsdutils, only : writeChildValue
   use dftbp_io_message, only : error, warning
   use dftbp_io_taggedoutput, only : tagLabels, TTaggedWriter
@@ -81,6 +82,7 @@ module dftbp_dftbplus_mainio
 #:endif
   public :: writeProjectedEigenvectors
   public :: writeAutotestTag, writeResultsTag, writeDetailedXml, writeBandOut
+  public :: writeBondInfo
   public :: writeDerivBandOut, writeHessianOut, writeBornChargesOut, writeBornDerivs
   public :: openOutputFile
   public :: writeDetailedOut1, writeDetailedOut2, writeDetailedOut2Dets, writeDetailedOut3
@@ -2036,6 +2038,108 @@ contains
     call closeFile(fd)
 
   end subroutine writeAutotestTag
+
+
+  !> Writes pairwise Mulliken bond populations, non-SCC bond energies and/or
+  !! Mayer bond orders as plain-text N x N matrices.
+  subroutine writeBondInfo(bondPop, bondEner, bondOrder, tWriteAutotest, autotestFile,&
+      & tWriteResultsTag, resultsFile, taggedWriter)
+
+    !> Pairwise Mulliken bond populations (allocation status used as a flag)
+    real(dp), allocatable, intent(in) :: bondPop(:,:)
+
+    !> Pairwise non-SCC bond energies (allocation status used as a flag)
+    real(dp), allocatable, intent(in) :: bondEner(:,:)
+
+    !> Pairwise Mayer bond orders (allocation status used as a flag)
+    real(dp), allocatable, intent(in) :: bondOrder(:,:)
+
+    !> Whether tagged output should be appended for regression testing
+    logical, intent(in) :: tWriteAutotest
+
+    !> Name of the autotest tag file to append to (mode = "a")
+    character(*), intent(in) :: autotestFile
+
+    !> Whether tagged output should be appended for results file
+    logical, intent(in) :: tWriteResultsTag
+
+    !> Name of the results tag file to append to (mode = "a")
+    character(*), intent(in) :: resultsFile
+
+    !> Tagged-output writer
+    type(TTaggedWriter), intent(inout) :: taggedWriter
+
+    type(TFileDescr) :: fd
+    integer :: nAtom, iAt
+
+    if (.not.any([allocated(bondPop), allocated(bondEner), allocated(bondOrder)])) return
+    if (.not.any([tWriteAutotest, tWriteResultsTag])) return
+
+    if (allocated(bondPop)) then
+      nAtom = size(bondPop, dim=1)
+      call openFile(fd, "bond_pop.dat", mode="w")
+      write(fd%unit, "(A)")&
+          & "# Mulliken bond populations: B_AB = sum_{mu in A, nu in B} P_{mu nu} S_{mu nu}"
+      write(fd%unit, "(A,I0)") "# nAtom = ", nAtom
+      do iAt = 1, nAtom
+        write(fd%unit, "(*(ES16.8,1x))") bondPop(iAt,:)
+      end do
+      call closeFile(fd)
+    end if
+
+    if (allocated(bondEner)) then
+      nAtom = size(bondEner, dim=1)
+      call openFile(fd, "bond_energy.dat", mode="w")
+      write(fd%unit, "(A)")&
+          & "# Non-SCC bond energies: E_AB = sum_{mu in A, nu in B} P_{mu nu} H0_{mu nu} (a.u.)"
+      write(fd%unit, "(A,I0)") "# nAtom = ", nAtom
+      do iAt = 1, nAtom
+        write(fd%unit, "(*(ES16.8,1x))") bondEner(iAt,:)
+      end do
+      call closeFile(fd)
+    end if
+
+    if (allocated(bondOrder)) then
+      nAtom = size(bondOrder, dim=1)
+      call openFile(fd, "bond_order.dat", mode="w")
+      write(fd%unit, "(A)")&
+          & "# Mayer bond orders: B_AB = sum_{mu in A, nu in B} (PS)_{mu nu} (PS)_{nu mu}"
+      write(fd%unit, "(A,I0)") "# nAtom = ", nAtom
+      do iAt = 1, nAtom
+        write(fd%unit, "(*(ES16.8,1x))") bondOrder(iAt,:)
+      end do
+      call closeFile(fd)
+    end if
+
+    if (tWriteAutotest) then
+      call openFile(fd, autotestFile, mode="a")
+      if (allocated(bondPop)) then
+        call taggedWriter%write(fd%unit, tagLabels%bondPopulations, bondPop)
+      end if
+      if (allocated(bondEner)) then
+        call taggedWriter%write(fd%unit, tagLabels%bondEnergies, bondEner)
+      end if
+      if (allocated(bondOrder)) then
+        call taggedWriter%write(fd%unit, tagLabels%bondOrders, bondOrder)
+      end if
+      call closeFile(fd)
+    end if
+
+    if (tWriteResultsTag) then
+      call openFile(fd, resultsFile, mode="a")
+      if (allocated(bondPop)) then
+        call taggedWriter%write(fd%unit, tagLabels%bondPopulations, bondPop)
+      end if
+      if (allocated(bondEner)) then
+        call taggedWriter%write(fd%unit, tagLabels%bondEnergies, bondEner)
+      end if
+      if (allocated(bondOrder)) then
+        call taggedWriter%write(fd%unit, tagLabels%bondOrders, bondOrder)
+      end if
+      call closeFile(fd)
+    end if
+
+  end subroutine writeBondInfo
 
 
   !> Writes out machine readable data
@@ -4510,11 +4614,11 @@ contains
       @:ASSERT(allocated(velocities))
       @:ASSERT(allocated(derivs))
       if (tPrintMulliken) then
-        call writeXYZFormatWithForces_(fname, pCoord0Out, species0, speciesName, velocities,&
-            & -derivs(:, 1:nAtom), comment, tAppendGeo, charges=sum(qOutput(:,:,1), dim=1))
+        call writeXYZFormat(fname, pCoord0Out, species0, speciesName, charges=sum(qOutput(:,:,1),&
+            & dim=1), velocities=velocities, forces=-derivs, comment=comment, append=tAppendGeo)
       else
-        call writeXYZFormatWithForces_(fname, pCoord0Out, species0, speciesName, velocities,&
-            & -derivs(:, 1:nAtom), comment, tAppendGeo)
+        call writeXYZFormat(fname, pCoord0Out, species0, speciesName, velocities=velocities,&
+            & forces=-derivs, comment=comment, append=tAppendGeo)
       end if
     else
       if (tPrintMulliken) then
@@ -4536,79 +4640,6 @@ contains
     end if
 
   end subroutine writeCurrentGeometry
-
-
-  !> Writes XYZ geometry with Mulliken charge, velocity and force columns.
-  subroutine writeXYZFormatWithForces_(fileName, coords, species, speciesNames, velocities, forces,&
-      & comment, append, charges)
-
-    !> File name to write to
-    character(*), intent(in) :: fileName
-
-    !> Coordinates in atomic units
-    real(dp), intent(in) :: coords(:,:)
-
-    !> Species of atoms
-    integer, intent(in) :: species(:)
-
-    !> Species names
-    character(*), intent(in) :: speciesNames(:)
-
-    !> Velocities for each atom
-    real(dp), intent(in) :: velocities(:,:)
-
-    !> Forces for each atom (in atomic units)
-    real(dp), intent(in) :: forces(:,:)
-
-    !> Comment for the XYZ frame header
-    character(*), intent(in) :: comment
-
-    !> Whether to append to existing file
-    logical, intent(in) :: append
-
-    !> Optional Mulliken charges
-    real(dp), intent(in), optional :: charges(:)
-
-    type(TFileDescr) :: fd
-    character(1) :: mode
-    integer :: ii, nAtom, nSpecies
-    real(dp) :: forceConv
-
-    nAtom = size(coords, dim=2)
-    nSpecies = maxval(species)
-    forceConv = Hartree__eV / Bohr__AA
-    @:ASSERT(size(coords, dim=1) == 3)
-    @:ASSERT(size(species) == nAtom)
-    @:ASSERT(size(speciesNames) == nSpecies)
-    @:ASSERT(all(shape(velocities) == [3, nAtom]))
-    @:ASSERT(all(shape(forces) == [3, nAtom]))
-    if (present(charges)) then
-      @:ASSERT(size(charges) == nAtom)
-    end if
-
-    if (append) then
-      mode = "a"
-    else
-      mode = "w"
-    end if
-
-    call openFile(fd, fileName, mode=mode)
-    write(fd%unit, "(I0)") nAtom
-    write(fd%unit, "(A)") trim(comment)
-
-    if (present(charges)) then
-      write(fd%unit, "(A5,10F16.8)") (trim(speciesNames(species(ii))), coords(:, ii) * Bohr__AA,&
-          & charges(ii), velocities(:, ii) * Bohr__AA / au__fs * 1000.0_dp,&
-          & forces(:, ii) * forceConv, ii = 1, nAtom)
-    else
-      write(fd%unit, "(A5,9F16.8)") (trim(speciesNames(species(ii))), coords(:, ii) * Bohr__AA,&
-          & velocities(:, ii) * Bohr__AA / au__fs * 1000.0_dp, forces(:, ii) * forceConv,&
-          & ii = 1, nAtom)
-    end if
-
-    call closeFile(fd)
-
-  end subroutine writeXYZFormatWithForces_
 
 
   !> Write geometry including periodic images to disc

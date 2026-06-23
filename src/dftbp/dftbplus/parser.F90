@@ -120,6 +120,7 @@ module dftbp_dftbplus_parser
 
     !> HSD output?
     logical :: tWriteHSD
+
   end type TParserFlags
 
 
@@ -371,8 +372,7 @@ contains
     end if
     call getChildValue(node, "StopAfterParsing", flags%tStop, .false.)
 
-    call getChildValue(node, "IgnoreUnprocessedNodes", &
-        &flags%tIgnoreUnprocessed, .false.)
+    call getChildValue(node, "IgnoreUnprocessedNodes", flags%tIgnoreUnprocessed, .false.)
 
   end subroutine readParserOptions
 
@@ -4949,9 +4949,7 @@ contains
     !> Control structure to fill
     type(TControl), intent(inout) :: ctrl
 
-    type(fnode), pointer :: child
-    type(fnode), pointer :: child2, child3
-    type(fnode), pointer :: value
+    type(fnode), pointer :: child, child2, child3, value
     type(string) :: buffer, modifier
 
     ! Linear response stuff
@@ -5015,6 +5013,11 @@ contains
       ctrl%lrespini%tOscillatorWindow = ctrl%lrespini%oscillatorWindow /= 0.0_dp
       call convertUnitHsd(char(modifier), dipoleUnits, child2, ctrl%lrespini%oscillatorWindow)
       call getChildValue(child, "CacheCharges", ctrl%lrespini%tCacheCharges, default=.true.)
+    #:if WITH_MPI
+      if (.not.ctrl%lrespini%tCacheCharges) then
+        call detailedError(child, "Uncached charges currently not supported for MPI enabled builds")
+      end if
+    #:endif
       call getChildValue(child, "WriteMulliken", ctrl%lrespini%tMulliken, default=.false.)
       call getChildValue(child, "WriteCoefficients", ctrl%lrespini%tCoeffs, default=.false.)
       ctrl%lrespini%tGrndState = .false.
@@ -5055,6 +5058,12 @@ contains
           call getChildValue(child2, "WriteStatusArnoldi", ctrl%lrespini%tArnoldi, default=.false.)
           call getChildValue(child2, "TestArnoldi", ctrl%lrespini%tDiagnoseArnoldi, default=.false.)
           ctrl%lrespini%iLinRespSolver = linRespSolverTypes%Arpack
+          call getChild(child2, "StatesAround", child3, requested=.false., modifier=modifier)
+          if (associated(child3)) then
+            allocate(ctrl%lrespini%shiftSpace)
+            call getChildValue(child3, "", ctrl%lrespini%shiftSpace, modifier=modifier)
+            call convertUnitHsd(char(modifier), energyUnits, child3, ctrl%lrespini%shiftSpace)
+          end if
         case ("stratmann")
           ctrl%lrespini%iLinRespSolver = linRespSolverTypes%Stratmann
           call getChildValue(child2, "SubSpaceFactor", ctrl%lrespini%subSpaceFactorStratmann, 20)
@@ -5425,6 +5434,12 @@ contains
           call readCM5(child, ctrl%cm5Input, geom)
         end if
       end if
+      call getChildValue(node, "WriteBondPopulation", ctrl%writeBondPopul, .false.)
+      call getChildValue(node, "WriteBondEnergy", ctrl%writeBondEnergy, .false.)
+      if (.not. withMpi) then
+        call getChildValue(node, "WriteBondOrder", ctrl%writeBondOrder, .false.)
+      end if
+
       call getChildValue(node, "AtomResolvedEnergies", ctrl%tAtomicEnergy, .false.)
 
       if (allocated(ctrl%solvInp)) then
