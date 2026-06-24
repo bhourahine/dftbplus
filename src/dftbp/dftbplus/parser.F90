@@ -633,7 +633,7 @@ contains
       call convertUnitHsd(char(modifier), timeUnits, field, ctrl%deltaT)
 
       call parseThermostat(node, ctrl%deltaT, ctrl%tReadMDVelocities, ctrl%maxRun,&
-          & ctrl%thermostatInp, ctrl%tempProfileInp)
+          & ctrl%thermostatInp, ctrl%tempProfileInp, geom%nAtom)
 
       if (ctrl%maxRun < -1) then
         call getChildValue(node, "Steps", ctrl%maxRun)
@@ -8193,7 +8193,8 @@ contains
 
 
   !> Parser the thermostat information from the HSD input
-  subroutine parseThermostat(node, deltaT, hasInitVelocities, maxRun, thermostatInp, tempProfileInp)
+  subroutine parseThermostat(node, deltaT, hasInitVelocities, maxRun, thermostatInp,&
+      tempProfileInp, nAtom)
 
     !> Parent node of the thermostat node
     type(fnode), pointer, intent(in) :: node
@@ -8213,12 +8214,24 @@ contains
     !> Temperature profile input filled up from the HSD data
     type(TTempProfileInput), allocatable, intent(out) :: tempProfileInp
 
-    type(fnode), pointer :: thermNode, child, child2
+    !> Number of atoms
+    integer, intent(in) :: nAtom
+    
+    type(fnode), pointer :: thermNode, child, child2, child3
     type(string) :: thermName, modifier
+    logical :: hasRegional = .false.
 
     allocate(thermostatInp, tempProfileInp)
     call getChildValue(node, "Thermostat", thermNode, child=child)
     call getNodeName(thermNode, thermName)
+    
+    ! Detect if a RegionalThermostat block is present; only valid for Langevin
+    call getChild(thermNode, "RegionalThermostat", child=child2, requested=.false.)
+    hasRegional = associated(child2)
+    if(char(thermName) /= "langevin" .and. hasRegional) then
+      call detailedError(child2, &
+          "RegionalThermostat may only appear inside a Langevin thermostat block.")
+    end if
 
     select case(char(thermName))
 
@@ -8271,6 +8284,49 @@ contains
           call detailedError(thermNode, "Either Frequency or TimeConstant must be set for the&
               & Langevin thermostat.")
         end if
+      end if
+
+      ! Check for regional thermostat configuration
+      call getChild(thermNode, "RegionalThermostat", child=child2, requested=.false.)
+      if (associated(child2)) then
+        thermostatInp%langevin%tRegioTherm = .true.
+        allocate(thermostatInp%langevin%regionTemperature(2))
+        allocate(thermostatInp%langevin%regionStart(2))
+        allocate(thermostatInp%langevin%regionEnd(2))
+        
+        ! Read region 1 configuration
+        call getChild(child2, "Region1", child=child3, requested=.false.)
+        if (.not. associated(child3)) then
+          call detailedError(child2, "Regional thermostat enabled but region data not provided&
+              & (Region1 is missing)")
+        end if
+        call getChildValue(child3, "Temperature", thermostatInp%langevin%regionTemperature(1),&
+            & modifier=modifier, child=child)
+        call convertUnitHsd(char(modifier), energyUnits, child, &
+           & thermostatInp%langevin%regionTemperature(1))
+        call readAtomRange_(child3, "Atoms", thermostatInp%langevin%regionStart(1),&
+           & thermostatInp%langevin%regionEnd(1), nAtom)
+        
+        ! Read region 2 configuration
+        call getChild(child2, "Region2", child=child3, requested=.false.)
+        if (.not. associated(child3)) then
+          call detailedError(child2, "Regional thermostat enabled but region data not provided&
+              & (Region2 is missing)")
+        end if
+        call getChildValue(child3, "Temperature", thermostatInp%langevin%regionTemperature(2),&
+            & modifier=modifier, child=child)
+        call convertUnitHsd(char(modifier), energyUnits, child,& 
+            & thermostatInp%langevin%regionTemperature(2))
+        call readAtomRange_(child3, "Atoms", thermostatInp%langevin%regionStart(2),&
+            & thermostatInp%langevin%regionEnd(2), nAtom)
+        
+        ! Check for region overlap
+        if (.not. (thermostatInp%langevin%regionEnd(1) < thermostatInp%langevin%regionStart(2) &
+           & .or. thermostatInp%langevin%regionEnd(2) < thermostatInp%langevin%regionStart(1))) then
+          call detailedError(child2, "Thermostat regions 1 and 2 overlap in regional thermostat& 
+              & configuration")
+        end if
+        
       end if
 
     case ("nosehoover")
@@ -8358,6 +8414,59 @@ contains
 
     end subroutine readTempOrTempProfile_
 
+    !> Reads atom range in format "start:end", supports negative indices (-1 = last atom)
+    subroutine readAtomRange_(node, key, iStart, iEnd, nAtom)
+      type(fnode), pointer, intent(in) :: node
+      character(*), intent(in) :: key
+      integer, intent(out) :: iStart, iEnd
+      integer, intent(in) :: nAtom
+      
+      type(fnode), pointer :: child
+      type(string) :: buffer
+      character(len=80) :: buf
+      character(len=32) :: nAtomStr
+      integer :: colonPos, ioErr
+      
+      call getChildValue(node, key, buffer, child=child)
+      buf = trim(adjustl(char(buffer)))
+      
+      colonPos = index(buf, ':')
+      if (colonPos == 0) then
+        call detailedError(child, "Atom range must be in format 'start:end', e.g. '1:50' or '1:-1'")
+      end if
+      
+      read(buf(1:colonPos-1), '(I10)', iostat=ioErr) iStart
+      if (ioErr /= 0) then
+        call detailedError(child, "Invalid start atom in range '"//trim(buf)//"'")
+      end if
+      
+      read(buf(colonPos+1:len(trim(buf))), '(I10)', iostat=ioErr) iEnd
+      if (ioErr /= 0) then
+        call detailedError(child, "Invalid end atom in range '"//trim(buf)//"'")
+      end if
+      
+      ! Handle negative indices (Python-like: -1 = last atom)
+      if (iStart < 0) then
+        iStart = nAtom + iStart + 1
+      end if
+      if (iEnd < 0) then
+        iEnd = nAtom + iEnd + 1
+      end if
+
+      ! Validate bounds
+      write(nAtomStr, '(I0)') nAtom
+      if (iStart < 1 .or. iStart > nAtom) then
+        call detailedError(child, "Start atom out of valid range [1, "//trim(nAtomStr)//"]")
+      end if
+      if (iEnd < 1 .or. iEnd > nAtom) then
+        call detailedError(child, "End atom out of valid range [1, "//trim(nAtomStr)//"]")
+      end if
+      if (iStart > iEnd) then
+        call detailedError(child, "Start atom > End atom in range '"//trim(buf)//"'")
+      end if
+      
+    end subroutine readAtomRange_
+    
   end subroutine parseThermostat
 
 

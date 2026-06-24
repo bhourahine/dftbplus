@@ -28,6 +28,18 @@ module dftbp_md_langevintherm
     !> Coupling strength
     real(dp) :: gamma
 
+    !> Enable regional thermostat
+    logical :: tRegioTherm = .false.
+
+    !> Temperature in Kelvin for each region (1 and 2)
+    real(dp), allocatable :: regionTemperature(:)
+
+    !> Starting atom index for each region
+    integer, allocatable :: regionStart(:)
+
+    !> Ending atom index for each region
+    integer, allocatable :: regionEnd(:)
+
   end type TLangevinThermInput
 
 
@@ -109,31 +121,31 @@ contains
     this%pMDFramework = pMDFramework
     this%deltaT = deltaT
     
-    ! Read regional information once during initialization
-    open(newunit=unit, file='thermoRange.dat', status='old', iostat=iStat) 
-    if (iStat /= 0) then
-      this%tRegioTherm = .false.
-    else
-      this%tRegioTherm = .true.
+    ! Initialize regional thermostat from input data
+    this%tRegioTherm = input%tRegioTherm
+    print *,' this%tRegioTherm ', this%tRegioTherm 
+    if (this%tRegioTherm) then
       this%energyExchange = 0.0_dp
       
-      do iReg = 1, 2
-        read(unit, *, iostat=iStat) this%regKT(iReg), this%startReg(iReg), this%endReg(iReg)
-        if (iStat /= 0) call error("Error: Could not read line for region in thermoRange.dat")
-        if (this%startReg(iReg) < 1 .or. this%endReg(iReg) > this%nAtom) then
-          call error("Thermostat region indices out of physical bounds (1 to nAtoms).")
-        end if
-        if (this%startReg(iReg) > this%endReg(iReg)) then
-          call error("startReg > endReg in thermoRange.dat.")
-        end if
-        ! Convert K to atomic units (Hartree)
-        this%regKT(iReg) = this%regKT(iReg) * KB_AU
-      end do
-      if (.not. (this%endReg(1) < this%startReg(2) .or. this%endReg(2) < this%startReg(1))) then
-        call error("Thermostat regions 1 and 2 overlap in thermoRange.dat.")
+      if (.not. allocated(input%regionTemperature) .or. &
+          & .not. allocated(input%regionStart) .or. &
+          & .not. allocated(input%regionEnd)) then
+        call error("Regional thermostat: internal error - region data not provided")
       end if
+      
+      if (size(input%regionTemperature) /= 2 .or. &
+          & size(input%regionStart) /= 2 .or. &
+          & size(input%regionEnd) /= 2) then
+        call error("Regional thermostat: internal error - incorrect number of regions")
+      end if
+      
+      do iReg = 1, 2
+        this%regKT(iReg) = input%regionTemperature(iReg)
+        this%startReg(iReg) = input%regionStart(iReg)
+        this%endReg(iReg) = input%regionEnd(iReg)
+      end do
+      
     end if
-    close(unit)
     
   end subroutine TLangevinTherm_init
 
@@ -196,6 +208,7 @@ contains
     end do
     
     if(this%tRegioTherm) then
+      print *,'the temperatures are',this%regKT(:)*315775.0248
       do iReg = 1, 2
         do ii = this%startReg(iReg), this%endReg(iReg)
           v_sq_old = sum(velocities(:, ii)**2)
