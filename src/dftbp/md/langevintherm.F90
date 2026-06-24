@@ -208,7 +208,6 @@ contains
     end do
     
     if(this%tRegioTherm) then
-      print *,'the temperatures are',this%regKT(:)*315775.0248
       do iReg = 1, 2
         do ii = this%startReg(iReg), this%endReg(iReg)
           v_sq_old = sum(velocities(:, ii)**2)
