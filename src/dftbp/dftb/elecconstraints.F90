@@ -9,7 +9,7 @@
 
 !> Module to impose constraints on the electronic ground state.
 module dftbp_dftb_elecconstraints
-  use dftbp_common_accuracy, only : dp, hugeIterations
+  use dftbp_common_accuracy, only : dp, imag, hugeIterations, rsp
   use dftbp_dftbplus_input_geoopt, only : readOptimizerInput
   use dftbp_extlibs_xmlf90, only : char, destroyNodeList, fnode, fnodeList, getItem1, getLength,&
       & string
@@ -17,6 +17,7 @@ module dftbp_dftb_elecconstraints
   use dftbp_io_hsdutils, only : detailedError, getChild, getChildren, getChildValue,&
       & getSelectedAtomIndices
   use dftbp_io_hsdutils2, only : localiseName
+  use dftbp_math_angmomentum, only : getLOperators
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_type_typegeometry, only : TGeometry
   use dftbp_type_wrappedintr, only : TWrappedInt1, TWrappedReal2
@@ -237,7 +238,7 @@ contains
         call getChild(constrNode, "TotalPopulation", totalPopNode, requested=.false.)
         call getChild(constrNode, "Charges", chargesNode, requested=.false.)
         call getChild(constrNode, "TotalCharge", totalChargeNode, requested=.false.)
-        nAssociated = count([associated(populationsNode), associated(totalPopNode), &
+        nAssociated = count([associated(populationsNode), associated(totalPopNode),&
             & associated(chargesNode), associated(totalChargeNode)])
         if (nAssociated /= 1) then
           call detailedError(constrNode, "You must specify exactly one and only one of the options&
@@ -479,7 +480,7 @@ contains
         nConstrVal = size(input%constrValues)
         do iConstrVal = 1, nConstrVal
           constrInd = constrInd + 1
-          ! If only one constraint value had been specified, it represents the sum over all atoms in
+          ! If only one constraint value has been specified, it represents the sum over all atoms in
           ! the constraint. Otherwise they are values for individual constraints on single atoms.
           if (nConstrVal == 1) then
             atoms = input%atoms
@@ -661,5 +662,293 @@ contains
     end do
 
   end subroutine addConstraintsShiftQ_
+
+
+!  !> Spin constraint
+!  subroutine addConstraintsShiftS_(shift, qIn, orb, species, conAt, conSh, Starget, V, vec)
+!    real(dp), intent(inout)     :: shift(:,:,:,:)
+!    real(dp), intent(in)        :: qIn(:,:,:)
+!    type(TOrbitals), intent(in) :: orb
+!    integer, intent(in)         :: species(:)
+!    integer, intent(in)         :: conAt
+!    integer, intent(in)         :: conSh
+!    real(dp), intent(in)        :: Starget
+!    real(dp), intent(in)        :: V
+!    real(dp), intent(in)        :: vec(3)
+!
+!    integer :: iOrb, nSpin, iSpin
+!    real(dp) :: Sshell(3), W, vecNorm(3)
+!
+!    nSpin = size(shift,dim=4)
+!
+!    vecNorm = vec / sqrt(sum(vec**2))
+!
+!    Sshell = sum(qIn(orb%posShell(conSh,species(conAt)):&
+!        & orb%posShell(conSh+1,species(conAt))-1,conAt,2:4),dim=1)
+!
+!    if (sqrt(sum(Sshell**2)) < epsilon(1.0_rsp)) then
+!      Sshell = Sshell + epsilon(1.0_rsp)*(/1,1,1/)
+!    end if
+!
+!    vecNorm = Sshell  / sqrt(sum(Sshell**2))
+!
+!    ! Push S towards required value
+!    w = V * 0.5_dp*(dot_product(Sshell,vecNorm) - Starget)
+!
+!    do iSpin = 2, nSpin
+!      do iOrb = orb%posShell(conSh,species(conAt)),&
+!          & orb%posShell(conSh+1,species(conAt))-1
+!        shift(iOrb,iOrb,conAt,iSpin) = shift(iOrb,iOrb,conAt,iSpin)&
+!            & + w * vecNorm(iSpin-1)
+!      end do
+!    end do
+!
+!  end subroutine addConstraintsShiftS_
+
+
+  !> Shift matrix for orbital momentum constraint of specific atomic shell
+  subroutine addConstraintsShiftL_(iShift,qBlockSkew, orb, species, conAt, conSh, Ltarget, V, vec)
+
+   !> Imaginary block shift
+   real(dp), intent(inout) :: iShift(:,:,:,:)
+
+   !> Antisymmetric Mulliken block populations for imaginary coefficients of Pauli matrics
+   real(dp), intent(in) :: qBlockSkew(:,:,:,:)
+
+   !> Information about the orbitals in the system.
+   type(TOrbitals), intent(in) :: orb
+
+   !> Species of the atoms
+   integer, intent(in) :: species(:)
+
+   !> Atom for constraint
+   integer, intent(in) :: conAt
+
+   !> Shell for constraint
+   integer, intent(in) :: conSh
+
+   !> Target value of L for shell
+   real(dp), intent(in) :: Ltarget
+
+   !> Strength of constraint
+   real(dp), intent(in) :: V
+
+   !> Direction of constraint
+   real(dp), intent(in) :: vec(3)
+
+    integer :: ii, iSp, iSh, iOrb, iStart, iEnd
+    real(dp), allocatable :: SpeciesL(:,:,:), tmpBlock(:,:)
+    complex(dp), allocatable :: Lz(:,:), Lplus(:,:)
+    real(dp) :: Lshell(3), vecNorm(3), W
+
+    ALLOCATE(SpeciesL(orb%mOrb,orb%mOrb,3), source=0.0_dp)
+    ALLOCATE(Lz(orb%mOrb,orb%mOrb), source=0.0_dp)
+    ALLOCATE(Lplus(orb%mOrb,orb%mOrb), source=0.0_dp)
+
+    vecNorm(:) = vec / norm2(vec)
+
+    iSp = species(conAt)
+    iSh = orb%angShell(conSh,iSp)
+    call getLOperators(Lplus(1:2*iSh+1,1:2*iSh+1), Lz(1:2*iSh+1,1:2*iSh+1), iSh)
+    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1, 1)&
+        & = aimag(Lplus(1:2*iSh+1,1:2*iSh+1))
+    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1, 2)&
+        & = -real(Lplus(1:2*iSh+1,1:2*iSh+1))
+    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1, 3)&
+        & = aimag(Lz(1:2*iSh+1,1:2*iSh+1))
+
+    Lshell(:) = 0.0_dp
+
+    iOrb = orb%nOrbSpecie(iSp)
+    ALLOCATE(tmpBlock(orb%mOrb,orb%mOrb), source=0.0_dp)
+    tmpBlock(1:iOrb,1:iOrb) = qBlockSkew(1:iOrb,1:iOrb,conAt, 1) ! Pauli identity part
+    iStart = orb%posShell(conSh,iSp)
+    iEnd = orb%posShell(conSh+1,iSp)-1
+    do ii = 1, 3
+      Lshell(ii) = - sum(SpeciesL(iStart:iEnd,iStart:iEnd,ii)&
+          & * transpose(tmpBlock(iStart:iEnd,iStart:iEnd)))
+    end do
+
+    if (norm2(Lshell) < epsilon(1.0_rsp)) Lshell(:) = Lshell + epsilon(1.0_rsp) * [1, 1, 1]
+
+    vecNorm(:) = lShell / norm2(lshell)
+
+    ! Push <L> towards required value
+    w = V * 0.5_dp * (dot_product(lshell, vecNorm) - Ltarget)
+
+    do ii = 1, 3
+      iShift(iStart:iEnd,iStart:iEnd,conAt,1) = iShift(iStart:iEnd,iStart:iEnd,conAt,1)&
+          & + w * vecNorm(ii) * SpeciesL(iStart:iEnd,iStart:iEnd,ii)
+    end do
+
+  end subroutine addConstraintsShiftL_
+
+
+  subroutine constrainJ_(shift, qIn, iShift, qBlockSkew, orb, species, conAt, conSh, Jtarget, V,&
+      & vec)
+    real(dp), intent(inout)     :: shift(:,:,:,:)
+    real(dp), intent(in)        :: qIn(:,:,:)
+    real(dp), intent(inout)     :: iShift(:,:,:,:)
+    real(dp), intent(in)        :: qBlockSkew(:,:,:,:)
+    type(TOrbitals), intent(in) :: orb
+    integer, intent(in)         :: species(:)
+    integer, intent(in)         :: conAt
+    integer, intent(in)         :: conSh
+    real(dp), intent(in)        :: Jtarget
+    real(dp), intent(in)        :: V
+    real(dp), intent(in)        :: vec(3)
+
+    integer :: ii, iSp, iSh, iOrb, iStart, iEnd, nSpin, iSpin
+    real(dp), allocatable :: SpeciesL(:,:,:)
+    complex(dp), allocatable :: Lz(:,:)
+    complex(dp), allocatable :: Lplus(:,:)
+    real(dp), allocatable :: tmpBlock(:,:)
+    real(dp) :: Lshell(3), Sshell(3), W, vecNorm(3)
+
+    nSpin = size(shift,dim=4)
+
+    vecNorm(:) = vec / norm2(vec)
+
+    ALLOCATE(SpeciesL(orb%mOrb,orb%mOrb,3), source=0.0_dp)
+    ALLOCATE(Lz(orb%mOrb,orb%mOrb), source=0.0_dp)
+    ALLOCATE(Lplus(orb%mOrb,orb%mOrb), source=0.0_dp)
+
+    iSp = species(conAt)
+    iSh = orb%angShell(conSh,iSp)
+    Lz(:,:) = 0.0_dp
+    Lplus(:,:) = 0.0_dp
+    call getLOperators(Lplus(1:2*iSh+1,1:2*iSh+1),Lz(1:2*iSh+1,1:2*iSh+1),iSh)
+    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1, 1)&
+        & = aimag(Lplus(1:2*iSh+1,1:2*iSh+1))
+    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1, 2)&
+        & = -real(Lplus(1:2*iSh+1,1:2*iSh+1))
+    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1, 3)&
+        & = aimag(Lz(1:2*iSh+1,1:2*iSh+1))
+
+    iOrb = orb%nOrbSpecie(iSp)
+    ALLOCATE(tmpBlock(orb%mOrb,orb%mOrb), source=0.0_dp)
+    tmpBlock(1:iOrb,1:iOrb) = qBlockSkew(1:iOrb,1:iOrb,conAt,1) ! identity part
+    iStart = orb%posShell(conSh,iSp)
+    iEnd = orb%posShell(conSh+1,iSp)-1
+    Lshell(:) = 0.0_dp
+    do ii = 1, 3
+      Lshell(ii) = - sum(SpeciesL(iStart:iEnd,iStart:iEnd,ii)&
+          &  * transpose(tmpBlock(iStart:iEnd,iStart:iEnd)))
+    end do
+
+    Sshell(:) = sum(qIn(orb%posShell(conSh,species(conAt)):&
+        & orb%posShell(conSh+1,species(conAt))-1,conAt,2:4),dim=1)
+
+    if ( norm2(lshell + 0.5_dp*Sshell) < epsilon(1.0_rsp)) Sshell(:) = Sshell&
+        & + epsilon(1.0_rsp) * [1,1,1]
+
+    vecNorm(:) = lshell + 0.5_dp*Sshell / norm2(lshell + 0.5_dp*Sshell)
+
+    ! Push J towards required value
+    w = V * 0.5_dp * (dot_product(lshell,vecNorm) + 0.5_dp*dot_product(Sshell,vecNorm) - Jtarget)
+
+    do ii = 1, 3
+      iShift(iStart:iEnd,iStart:iEnd,conAt,1) = iShift(iStart:iEnd,iStart:iEnd,conAt,1)&
+          & + w * vecNorm(ii) * SpeciesL(iStart:iEnd,iStart:iEnd,ii)
+    end do
+
+    do iSpin = 2, nSpin
+      do iOrb = orb%posShell(conSh,species(conAt)), orb%posShell(conSh+1,species(conAt))-1
+        shift(iOrb,iOrb,conAt,iSpin) = shift(iOrb,iOrb,conAt,iSpin) + w * vecNorm(iSpin-1)
+      end do
+    end do
+
+  end subroutine constrainJ_
+
+
+!  subroutine constrainMj_(shift, qIn, iShift, qBlockSkew, orb, species,&
+!      & conAt, conSh, Jtarget, V, vec)
+!    real(dp), intent(inout)     :: shift(:,:,:,:)
+!    real(dp), intent(in)        :: qIn(:,:,:)
+!    real(dp), intent(inout)     :: iShift(:,:,:,:)
+!    real(dp), intent(in)        :: qBlockSkew(:,:,:,:)
+!    type(TOrbitals), intent(in) :: orb
+!    integer, intent(in)         :: species(:)
+!    integer, intent(in)         :: conAt
+!    integer, intent(in)         :: conSh
+!    real(dp), intent(in)        :: Jtarget
+!    real(dp), intent(in)        :: V
+!    real(dp), intent(in)        :: vec(3)
+!
+!    integer :: ii, iSp, iSh, iOrb, iStart, iEnd, nSpin, iSpin
+!    real(dp), allocatable :: SpeciesL(:,:,:)
+!    complex(dp), allocatable :: Lz(:,:)
+!    complex(dp), allocatable :: Lplus(:,:)
+!    real(dp), allocatable :: tmpBlock(:,:)
+!    real(dp) :: Lshell(3), Sshell(3), W, vecNorm(3)
+!
+!    nSpin = size(shift,dim=4)
+!
+!    vecNorm = vec / norm2(vec)
+!
+!    ALLOCATE(SpeciesL,(orb%mOrb,orb%mOrb,3))
+!    SpeciesL = 0.0_dp
+!    ALLOCATE(Lz,(orb%mOrb,orb%mOrb))
+!    ALLOCATE(Lplus,(orb%mOrb,orb%mOrb))
+!
+!    iSp = species(conAt)
+!    Lz = 0.0_dp
+!    Lplus = 0.0_dp
+!    iSh = orb%angShell(conSh,iSp)
+!    call getLOperators(Lplus(1:2*iSh+1,1:2*iSh+1),Lz(1:2*iSh+1,1:2*iSh+1),iSh)
+!    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+!        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,1)&
+!        & = aimag(Lplus(1:2*iSh+1,1:2*iSh+1))
+!    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+!        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,2)&
+!        & = -real(Lplus(1:2*iSh+1,1:2*iSh+1))
+!    speciesL(orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,&
+!        & orb%posShell(conSh,iSp):orb%posShell(conSh+1,iSp)-1,3)&
+!        & = aimag(Lz(1:2*iSh+1,1:2*iSh+1))
+!
+!    ALLOCATE(tmpBlock,(orb%mOrb,orb%mOrb))
+!
+!    Lshell = 0.0_dp
+!
+!    iOrb = orb%nOrbSpecie(iSp)
+!    tmpBlock(:,:) = 0.0_dp
+!    tmpBlock(1:iOrb,1:iOrb) = qBlockSkew(1:iOrb,1:iOrb,conAt,1) ! identity part
+!    iStart = orb%posShell(conSh,iSp)
+!    iEnd = orb%posShell(conSh+1,iSp)-1
+!    do ii = 1, 3
+!      Lshell(ii) =&
+!          & - sum(SpeciesL(iStart:iEnd,iStart:iEnd,ii)&
+!          &  * transpose(tmpBlock(iStart:iEnd,iStart:iEnd)))
+!    end do
+!
+!    Sshell = sum(qIn(orb%posShell(conSh,species(conAt)):&
+!        & orb%posShell(conSh+1,species(conAt))-1,conAt,2:4),dim=1)
+!
+!    ! Push M_J towards required value
+!
+!    w = V * 0.5_dp*(dot_product(lshell,vecNorm)+&
+!        & 0.5_dp*dot_product(Sshell,vecNorm) -Jtarget)
+!
+!    do ii = 1, 3
+!      iShift(iStart:iEnd,iStart:iEnd,conAt,1) =&
+!          & iShift(iStart:iEnd,iStart:iEnd,conAt,1)&
+!          & + w * vecNorm(ii) * SpeciesL(iStart:iEnd,iStart:iEnd,ii)
+!    end do
+!
+!    do iSpin = 2, nSpin
+!      do iOrb = orb%posShell(conSh,species(conAt)),&
+!          & orb%posShell(conSh+1,species(conAt))-1
+!        shift(iOrb,iOrb,conAt,iSpin) = shift(iOrb,iOrb,conAt,iSpin)&
+!            & + w * vecNorm(iSpin-1)
+!      end do
+!    end do
+!
+!  end subroutine constrainMj_
 
 end module dftbp_dftb_elecconstraints
