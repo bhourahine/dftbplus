@@ -22,6 +22,7 @@ module dftbp_dftb_densitymatrix
 #:if WITH_SCALAPACK
   use dftbp_extlibs_scalapackfx, only : blacsgrid, blocklist, CSRC_, NB_, pblasfx_pgemm,&
       & pblasfx_psyrk, pblasfx_ptran, pblasfx_ptranc, scalafx_indxl2g, scalafx_islocal, size
+  use dftbp_math_matrixops, only : adjointLowerTriangle_BLACS
 #:endif
 #:if WITH_MAGMA
   use iso_fortran_env, only : int64
@@ -856,7 +857,8 @@ contains
           end do
         end do
         call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
-        call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
+        call adjointLowerTriangle_BLACS(desc, myBlacs%mycol, myBlacs%myrow, myBlacs%ncol,&
+            & myBlacs%nrow, densityMtx)
       else
         ! Occupied products f*e have mixed signs, so the rank-k update is not
         ! applicable. Use a matrix product.
@@ -891,46 +893,11 @@ contains
         end do
       end do
       call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N")
-      call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
+      call adjointLowerTriangle_BLACS(desc, myBlacs%mycol, myBlacs%myrow, myBlacs%ncol,&
+          & myBlacs%nrow, densityMtx)
     end if
 
   end subroutine makeDensityMtxRealBlacs
-
-
-  !> Completes a symmetric matrix held as its lower triangle (as produced by a
-  !> rank-k update) by adding its transpose and correcting the doubled diagonal.
-  subroutine addLowerTriangleTranspose(myBlacs, desc, matrix, work)
-
-    !> BLACS grid information
-    type(blacsgrid), intent(in) :: myBlacs
-
-    !> Matrix descriptor
-    integer, intent(in) :: desc(:)
-
-    !> Lower triangle on entry, full symmetric matrix on exit
-    real(dp), intent(inout) :: matrix(:,:)
-
-    !> Scratch array with the same shape and descriptor as matrix
-    real(dp), intent(inout) :: work(:,:)
-
-    integer :: ii, iGlob, iLocRow, iLocCol
-    logical :: isLocal
-
-    ! Mirror the lower triangle into the upper triangle by adding the transpose;
-    ! this doubles the diagonal, which is halved afterwards.
-    work(:,:) = matrix
-    call pblasfx_ptran(work, desc, matrix, desc, alpha=1.0_dp, beta=1.0_dp)
-    ! Halve the diagonal. Loop over this rank's local columns only (rather than the
-    ! full matrix order on every rank, which would scale serially).
-    do ii = 1, size(matrix, dim=2)
-      iGlob = scalafx_indxl2g(ii, desc(NB_), myBlacs%mycol, desc(CSRC_), myBlacs%ncol)
-      call scalafx_islocal(myBlacs, desc, iGlob, iGlob, isLocal, iLocRow, iLocCol)
-      if (isLocal) then
-        matrix(iLocRow, iLocCol) = 0.5_dp * matrix(iLocRow, iLocCol)
-      end if
-    end do
-
-  end subroutine addLowerTriangleTranspose
 
 
   !> Create density or energy weighted density matrix (complex) for both triangles.
