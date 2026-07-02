@@ -377,7 +377,7 @@ contains
   end subroutine getDensityMatrix_real_blacs
 
 
-!> Returns the distributed real energy weighted density matrix
+  !> Returns the distributed real energy weighted density matrix
   subroutine getEDensityMatrix_real_blacs(this, myBlacs, desc, egyDensityMatrix, eigenvecs,&
       & filling, eigenvals, errStatus)
 
@@ -844,22 +844,22 @@ contains
     ! Scale a copy of the eigenvectors
     call blocks%init(myBlacs, desc, "c")
     if (present(eigenVals)) then
-      if (all(filling * eigenVals <= 0.0_dp)) then
-        ! Energy-weighted matrix W = V diag(f e) V^T. When every occupied product
-        ! f*e is non-positive (the common case, occupied levels below the reference
-        ! energy), W = -(Y Y^T) with Y = V sqrt(-f e), so a symmetric rank-k update
-        ! with a prefactor of -1 applies, as for the density matrix below.
-        do ii = 1, size(blocks)
-          call blocks%getblock(ii, iGlob, iLoc, blockSize)
-          do jj = 0, blockSize - 1
-            work(:, iLoc + jj) = eigenVecs(:, iLoc + jj)&
-                & * sqrt(-eigenVals(iGlob + jj) * filling(iGlob + jj))
-          end do
-        end do
-        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
-        call adjointLowerTriangle_BLACS(desc, myBlacs%mycol, myBlacs%myrow, myBlacs%ncol,&
-            & myBlacs%nrow, densityMtx)
-      else
+      !if (all(filling * eigenVals <= 0.0_dp)) then
+      !  ! Energy-weighted matrix W = V diag(f e) V^T. When every occupied product
+      !  ! f*e is non-positive (the common case, occupied levels below the reference
+      !  ! energy), W = -(Y Y^T) with Y = V sqrt(-f e), so a symmetric rank-k update
+      !  ! with a prefactor of -1 applies, as for the density matrix below.
+      !  do ii = 1, size(blocks)
+      !    call blocks%getblock(ii, iGlob, iLoc, blockSize)
+      !    do jj = 0, blockSize - 1
+      !      work(:, iLoc + jj) = eigenVecs(:, iLoc + jj)&
+      !          & * sqrt(abs(eigenVals(iGlob + jj) * filling(iGlob + jj)))
+      !    end do
+      !  end do
+      !  call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
+      !  call adjointLowerTriangle_BLACS(desc, myBlacs%mycol, myBlacs%myrow, myBlacs%ncol,&
+      !      & myBlacs%nrow, densityMtx)
+      !else
         ! Occupied products f*e have mixed signs, so the rank-k update is not
         ! applicable. Use a matrix product.
         do ii = 1, size(blocks)
@@ -870,18 +870,18 @@ contains
           end do
         end do
         call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
-      end if
-    else if (any(filling < 0.0_dp)) then
-      ! Some occupations are negative (e.g. Methfessel-Paxton filling), so
-      ! sqrt(filling) is not real. Use a matrix product.
-      do ii = 1, size(blocks)
-        call blocks%getblock(ii, iGlob, iLoc, blockSize)
-        do jj = 0, blockSize - 1
-          work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * filling(iGlob + jj)
-        end do
-      end do
-      call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
-    else
+      !end if
+    else !if (any(filling < 0.0_dp)) then
+      !! Some occupations are negative (e.g. Methfessel-Paxton filling), so
+      !! sqrt(filling) is not real. Use a matrix product.
+      !do ii = 1, size(blocks)
+      !  call blocks%getblock(ii, iGlob, iLoc, blockSize)
+      !  do jj = 0, blockSize - 1
+      !    work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * filling(iGlob + jj)
+      !  end do
+      !end do
+      !call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
+    !else
       ! For non-negative occupations the density matrix rho = V diag(f) V^T equals
       ! W W^T with W = V sqrt(f). This symmetric rank-k update forms only one
       ! triangle, roughly halving the work of the matrix product above. The
