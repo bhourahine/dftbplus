@@ -21,7 +21,8 @@ module dftbp_dftb_densitymatrix
   use dftbp_type_commontypes, only : TParallelKS
 #:if WITH_SCALAPACK
   use dftbp_extlibs_scalapackfx, only : blacsgrid, blocklist, CSRC_, NB_, pblasfx_pgemm,&
-      & pblasfx_psyrk, pblasfx_ptran, pblasfx_ptranc, scalafx_indxl2g, scalafx_islocal, size
+      & pblasfx_psyr, pblasfx_psyrk, pblasfx_ptran, pblasfx_ptranc, scalafx_indxl2g,&
+      & scalafx_islocal, size
 #:endif
 #:if WITH_MAGMA
   use iso_fortran_env, only : int64
@@ -833,33 +834,63 @@ contains
     !> Eigenvalues, if energy weighted density matrix required
     real(dp), intent(in), optional :: eigenVals(:)
 
-    integer  :: ii, jj, iGlob, iLoc, blockSize
+    integer  :: ii, jj, iGlob, iLoc, blockSize, iLev, nTiny
     type(blocklist) :: blocks
     real(dp), allocatable :: work(:,:)
+    real(dp) :: weight
+
+    ! Square-rooting occupation weights close to underflow in the rank-k updates below has
+    ! been observed to destabilise subsequent ScaLAPACK eigensolver (MRRR) calls for some
+    ! compiler/library combinations. Levels with weight magnitude in [eps, sqrt(eps)) are
+    ! therefore applied through exact rank-1 updates instead, while weights below eps are
+    ! dropped, as they contribute below double precision resolution to any matrix element.
+    ! Should more than maxRank1 levels fall into the rank-1 window (each update is a
+    ! memory-bound level-2 pass over the distributed matrix), the plain matrix product is
+    ! used instead.
+    real(dp), parameter :: sqrtEps = sqrt(epsilon(1.0_dp))
+    integer, parameter :: maxRank1 = 32
 
     densityMtx(:, :) = 0.0_dp
     work = densityMtx
 
-    ! Scale a copy of the eigenvectors
+    ! Scale a copy of the eigenvectors. Note: filling and eigenVals are replicated, so all
+    ! ranks take identical branches below and the collective calls stay matched.
     call blocks%init(myBlacs, desc, "c")
     if (present(eigenVals)) then
-      if (all(filling * eigenVals <= 0.0_dp)) then
+      nTiny = count(abs(filling * eigenVals) >= epsilon(1.0_dp)&
+          & .and. abs(filling * eigenVals) < sqrtEps)
+      if (all(filling * eigenVals <= 0.0_dp .or. abs(filling * eigenVals) < epsilon(1.0_dp))&
+          & .and. nTiny <= maxRank1) then
         ! Energy-weighted matrix W = V diag(f e) V^T. When every occupied product
         ! f*e is non-positive (the common case, occupied levels below the reference
         ! energy), W = -(Y Y^T) with Y = V sqrt(-f e), so a symmetric rank-k update
-        ! with a prefactor of -1 applies, as for the density matrix below.
+        ! with a prefactor of -1 applies, as for the density matrix below. Products
+        ! below eps in magnitude are negligible either way, so they cannot veto this
+        ! path. The .not. form of the weight test keeps non-finite weights on the
+        ! square-root path, so they stay visible in the result.
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
-            work(:, iLoc + jj) = eigenVecs(:, iLoc + jj)&
-                & * sqrt(-eigenVals(iGlob + jj) * filling(iGlob + jj))
+            if (.not. (-eigenVals(iGlob + jj) * filling(iGlob + jj) < sqrtEps)) then
+              work(:, iLoc + jj) = eigenVecs(:, iLoc + jj)&
+                  & * sqrt(-eigenVals(iGlob + jj) * filling(iGlob + jj))
+            else
+              work(:, iLoc + jj) = 0.0_dp
+            end if
           end do
         end do
         call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
+        do iLev = 1, size(filling)
+          weight = eigenVals(iLev) * filling(iLev)
+          if (-weight >= epsilon(1.0_dp) .and. -weight < sqrtEps) then
+            call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=weight,&
+                & jx=iLev)
+          end if
+        end do
         call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
       else
-        ! Occupied products f*e have mixed signs, so the rank-k update is not
-        ! applicable. Use a matrix product.
+        ! Occupied products f*e have mixed signs (or too many levels fall into the
+        ! rank-1 window), so the rank-k update is not applicable. Use a matrix product.
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
@@ -869,29 +900,45 @@ contains
         end do
         call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
       end if
-    else if (any(filling < 0.0_dp)) then
-      ! Some occupations are negative (e.g. Methfessel-Paxton filling), so
-      ! sqrt(filling) is not real. Use a matrix product.
-      do ii = 1, size(blocks)
-        call blocks%getblock(ii, iGlob, iLoc, blockSize)
-        do jj = 0, blockSize - 1
-          work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * filling(iGlob + jj)
-        end do
-      end do
-      call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
     else
-      ! For non-negative occupations the density matrix rho = V diag(f) V^T equals
-      ! W W^T with W = V sqrt(f). This symmetric rank-k update forms only one
-      ! triangle, roughly halving the work of the matrix product above. The
-      ! serial (herk) and GPU (syrk) density-matrix builds already do this.
-      do ii = 1, size(blocks)
-        call blocks%getblock(ii, iGlob, iLoc, blockSize)
-        do jj = 0, blockSize - 1
-          work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * sqrt(filling(iGlob + jj))
+      nTiny = count(filling >= epsilon(1.0_dp) .and. filling < sqrtEps)
+      if (any(filling < -epsilon(1.0_dp)) .or. nTiny > maxRank1) then
+        ! Some occupations are meaningfully negative (e.g. Methfessel-Paxton filling),
+        ! so sqrt(filling) is not real (or too many levels fall into the rank-1
+        ! window). Use a matrix product.
+        do ii = 1, size(blocks)
+          call blocks%getblock(ii, iGlob, iLoc, blockSize)
+          do jj = 0, blockSize - 1
+            work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * filling(iGlob + jj)
+          end do
         end do
-      end do
-      call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N")
-      call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
+        call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
+      else
+        ! For non-negative occupations the density matrix rho = V diag(f) V^T equals
+        ! W W^T with W = V sqrt(f). This symmetric rank-k update forms only one
+        ! triangle, roughly halving the work of the matrix product above. The
+        ! serial (herk) and GPU (syrk) density-matrix builds already do this. The
+        ! .not. form of the weight test keeps non-finite occupations on the
+        ! square-root path, so they stay visible in the result.
+        do ii = 1, size(blocks)
+          call blocks%getblock(ii, iGlob, iLoc, blockSize)
+          do jj = 0, blockSize - 1
+            if (.not. (filling(iGlob + jj) < sqrtEps)) then
+              work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * sqrt(filling(iGlob + jj))
+            else
+              work(:, iLoc + jj) = 0.0_dp
+            end if
+          end do
+        end do
+        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N")
+        do iLev = 1, size(filling)
+          if (filling(iLev) >= epsilon(1.0_dp) .and. filling(iLev) < sqrtEps) then
+            call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L",&
+                & alpha=filling(iLev), jx=iLev)
+          end if
+        end do
+        call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
+      end if
     end if
 
   end subroutine makeDensityMtxRealBlacs
