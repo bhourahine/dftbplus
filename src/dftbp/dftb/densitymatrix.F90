@@ -13,7 +13,7 @@
 !! Caveat: The routines create the transposed and complex conjugated of the density matrices
 !! (cc* instead of the conventional c*c).
 module dftbp_dftb_densitymatrix
-  use dftbp_common_accuracy, only : dp, lc
+  use dftbp_common_accuracy, only : dp, lc, rdp
   use dftbp_common_constants, only : imag, pi
   use dftbp_common_status, only : TStatus
   use dftbp_elecsolvers_dmsolvertypes, only : densityMatrixTypes
@@ -847,7 +847,7 @@ contains
     ! Should more than maxRank1 levels fall into the rank-1 window (each update is a
     ! memory-bound level-2 pass over the distributed matrix), the plain matrix product is
     ! used instead.
-    real(dp), parameter :: sqrtEps = sqrt(epsilon(1.0_dp))
+    real(dp), parameter :: sqrtEps = sqrt(epsilon(1.0_rdp))
     integer, parameter :: maxRank1 = 32
 
     densityMtx(:, :) = 0.0_dp
@@ -882,7 +882,7 @@ contains
         call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
         do iLev = 1, size(filling)
           weight = eigenVals(iLev) * filling(iLev)
-          if (-weight >= epsilon(1.0_dp) .and. -weight < sqrtEps) then
+          if (-weight >= 16.0_dp*epsilon(1.0_dp) .and. -weight < sqrtEps) then
             call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=weight,&
                 & jx=iLev)
           end if
@@ -901,8 +901,8 @@ contains
         call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
       end if
     else
-      nTiny = count(filling >= epsilon(1.0_dp) .and. filling < sqrtEps)
-      if (any(filling < -epsilon(1.0_dp)) .or. nTiny > maxRank1) then
+      nTiny = count(abs(filling) >= epsilon(1.0_dp) .and. abs(filling) < sqrtEps)
+      if (any(filling < -sqrtEps) .or. nTiny > maxRank1) then
         ! Some occupations are meaningfully negative (e.g. Methfessel-Paxton filling),
         ! so sqrt(filling) is not real (or too many levels fall into the rank-1
         ! window). Use a matrix product.
@@ -923,7 +923,7 @@ contains
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
-            if (.not. (filling(iGlob + jj) < sqrtEps)) then
+            if (filling(iGlob + jj) >= sqrtEps) then
               work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * sqrt(filling(iGlob + jj))
             else
               work(:, iLoc + jj) = 0.0_dp
@@ -932,10 +932,14 @@ contains
         end do
         call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N")
         do iLev = 1, size(filling)
-          if (filling(iLev) >= epsilon(1.0_dp) .and. filling(iLev) < sqrtEps) then
-            call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L",&
-                & alpha=filling(iLev), jx=iLev)
+          if (abs(filling(iLev)) >= 16.0_dp*epsilon(1.0_rdp) .and. abs(filling(iLev)) < sqrtEps)&
+              & then
+            call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=filling(iLev),&
+                & jx=iLev)
           end if
+        end do
+        do ii = 1, size(densityMtx, dim=2)
+          densityMtx(ii,ii) = densityMtx(ii,ii) + sign(epsilon(1.0_dp), densityMtx(ii,ii))
         end do
         call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
       end if
