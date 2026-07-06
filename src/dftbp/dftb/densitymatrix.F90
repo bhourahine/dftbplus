@@ -851,6 +851,7 @@ contains
     integer, parameter :: maxRank1 = 32
     logical :: isLocal
     integer :: iLocRow, iLocCol
+    real(dp), parameter :: epsMul = 16.0_dp
 
     densityMtx(:, :) = 0.0_dp
     work = densityMtx
@@ -884,7 +885,7 @@ contains
         call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
         do iLev = 1, size(filling)
           weight = eigenVals(iLev) * filling(iLev)
-          if (-weight >= 16.0_dp*epsilon(1.0_dp) .and. -weight < sqrtEps) then
+          if (-weight >= epsMul * epsilon(1.0_dp) .and. -weight < sqrtEps) then
             call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=weight,&
                 & jx=iLev)
           end if
@@ -934,7 +935,7 @@ contains
         end do
         call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N")
         do iLev = 1, size(filling)
-          if (abs(filling(iLev)) >= 16.0_dp*epsilon(1.0_rdp) .and. abs(filling(iLev)) < sqrtEps)&
+          if (abs(filling(iLev)) >= epsMul * epsilon(1.0_rdp) .and. abs(filling(iLev)) < sqrtEps)&
               & then
             call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=filling(iLev),&
                 & jx=iLev)
@@ -945,7 +946,7 @@ contains
           call scalafx_islocal(myBlacs, desc, iGlob, iGlob, isLocal, iLocRow, iLocCol)
           if (isLocal) then
             densityMtx(iLocRow, iLocCol) = densityMtx(iLocRow, iLocCol)&
-                & + sign(epsilon(1.0_dp), densityMtx(iLocRow, iLocCol))
+                & + epsMul * sign(epsilon(1.0_dp), densityMtx(iLocRow, iLocCol))
           end if
         end do
         call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
