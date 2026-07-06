@@ -9,7 +9,6 @@
 
 !> Provides DFTB+ API
 module dftbp_api
-  use, intrinsic :: iso_fortran_env, only : output_unit
   use dftbp_common_accuracy, only : dp
   use dftbp_common_environment, only : TEnvironment, TEnvironment_init
   use dftbp_common_file, only : closeFile, openFile, TFileDescr
@@ -1235,8 +1234,6 @@ contains
     if(tSpeciesNameChanged)then
       call error('speciesNames has changed between calls to DFTB+. This will cause erroneous&
           & results.' // newline // 'Instead call destruct and then fully re-initialize.')
-    else
-       continue
     endif
 
   end subroutine TDftbPlus_checkSpeciesNames
