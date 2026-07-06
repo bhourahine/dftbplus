@@ -849,6 +849,8 @@ contains
     ! used instead.
     real(dp), parameter :: sqrtEps = sqrt(epsilon(1.0_rdp))
     integer, parameter :: maxRank1 = 32
+    logical :: isLocal
+    integer :: iLocRow, iLocCol
 
     densityMtx(:, :) = 0.0_dp
     work = densityMtx
@@ -938,8 +940,13 @@ contains
                 & jx=iLev)
           end if
         end do
-        do ii = 1, minval(shape(densityMtx))
-          densityMtx(ii,ii) = densityMtx(ii,ii) + sign(epsilon(1.0_dp), densityMtx(ii,ii))
+        do ii = 1, size(densityMtx, dim=2)
+          iGlob = scalafx_indxl2g(ii, desc(NB_), myBlacs%mycol, desc(CSRC_), myBlacs%ncol)
+          call scalafx_islocal(myBlacs, desc, iGlob, iGlob, isLocal, iLocRow, iLocCol)
+          if (isLocal) then
+            densityMtx(iLocRow, iLocCol) = densityMtx(iLocRow, iLocCol)&
+                & + sign(epsilon(1.0_dp), densityMtx(iLocRow, iLocCol))
+          end if
         end do
         call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
       end if
