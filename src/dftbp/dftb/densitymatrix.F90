@@ -938,7 +938,7 @@ contains
                 & jx=iLev)
           end if
         end do
-        do ii = 1, size(densityMtx, dim=2)
+        do ii = 1, minval(shape(densityMtx))
           densityMtx(ii,ii) = densityMtx(ii,ii) + sign(epsilon(1.0_dp), densityMtx(ii,ii))
         end do
         call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
