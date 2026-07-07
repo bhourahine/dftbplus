@@ -847,23 +847,41 @@ contains
     ! Should more than maxRank1 levels fall into the rank-1 window (each update is a
     ! memory-bound level-2 pass over the distributed matrix), the plain matrix product is
     ! used instead.
-    real(dp), parameter :: sqrtEps = sqrt(epsilon(1.0_rdp))
+    real(dp), parameter :: epsMul = 16.0_dp * epsilon(1.0_rdp)
+    real(dp), parameter :: sqrtEps = sqrt(epsMul)
     integer, parameter :: maxRank1 = 32
-    logical :: isLocal
+    logical :: isLocal, isSignFlip
     integer :: iLocRow, iLocCol
-    real(dp), parameter :: epsMul = 16.0_dp
 
     densityMtx(:, :) = 0.0_dp
     work = densityMtx
 
-    ! Scale a copy of the eigenvectors. Note: filling and eigenVals are replicated, so all
+    ! Scales a copy of the eigenvectors. Note: filling and eigenVals are replicated, so all
     ! ranks take identical branches below and the collective calls stay matched.
     call blocks%init(myBlacs, desc, "c")
+
     if (present(eigenVals)) then
-      nTiny = count(abs(filling * eigenVals) >= epsilon(1.0_dp)&
-          & .and. abs(filling * eigenVals) < sqrtEps)
-      if (all(filling * eigenVals <= 0.0_dp .or. abs(filling * eigenVals) < epsilon(1.0_dp))&
-          & .and. nTiny <= maxRank1) then
+
+      ! can speed up, as only need to know if more than maxRank1 match and if any have different
+      ! signs :
+      nTiny = count(abs(filling * eigenVals) < epsMul .and. abs(filling * eigenVals) < sqrtEps)
+      isSignFlip = any(filling * eigenVals >= sqrtEps) .and. any(filling * eigenVals <= -sqrtEps)
+
+      if (isSignFlip .or. nTiny > maxRank1) then
+
+        ! Occupied products f*e have mixed signs (or too many levels fall into the
+        ! rank-1 update window), so the rank-k update is not applicable. Use a matrix product.
+        do ii = 1, size(blocks)
+          call blocks%getblock(ii, iGlob, iLoc, blockSize)
+          do jj = 0, blockSize - 1
+            work(:, iLoc + jj) = eigenVals(iGlob + jj) * filling(iGlob + jj)&
+                & * eigenVecs(:, iLoc + jj)
+          end do
+        end do
+        call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
+
+      else
+
         ! Energy-weighted matrix W = V diag(f e) V^T. When every occupied product
         ! f*e is non-positive (the common case, occupied levels below the reference
         ! energy), W = -(Y Y^T) with Y = V sqrt(-f e), so a symmetric rank-k update
@@ -874,41 +892,37 @@ contains
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
-            if (.not. (-eigenVals(iGlob + jj) * filling(iGlob + jj) < sqrtEps)) then
+            if (abs(eigenVals(iGlob + jj) * filling(iGlob + jj)) >= sqrtEps) then
               work(:, iLoc + jj) = eigenVecs(:, iLoc + jj)&
-                  & * sqrt(-eigenVals(iGlob + jj) * filling(iGlob + jj))
+                  & * sqrt(abs(eigenVals(iGlob + jj) * filling(iGlob + jj)))
             else
               work(:, iLoc + jj) = 0.0_dp
             end if
           end do
         end do
-        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
+        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N",&
+            & alpha=sign(1.0_dp, eigenVals(1) * filling(1)))
         do iLev = 1, size(filling)
           weight = eigenVals(iLev) * filling(iLev)
-          if (-weight >= epsMul * epsilon(1.0_dp) .and. -weight < sqrtEps) then
-            call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=weight,&
-                & jx=iLev)
+          if (abs(weight) >= epsMul .and. abs(weight) < sqrtEps) then
+            call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=weight, jx=iLev)
           end if
         end do
         call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
-      else
-        ! Occupied products f*e have mixed signs (or too many levels fall into the
-        ! rank-1 window), so the rank-k update is not applicable. Use a matrix product.
-        do ii = 1, size(blocks)
-          call blocks%getblock(ii, iGlob, iLoc, blockSize)
-          do jj = 0, blockSize - 1
-            work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * eigenVals(iGlob + jj)&
-                & * filling(iGlob + jj)
-          end do
-        end do
-        call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
+
       end if
-    else
-      nTiny = count(abs(filling) >= epsilon(1.0_dp) .and. abs(filling) < sqrtEps)
-      if (any(filling < -sqrtEps) .or. nTiny > maxRank1) then
-        ! Some occupations are meaningfully negative (e.g. Methfessel-Paxton filling),
-        ! so sqrt(filling) is not real (or too many levels fall into the rank-1
-        ! window). Use a matrix product.
+
+    else ! not present(eigenVals), occupations only
+
+      ! can speed up, as only need to know if more than maxRank1 match and if any have different
+      ! signs :
+      nTiny = count(abs(filling) >= epsMul .and. filling < sqrtEps)
+      isSignFlip = any(filling >= sqrtEps) .and. any(filling <= -sqrtEps)
+
+      if (isSignFlip .or. nTiny > maxRank1) then
+
+        ! Too many occupations are very small or some have different signs (e.g. Methfessel-Paxton
+        ! filling). Use a matrix product.
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
@@ -916,7 +930,9 @@ contains
           end do
         end do
         call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
+
       else
+
         ! For non-negative occupations the density matrix rho = V diag(f) V^T equals
         ! W W^T with W = V sqrt(f). This symmetric rank-k update forms only one
         ! triangle, roughly halving the work of the matrix product above. The
@@ -927,29 +943,28 @@ contains
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
             if (filling(iGlob + jj) >= sqrtEps) then
-              work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * sqrt(filling(iGlob + jj))
-            else
-              work(:, iLoc + jj) = 0.0_dp
+              work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * sqrt(abs(filling(iGlob + jj)))
             end if
           end do
         end do
-        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N")
+        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N",&
+            & alpha=sign(1.0_dp, filling(1)))
         do iLev = 1, size(filling)
-          if (abs(filling(iLev)) >= epsMul * epsilon(1.0_rdp) .and. abs(filling(iLev)) < sqrtEps)&
-              & then
+          if (abs(filling(iLev)) > epsMul .and. abs(filling(iLev)) < sqrtEps) then
             call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=filling(iLev),&
                 & jx=iLev)
           end if
         end do
-        do ii = 1, size(densityMtx, dim=2)
-          iGlob = scalafx_indxl2g(ii, desc(NB_), myBlacs%mycol, desc(CSRC_), myBlacs%ncol)
-          call scalafx_islocal(myBlacs, desc, iGlob, iGlob, isLocal, iLocRow, iLocCol)
-          if (isLocal) then
-            densityMtx(iLocRow, iLocCol) = densityMtx(iLocRow, iLocCol)&
-                & + epsMul * sign(epsilon(1.0_dp), densityMtx(iLocRow, iLocCol))
-          end if
-        end do
+        !do ii = 1, size(densityMtx, dim=2)
+        !  iGlob = scalafx_indxl2g(ii, desc(NB_), myBlacs%mycol, desc(CSRC_), myBlacs%ncol)
+        !  call scalafx_islocal(myBlacs, desc, iGlob, iGlob, isLocal, iLocRow, iLocCol)
+        !  if (isLocal) then
+        !    densityMtx(iLocRow, iLocCol) = densityMtx(iLocRow, iLocCol)&
+        !        & + sign(epsMul, densityMtx(iLocRow, iLocCol))
+        !  end if
+        !end do
         call addLowerTriangleTranspose(myBlacs, desc, densityMtx, work)
+
       end if
     end if
 
