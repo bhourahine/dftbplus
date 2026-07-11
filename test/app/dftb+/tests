@@ -8,6 +8,7 @@
 extpot/CH4_gross                       #? MPI_PROCS <= 1
 extpot/CH4_net                         #? MPI_PROCS <= 1
 extpot/CH3OH_species                   #? MPI_PROCS <= 1
+extpot/C60                             #? MPI_PROCS <= 4
 
 deltadftb/C2H4                         #? OMP_THREADS <= 2 and not WITH_MPI
 deltadftb/C2H4_noground                #? OMP_THREADS <= 2 and not WITH_MPI

@@ -837,7 +837,7 @@ contains
     integer  :: ii, jj, iGlob, iLoc, blockSize, iLev, nTiny
     type(blocklist) :: blocks
     real(dp), allocatable :: work(:,:)
-    real(dp) :: weight
+    real(dp) :: weight, fillSign
 
     ! Square-rooting occupation weights close to underflow in the rank-k updates below has
     ! been observed to destabilise subsequent ScaLAPACK eigensolver (MRRR) calls for some
@@ -854,15 +854,21 @@ contains
     integer, parameter :: maxRank1 = 32
 
     densityMtx(:, :) = 0.0_dp
-    work = densityMtx
+    work = eigenVecs
 
     ! Scale a copy of the eigenvectors. Note: filling and eigenVals are replicated, so all
     ! ranks take identical branches below and the collective calls stay matched.
     call blocks%init(myBlacs, desc, "c")
     if (present(eigenVals)) then
-      nTiny = count(abs(filling * eigenVals) >= dropTol&
-          & .and. abs(filling * eigenVals) < sqrtEps)
-      if (all(filling * eigenVals <= 0.0_dp .or. abs(filling * eigenVals) < dropTol)&
+      nTiny = count(abs(filling * eigenVals) >= dropTol .and. abs(filling * eigenVals) < sqrtEps)
+      fillSign = 1.0_dp
+      lpSign: do iLev = 1, size(filling)
+        if (abs(filling(iLev) * eigenVals(iLev)) >= dropTol ) then
+          fillSign = sign(1.0_dp, filling(iLev) * eigenVals(iLev))
+          exit lpSign
+        end if
+      end do lpSign
+      if (all( fillSign * filling * eigenVals >= 0.0_dp .or. abs(filling * eigenVals) < dropTol)&
           & .and. nTiny <= maxRank1) then
         ! Energy-weighted matrix W = V diag(f e) V^T. When every occupied product
         ! f*e is non-positive (the common case, occupied levels below the reference
@@ -874,18 +880,18 @@ contains
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
-            if (.not. (-eigenVals(iGlob + jj) * filling(iGlob + jj) < sqrtEps)) then
-              work(:, iLoc + jj) = eigenVecs(:, iLoc + jj)&
-                  & * sqrt(-eigenVals(iGlob + jj) * filling(iGlob + jj))
+            if (.not. fillSign  * eigenVals(iGlob + jj) * filling(iGlob + jj) < sqrtEps) then
+              work(:, iLoc + jj) = work(:, iLoc + jj)&
+                  & * sqrt(abs(eigenVals(iGlob + jj) * filling(iGlob + jj)))
             else
               work(:, iLoc + jj) = 0.0_dp
             end if
           end do
         end do
-        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=-1.0_dp)
+        call pblasfx_psyrk(work, desc, densityMtx, desc, uplo="L", trans="N", alpha=fillSign)
         do iLev = 1, size(filling)
           weight = eigenVals(iLev) * filling(iLev)
-          if (-weight >= dropTol .and. -weight < sqrtEps) then
+          if (abs(weight) >= dropTol .and. abs(weight) < sqrtEps) then
             call pblasfx_psyr(eigenVecs, desc, densityMtx, desc, uplo="L", alpha=weight,&
                 & jx=iLev)
           end if
@@ -898,7 +904,7 @@ contains
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
-            work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * eigenVals(iGlob + jj)&
+            work(:, iLoc + jj) = work(:, iLoc + jj) * eigenVals(iGlob + jj)&
                 & * filling(iGlob + jj)
           end do
         end do
@@ -913,7 +919,7 @@ contains
         do ii = 1, size(blocks)
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
-            work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * filling(iGlob + jj)
+            work(:, iLoc + jj) = work(:, iLoc + jj) * filling(iGlob + jj)
           end do
         end do
         call pblasfx_pgemm(eigenVecs, desc, work, desc, densityMtx, desc, transb="T")
@@ -928,7 +934,7 @@ contains
           call blocks%getblock(ii, iGlob, iLoc, blockSize)
           do jj = 0, blockSize - 1
             if (.not. (filling(iGlob + jj) < sqrtEps)) then
-              work(:, iLoc + jj) = eigenVecs(:, iLoc + jj) * sqrt(filling(iGlob + jj))
+              work(:, iLoc + jj) = work(:, iLoc + jj) * sqrt(filling(iGlob + jj))
             else
               work(:, iLoc + jj) = 0.0_dp
             end if
