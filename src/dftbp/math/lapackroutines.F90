@@ -23,7 +23,7 @@ module dftbp_math_lapackroutines
   public :: gesv, getri, getrf, sytri, sytrf, larnv, hetri, hetrf, gesvd, potrf, trsm, getrs, posv
 
 
-  !> Computes the solution to a real system of linear equations A * X = B, where A is an N-by-N
+  !> Computes the solution to a system of linear equations A * X = B, where A is an N-by-N
   !> matrix and X and B are N-by-NRHS matrices
   interface gesv
     module procedure gesv_real
