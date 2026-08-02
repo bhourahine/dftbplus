@@ -54,7 +54,7 @@ For developers
 To perform pylint static checking, in the top DFTB+ directory the
 individual scripts can be tested, for example by ::
 
-  env PYTHONPATH=$PWD/tools/dptools/src pylint3 --rcfile \
+  env PYTHONPATH=$PWD/tools/dptools/src pylint --rcfile \
   utils/srccheck/pylint/pylintrc-3.ini tools/dptools/src/dptools/*
 
 

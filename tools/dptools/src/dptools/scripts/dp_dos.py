@@ -38,11 +38,12 @@ GAUSS_BROADENING = "gauss"
 FERMI_BROADENING = "fermi"
 MP_BROADENING = "mp"
 BROADENING_FUNCTIONS = [GAUSS_BROADENING, FERMI_BROADENING, MP_BROADENING]
+ENERGY_UNITS = ["eV", "H", "Hartree", "K", "Kelvin"]
 
 DEFAULT_RANGES = {
-    GAUSS_BROADENING: 3.5,
-    FERMI_BROADENING: 7.0,
-    MP_BROADENING: 3.5,
+    GAUSS_BROADENING: 4.0, # Decay to ~ single precision eps
+    FERMI_BROADENING: 18.0, # Decay to ~ single precision eps
+    MP_BROADENING: 4.0, # Decay to ~ single precision eps
 }
 
 DEFAULT_WIDTHS = {
@@ -59,9 +60,9 @@ def main(cmdlineargs=None):
         cmdlineargs: List of command line arguments. When None, arguments in
             sys.argv are parsed (Default: None).
     '''
-    args, broadening, sigma, sigmarange, infile, outfile = \
+    args, broadening, sigma, broadunit, sigmarange, infile, outfile = \
     parse_arguments(cmdlineargs)
-    dp_dos(args, broadening, sigma, sigmarange, infile, outfile)
+    dp_dos(args, broadening, sigma, broadunit, sigmarange, infile, outfile)
 
 
 def parse_arguments(cmdlineargs=None):
@@ -95,6 +96,10 @@ def parse_arguments(cmdlineargs=None):
                              DEFAULT_WIDTHS[MP_BROADENING])
     parser.add_argument("-b", "--broadening-width", type=float, metavar="WIDTH",
                         dest="broadwidth", help=msg, default=-1.0)
+
+    msg = "energy unit for broadening the levels (default: eV)"
+    parser.add_argument("-u", "--broadening-units", dest="broadunit",
+                        help=msg, choices=ENERGY_UNITS, default="ev")
 
     msg = "number of sigmas after which the broadening function is considered "\
           "to be zero (default: gauss {:.2f}, fermi {:.2f}, mp {:.2f})"\
@@ -152,15 +157,27 @@ def parse_arguments(cmdlineargs=None):
     else:
         sigma = args.broadwidth
 
+    broadunit = args.broadunit
+    match broadunit.lower():
+        case "ev":
+            # Same unit as band structure file
+            pass
+        case "h" | "hartree":
+            sigma *= 27.2113845
+        case "k" | "kelvin":
+            sigma *= 0.00000316681534524639
+        case _:
+            raise ScriptError("unknown broadening unit: ", broadunit)
+
     if args.broadrange < 0.0:
         sigmarange = DEFAULT_RANGES[broadening]
     else:
         sigmarange = args.broadrange
 
-    return args, broadening, sigma, sigmarange, infile, outfile
+    return args, broadening, sigma, broadunit, sigmarange, infile, outfile
 
 
-def dp_dos(args, broadening, sigma, sigmarange, infile, outfile):
+def dp_dos(args, broadening, sigma, broadunit, sigmarange, infile, outfile):
     '''convolves the eigenlevels with a broadening function to produce nice
        DOS/PDOS curves.
 
@@ -168,6 +185,7 @@ def dp_dos(args, broadening, sigma, sigmarange, infile, outfile):
         args: Containing the obtained parsed arguments.
         broadening: Specified broadening width sigma.
         sigma: Broadening width
+        broadunit: Unit for broadening width sigma.
         sigmarange: number of sigmas after which the broadening function is
                     considered to be zero
         infile: File containing the DFTB+ band structure information.
@@ -197,8 +215,8 @@ def dp_dos(args, broadening, sigma, sigmarange, infile, outfile):
         broadening_function = lambda x: 1.0 / (1.0 + np.cosh(bb * x))
     elif broadening == GAUSS_BROADENING:
         aa = 1.0 / (sigma * np.sqrt(np.pi))
-        bb = -1.0 / sigma**2
-        broadening_function = lambda x: np.exp(bb * x * x)
+        bb = 1.0 / sigma**2
+        broadening_function = lambda x: np.exp(-bb * x * x)
     else: # Methfessel-Paxton
         aa = 1.0 / sigma
         bb = 1.0 / sigma
