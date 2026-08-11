@@ -12,6 +12,7 @@ set(sources-fpp
   ${curdir}/erfcalc.F90
   ${curdir}/errorfunction.F90
   ${curdir}/factorial.F90
+  ${curdir}/gauge.F90
   ${curdir}/hermite.F90
   ${curdir}/interpolation.F90
   ${curdir}/lapackroutines.F90
