@@ -5,6 +5,7 @@
 !  See the LICENSE file for terms of usage and distribution.                                       !
 !--------------------------------------------------------------------------------------------------!
 
+#:include 'common.fypp'
 #:include 'error.fypp'
 
 !> Contains routines to locate a value in a sorted array using binary search
@@ -16,7 +17,7 @@ module dftbp_math_binarysearch
 
   private
   public :: search_int, search_asc_real_geq, search_asc_real_gt, search_des_real_geq,&
-      & search_des_real_gt
+      & search_des_real_gt, search_int_multikey
 
 contains
 
@@ -50,6 +51,48 @@ contains
     jj = jlower
 
   end subroutine search_int
+
+
+  !> Integer case for binary search of sorted values to find the jj such that
+  !! xVal < xx(jj+1), i.e., the last occurance of the value in an array, or if not present in the
+  !! array, the last element smaller than xVal. If xVal < xx(1), jj = 0
+  subroutine search_int_multikey(jj, xx, compare, xVal)
+
+    !> Located element
+    integer, intent(out) :: jj
+
+    !> Array of values in ascending order to search through
+    integer, intent(in) :: xx(:,:)
+
+    !> Value to locate jj for
+    integer, intent(in) :: xVal(:)
+
+    interface
+      function compare(x, y)
+        implicit none
+        integer, intent(in) :: x(:)
+        integer, intent(in) :: y(:)
+        logical :: compare
+      end function compare
+    end interface
+
+    @:ASSERT(size(xVal) == size(xx, dim=1))
+
+    integer :: jlower, jupper, jcurr
+
+    jlower = 0
+    jupper = size(xx)
+    do while (jlower < jupper)
+      jcurr = jlower + (jupper - jlower + 1) / 2
+      if (compare(xVal, xx(:,jcurr))) then ! xVal > xx
+        jlower = jcurr
+      else
+        jupper = jcurr - 1
+      end if
+    end do
+    jj = jlower
+
+  end subroutine search_int_multikey
 
 
   !======================================

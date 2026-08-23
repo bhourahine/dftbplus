@@ -15,7 +15,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_common_atomicmass, only : getAtomicMass
   use dftbp_common_coherence, only : checkExactCoherence, checkToleranceCoherence
   use dftbp_common_constants, only : amu__au, au__ps, Bohr__AA, Bohr__nm, Boltzmann, Hartree__eV,&
-      & Hartree__kJ_mol, pi, shellNames, symbolToNumber
+      & Hartree__kJ_mol, pi, shellNames, symbolToNumber, AA__Bohr
   use dftbp_common_envcheck, only : checkStackSize
   use dftbp_common_environment, only : globalTimers, TEnvironment
   use dftbp_common_file, only : clearFile, setDefaultBinaryAccess, TFileDescr
@@ -89,6 +89,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_extlibs_sdftd3, only : TSDFTD3, TSDFTD3_init, writeSDFTD3Info
   use dftbp_extlibs_tblite, only : TTBLite, TTBLite_init, writeTBLiteInfo
   use dftbp_geometry_control, only : TGeomChanges
+  use dftbp_geometry_neighbours, only : update
   use dftbp_geoopt_conjgrad, only : TConjGrad
   use dftbp_geoopt_deprecated_steepdesc, only : TSteepDescDepr
   use dftbp_geoopt_filter, only : TFilter, TFilter_init
@@ -1441,6 +1442,10 @@ contains
         & this%latVec, this%origin, this%recVec, this%invLatVec, this%cellVol, this%recCellVol,&
         & input%transpar, errStatus)
     if (errStatus%hasError()) call error(errStatus%message)
+
+    if (this%boundaryCond%iBoundaryCondition == boundaryCondsEnum%cluster) then
+      call update(this%coord0, 5.0_dp * AA__Bohr)
+    end if
 
     ! Get species names and output file
     this%geoOutFile = input%ctrl%outFile
