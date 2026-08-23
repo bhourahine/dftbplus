@@ -15,7 +15,7 @@ module dftbp_dftbplus_initprogram
   use dftbp_common_atomicmass, only : getAtomicMass
   use dftbp_common_coherence, only : checkExactCoherence, checkToleranceCoherence
   use dftbp_common_constants, only : amu__au, au__ps, Bohr__AA, Bohr__nm, Boltzmann, Hartree__eV,&
-      & Hartree__kJ_mol, pi, shellNames, symbolToNumber
+      & Hartree__kJ_mol, pi, shellNames, symbolToNumber, AA__Bohr
   use dftbp_common_envcheck, only : checkStackSize
   use dftbp_common_environment, only : globalTimers, TEnvironment
   use dftbp_common_file, only : clearFile, setDefaultBinaryAccess, TFileDescr

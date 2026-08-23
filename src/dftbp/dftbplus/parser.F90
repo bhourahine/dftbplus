@@ -55,13 +55,11 @@ module dftbp_dftbplus_parser
   use dftbp_extlibs_elsiiface, only : withELSI, withPEXSI
   use dftbp_extlibs_plumed, only : withPlumed
   use dftbp_extlibs_poisson, only : TPoissonInfo, withPoisson
-#:if  WITH_POISSON
-  use dftbp_poisson_boundaryconditions, only : poissonBCsEnum, bcPoissonNames
-#:endif
   use dftbp_extlibs_sdftd3, only : dampingFunction, TSDFTD3Input
   use dftbp_extlibs_tblite, only : tbliteMethod
   use dftbp_extlibs_xmlf90, only : assignment(=), char, destroyNode, destroyNodeList, fnode,&
       & fnodeList, getItem1, getLength, getNodeName, removeChild, string, textNodeName
+  use dftbp_geometry_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_geoopt_geoopt, only : geoOptTypes
   use dftbp_io_charmanip, only : i2c, newline, tolower, unquote
   use dftbp_io_hsdparser, only : getNodeHSdName, parseHsd
@@ -4309,6 +4307,7 @@ contains
     integer :: nAllAtom
     type(TNeighbourList) :: neighs
     type(TStatus) :: errStatus
+    type(TBoundaryConds) :: boundaryConds
 
     allocate(tmpR2(3, geom%nAtom))
     allocate(input%polar(geom%nAtom))
@@ -4369,14 +4368,16 @@ contains
       if (geom%tPeriodic) then
         ! Make some guess for the nr. of all interacting atoms
         nAllAtom = int((real(geom%nAtom, dp)**(1.0_dp/3.0_dp) + 3.0_dp)**3)
+        boundaryConds%iBoundaryCondition = boundaryCondsEnum%pbc3d
       else
         nAllAtom = geom%nAtom
+        boundaryConds%iBoundaryCondition = boundaryCondsEnum%cluster
       end if
       allocate(coords(3, nAllAtom))
       allocate(img2CentCell(nAllAtom))
       allocate(iCellVec(nAllAtom))
       call updateNeighbourList(coords, img2CentCell, iCellVec, neighs, nAllAtom, geom%coords,&
-          & mCutoff, rCellVec, errStatus)
+          & mCutoff, rCellVec, boundaryConds, errStatus)
       if (errStatus%hasError()) then
         call error(errStatus%message)
       end if
