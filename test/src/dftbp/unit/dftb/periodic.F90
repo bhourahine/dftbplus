@@ -14,7 +14,8 @@ module test_dftb_periodic
   use dftbp_common_globalenv, only : destructGlobalEnv, initGlobalEnv
   use dftbp_common_status, only : TStatus
   use dftbp_dftb_periodic, only : allocateNeighbourArrays, distributeAtoms, fillNeighbourArrays,&
-      & reallocateArrays2, TNeighbourList, TNeighbourlist_init, updateNeighbourList
+      & reallocateNeighbourSizedArrays, TNeighbourList, TNeighbourlist_init, updateNeighbourList
+  use dftbp_geometry_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   $:FORTUNO_SERIAL_IMPORTS()
   implicit none (type, external)
 
@@ -118,7 +119,7 @@ contains
     neighDist2(:,:) = neighDist2Test(:,:)
 
     maxNeighbour = 4
-    call reallocateArrays2(iNeighbour, neighDist2, maxNeighbour)
+    call reallocateNeighbourSizedArrays(iNeighbour, neighDist2, maxNeighbour)
 
     @:ASSERT(lbound(iNeighbour, dim=1) == 1)
     @:ASSERT(ubound(iNeighbour, dim=1) == maxNeighbour)
@@ -153,7 +154,7 @@ contains
     neighDist2(:,:) = neighDist2Test(:,:)
 
     maxNeighbour = 2
-    call reallocateArrays2(iNeighbour, neighDist2, maxNeighbour)
+    call reallocateNeighbourSizedArrays(iNeighbour, neighDist2, maxNeighbour)
 
     @:ASSERT(lbound(iNeighbour, dim=1) == 1)
     @:ASSERT(ubound(iNeighbour, dim=1) == maxNeighbour)
@@ -215,6 +216,7 @@ contains
     type(TStatus) :: errStatus
     integer :: nAtom
     type(TNeighbourList) :: neighs
+    type(TBoundaryConds) :: boundaryConds
 
     @:ASSERT(.true.)
     nAtom = 2
@@ -223,6 +225,7 @@ contains
     allocate(iCellVec(nAtom))
     allocate(coords0(3, nAtom))
     allocate(rCellVec(3, 1))
+    boundaryConds%iBoundaryCondition = boundaryCondsEnum%pbc3d
     rCellVec(:, :) = 0.0_dp
     iCellVec(:) = 0
     mCutoff = 1.0_dp
@@ -230,13 +233,13 @@ contains
     call TNeighbourlist_init(neighs, nAtom, 2)
     coords0(1, 2) = minNeighDist
     call updateNeighbourList(coords, img2CentCell, iCellVec, neighs, nAtom, coords0, mCutoff,&
-        & rCellVec, errStatus)
+        & rCellVec, boundaryConds, errStatus)
     @:ASSERT(.not.errStatus%hasError())
     ! tolerance is small, so this value is now smaller and corresponds to a previous code
     ! regression (but _should_ trigger an error):
     coords0(1, 2) = minNeighDist**2
     call updateNeighbourList(coords, img2CentCell, iCellVec, neighs, nAtom, coords0, mCutoff,&
-        & rCellVec, errStatus)
+        & rCellVec, boundaryConds, errStatus)
     @:ASSERT(errStatus%hasError())
 
   $:END_TEST()
