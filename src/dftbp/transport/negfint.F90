@@ -16,7 +16,7 @@ module dftbp_transport_negfint
   use dftbp_common_file, only : closeFile, openFile, TFileDescr
   use dftbp_common_globalenv, only : stdOut, tIOproc
   use dftbp_common_status, only : TStatus
-  use dftbp_geometry_boundarycond, only : TBoundaryConds
+  use dftbp_geometry_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_dftb_periodic, only : TNeighbourList, TNeighbourlist_init, updateNeighbourListAndSpecies
   use dftbp_dftb_sparse2dense, only : unpackHS
   use dftbp_extlibs_negf, only : associate_current, associate_ldos, associate_lead_currents,&
@@ -1902,12 +1902,12 @@ contains
 
 
   !> THIS is a first version of local current computation.
-  ! It has been placed here since it depends on internal representations of DFTB
-  !
-  ! NOTE: Limited to non-periodic systems
+  !! It has been placed here since it depends on internal representations of DFTB
+  !!
+  !! NOTE: Limited to non-periodic systems
   subroutine local_currents(this, env, groupKS, ham, over, neighbourList, nNeighbour, skCutoff,&
       & iAtomStart, iPair, img2CentCell, iCellVec, cellVec, rCellVec, orb, kPoints, kWeights,&
-      & coord0, species0, speciesName, chempot, testArray, errStatus)
+      & coord0, species0, speciesName, chempot, testArray, boundaryCond, errStatus)
 
     !> Instance.
     class(TNegfInt), target, intent(inout) :: this
@@ -1957,15 +1957,16 @@ contains
     !> Species Names (as in gen file)
     character(*), intent(in) :: speciesName(:)
 
-    ! We need this now for different fermi levels in colinear spin
-    ! Note: spin polarized does not work with
-    ! built-in potential (the unpolarized does) in the poisson
-    ! I do not set the fermi because it seems that in libnegf it is
-    ! not really needed
+    !> We need this now for different fermi levels in colinear spin
+    !! Note: spin polarized does not work with built-in potential (the unpolarized does) in the
+    !! poisson I do not set the Fermi because it seems that in libnegf it is not really needed
     real(dp), intent(in) :: chempot(:,:)
 
     !> Array passed back to main for autotests (will become the output)
     real(dp), allocatable, intent(out) :: testArray(:,:)
+
+    !> Boundary condition
+    type(TBoundaryConds) :: boundaryCond
 
     !> Operation status, if an error needs to be returned
     type(TStatus), intent(out) :: errStatus
@@ -1990,6 +1991,9 @@ contains
     type(TFileDescr) :: fd
     logical :: tPrint
 
+    ! NOTE: Limited to non-periodic systems
+    @:ASSERT(boundaryCond%iBoundaryCondition == boundaryCondsEnum%cluster)
+
     ! Workaround: intel18
     ! Explicit pointer needed instead of using this%* directly as pointer argument in calls
     pCsrHam => this%csrHam
@@ -1998,9 +2002,9 @@ contains
     pCsrDens => csrDens
     pCsrEDens => csrEDens
 
-#:if WITH_MPI
+  #:if WITH_MPI
     call negf_mpi_init(env%mpi%groupComm)
-#:endif
+  #:endif
     call get_params(this%negf, params)
 
     !Decide what to do with surface GFs.
@@ -2038,7 +2042,8 @@ contains
     call TNeighbourlist_init(lc_neigh, nAtom, nInitNeigh)
 
     call updateNeighbourListAndSpecies(env, lc_coord, lc_species, lc_img2CentCell, lc_iCellVec, &
-        & lc_neigh, lc_nAllAtom, coord0, species0, skCutoff, rCellVec, errStatus, symmetric=.true.)
+        & lc_neigh, lc_nAllAtom, coord0, species0, skCutoff, rCellVec, boundaryCond, errStatus,&
+        & symmetric=.true.)
     @:PROPAGATE_ERROR(errStatus)
 
     allocate(lcurr(maxval(lc_neigh%nNeighbour), nAtom, nSpin))

@@ -13,10 +13,10 @@ module test_dftb_coulomb
   use dftbp_common_constants, only : pi
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_status, only : TStatus
-  use dftbp_geometry_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_dftb_coulomb, only : TCoulombInput, TCoulomb, TCoulomb_init
   use dftbp_dftb_periodic, only : getCellTranslations, TNeighbourList, TNeighbourlist_init,&
       & updateNeighbourListAndSpecies
+  use dftbp_geometry_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_math_simplealgebra, only : invert33, determinant33
   use dftbp_type_commontypes, only : TOrbitals
   $:FORTUNO_SERIAL_IMPORTS()
@@ -35,6 +35,7 @@ contains
     type(TNeighbourList) :: neighbourList
     type(TOrbitals) :: orb
     type(TStatus) :: errStatus
+    type(TBoundaryConds) :: boundaryConds
     integer, parameter :: nAtom = 2, nSpecies = 1, nShell = 1
     integer, parameter :: species0(nAtom) = 1
     ! x aligned pair
@@ -49,6 +50,7 @@ contains
     input%ewaldAlpha = 0.0_dp
     input%tolEwald = 1E-9_dp
     input%boundaryCond = boundaryCondsEnum%cluster
+    boundaryConds%iBoundaryCondition = boundaryCondsEnum%cluster
 
     ! Set up indexing for s-orbitals on the atoms
     allocate(orb%nShell(nSpecies))
@@ -77,7 +79,7 @@ contains
     allocate(species(nAtom))
 
     call updateNeighbourListAndSpecies(env, coords, species, img2CentCell, iCellVec, neighbourList,&
-        & nAllAtom, coords0, species0, cutOff, rCellVec, errStatus)
+        & nAllAtom, coords0, species0, cutOff, rCellVec, boundaryConds, errStatus)
     @:ASSERT(.not.errStatus%hasError())
 
     call TCoulomb_init(coulomb, input, env, nAtom)
@@ -126,6 +128,7 @@ contains
     input%ewaldAlpha = 0.0_dp
     input%tolEwald = 1E-9_dp
     input%boundaryCond = boundaryCondsEnum%pbc3d
+    boundaryConds%iBoundaryCondition = boundaryCondsEnum%pbc3d
 
     ! Set up indexing for s-orbitals on the atoms
     allocate(orb%nShell(nSpecies))
@@ -166,7 +169,7 @@ contains
     call getCellTranslations(cellVecs, rCellVecs, latVecs, invLatVecs, cutOff, boundaryConds)
 
     call updateNeighbourListAndSpecies(env, coords, species, img2CentCell, iCellVec, neighbourList,&
-        & nAllAtom, coords0, species0, cutOff, rCellVecs, errStatus)
+        & nAllAtom, coords0, species0, cutOff, rCellVecs, boundaryConds, errStatus)
     @:ASSERT(.not.errStatus%hasError())
 
     call coulomb%updateCoords(env, neighbourList, coords0, species0)

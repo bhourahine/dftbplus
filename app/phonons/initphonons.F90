@@ -20,6 +20,7 @@ module phonons_initphonons
       & TNeighbourList, TNeighbourlist_init, updateNeighbourList
   use dftbp_extlibs_xmlf90, only : assignment(=), char, destroyNodeList, fnode, fnodelist,&
       & getItem1, getLength, getNodeName, string, textNodeName
+  use dftbp_geometry_boundarycond, only : boundaryCondsEnum, TBoundaryConds
   use dftbp_io_charmanip, only : i2c, tolower, unquote
   use dftbp_io_hsdparser, only : dumpHSD, parseHSD
   use dftbp_io_hsdutils, only : detailedError, getChild, getChildren, getChildValue,&
@@ -1381,6 +1382,7 @@ contains
     real(dp) :: mCutoff
     real(dp), allocatable :: coords(:,:), cellVec(:,:), rCellVec(:,:)
     integer, allocatable :: iCellVec(:)
+    type(TBoundaryConds) :: boundaryConds
     type(TStatus) :: errStatus
 
     call TNeighbourlist_init(neighbourList, geo%nAtom, nInitNeighbours)
@@ -1390,20 +1392,21 @@ contains
     if (geo%tPeriodic) then
       !! Make some guess for the nr. of all interacting atoms
       nAllAtom = int((real(geo%nAtom, dp)**(1.0_dp/3.0_dp) + 3.0_dp)**3)
-      call getCellTranslations(cellVec, rCellVec, geo%latVecs, &
-            &geo%recVecs2p, mCutoff)
+      call getCellTranslations(cellVec, rCellVec, geo%latVecs, geo%recVecs2p, mCutoff)
+      boundaryConds%iBoundaryCondition = boundaryCondsEnum%pbc3d
     else
       nAllAtom = geo%nAtom
       allocate(rCellVec(3, 1))
       rCellVec(:, 1) = (/ 0.0_dp, 0.0_dp, 0.0_dp /)
+      boundaryConds%iBoundaryCondition = boundaryCondsEnum%cluster
     end if
 
     allocate(coords(3, nAllAtom))
     allocate(img2CentCell(nAllAtom))
     allocate(iCellVec(nAllAtom))
 
-    call updateNeighbourList(coords, img2CentCell, iCellVec, neighbourList, &
-        &nAllAtom, geo%coords, mCutoff, rCellVec, errStatus, symmetric=.false.)
+    call updateNeighbourList(coords, img2CentCell, iCellVec, neighbourList, nAllAtom, geo%coords,&
+        & mCutoff, rCellVec, boundaryConds, errStatus, symmetric=.false.)
     if (errStatus%hasError()) then
       call error(errStatus%message)
     end if
