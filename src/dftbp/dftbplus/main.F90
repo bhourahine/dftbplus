@@ -470,7 +470,7 @@ contains
           & this%ints%overlap, this%neighbourList, this%nNeighbourSK, this%cutOff%skCutoff,&
           & this%denseDesc%iAtomStart, this%iSparseStart, this%img2CentCell, this%iCellVec,&
           & this%cellVec, this%rCellVec, this%orb, this%kPoint, this%kWeight, this%coord0Fold,&
-          & this%species0, this%speciesName, this%mu, this%lCurrArray, errStatus)
+          & this%species0, this%speciesName, this%mu, this%lCurrArray, this%boundaryCond, errStatus)
       if (errStatus%hasError()) then
         call error(errStatus%message)
       end if
@@ -2571,10 +2571,11 @@ contains
       if (tHelical) then
         call updateNeighbourListAndSpecies(env, coord, species, img2CentCell, iCellVec,&
             & neighbourList, nAllAtom, coord0Fold, species0, cutoff%mCutoff, rCellVec,&
-            & errStatus, helicalBoundConds=latVec)
+            & boundaryCond, errStatus, helicalBoundConds=latVec)
       else
         call updateNeighbourListAndSpecies(env, coord, species, img2CentCell, iCellVec,&
-            & neighbourList, nAllAtom, coord0Fold, species0, cutoff%mCutOff, rCellVec, errStatus)
+            & neighbourList, nAllAtom, coord0Fold, species0, cutoff%mCutOff, rCellVec,&
+            & boundaryCond, errStatus)
       end if
       @:PROPAGATE_ERROR(errStatus)
     end if
@@ -2594,7 +2595,7 @@ contains
       call updateNeighbourListAndSpecies(env, symNeighbourList%coord, symNeighbourList%species,&
           & symNeighbourList%img2CentCell, symNeighbourList%iCellVec,&
           & symNeighbourList%neighbourList, symNeighbourList%nAllAtom, coord0Fold, species0,&
-          & cutoff%mCutOff, rCellVec, errStatus, symmetric=.true.)
+          & cutoff%mCutOff, rCellVec, boundaryCond, errStatus, symmetric=.true.)
       @:PROPAGATE_ERROR(errStatus)
       if (allocated(nNeighbourCamSym)) then
         ! count neighbours for CAM interactions (for symmetric neighbour list)
