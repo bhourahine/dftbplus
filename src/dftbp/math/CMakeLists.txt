@@ -4,6 +4,7 @@ set(sources-fpp
   ${curdir}/angmomentum.F90
   ${curdir}/binarysearch.F90
   ${curdir}/blasroutines.F90
+  ${curdir}/comparisions.F90
   ${curdir}/contactsymm.F90
   ${curdir}/counting.F90
   ${curdir}/degeneracy.F90

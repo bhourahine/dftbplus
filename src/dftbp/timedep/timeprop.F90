@@ -5314,7 +5314,7 @@ contains
 
     call updateNeighbourListAndSpecies(env, coordAll, this%speciesAll, img2CentCell, this%iCellVec,&
         & neighbourList, nAllAtom, coord0Fold, this%species0, this%cutoff%mCutoff, this%rCellVec,&
-        & errStatus)
+        & boundaryCond, errStatus)
     @:PROPAGATE_ERROR(errStatus)
     call getNrOfNeighboursForAll(nNeighbourSK, neighbourList, this%cutoff%skCutoff)
     call getSparseDescriptor(neighbourList%iNeighbour, nNeighbourSK, img2CentCell, orb,&
@@ -5324,7 +5324,7 @@ contains
       call updateNeighbourListAndSpecies(env, symNeighbourList%coord, symNeighbourList%species,&
           & symNeighbourList%img2CentCell, symNeighbourList%iCellVec,&
           & symNeighbourList%neighbourList, symNeighbourList%nAllAtom, coord0Fold, this%species0,&
-          & this%cutoff%camCutoff, this%rCellVec, errStatus, symmetric=.true.)
+          & this%cutoff%camCutoff, this%rCellVec, boundaryCond, errStatus, symmetric=.true.)
       @:PROPAGATE_ERROR(errStatus)
       if (allocated(nNeighbourCamSym)) then
         call getNrOfNeighboursForAll(nNeighbourCamSym, symNeighbourList%neighbourList,&
