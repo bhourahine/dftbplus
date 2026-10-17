@@ -7,13 +7,13 @@
 
 !> Contains a type with basis information
 module dftbp_type_orbitals
-  use dftbp_common_accuracy, only : sc
+  use dftbp_common_accuracy, only : sc, dp
   use dftbp_common_constants, only : shellNames
   use dftbp_io_message, only : error
   implicit none
 
   private
-  public :: TOrbitals, getShellNames, orbitalNames
+  public :: TOrbitals, getShellNames, orbitalNames, cubicNames, general2cubic
 
 
   !> Contains information about the orbitals of the species/atoms in the system
@@ -59,8 +59,28 @@ module dftbp_type_orbitals
       & '         ','         ','         ','         ','         ','         ','         ',&
       & '         ','         ','y        ','z        ','x        ','         ','         ',&
       & '         ','xy       ','yz       ','z2       ','xz       ','x2-y2    ','         ',&
-      & 'y(3x2-y2)','xyz      ','yz2      ','z3       ','xz2      ','z(x2-y2) ','x(x2-3y2)'&
-      &], [7,4])
+      & 'y(3x2-y2)','xyz      ','yz2      ','z3       ','xz2      ','z(x2-y2) ','x(x2-3y2)'],&
+      & [7,4])
+
+
+  !> Labels for cubic convention f-orbitals
+  character(lenOrbitalNames), parameter :: cubicNames(-3:3) =&
+      & ['y(z2-x2) ','xyz      ','y3       ','z3       ','x3       ','z(x2-y2) ','x(z2-y2) ']
+
+
+  !> Unitary transformation matrix from general to cubic f-orbital basis
+  !! https://chemistry.tcd.ie/staff/people/gww/gw_new/research/methodology/
+  real(dp), parameter :: general2cubic(7,7) =&
+      & reshape([&
+      & -sqrt(6.0_dp)/4.0_dp, 0.0_dp, sqrt(10.0_dp)/4.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp,&
+      & 0.0_dp, 1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp,&
+      & -sqrt(10.0_dp)/4.0_dp, 0.0_dp, -sqrt(6.0_dp)/4.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp,&
+      & 0.0_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp, 0.0_dp, 0.0_dp,&
+      & 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, -sqrt(6.0_dp)/4.0_dp, 0.0_dp, sqrt(10.0_dp)/4.0_dp,&
+      & 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, 1.0_dp, 0.0_dp,&
+      & 0.0_dp, 0.0_dp, 0.0_dp, 0.0_dp, sqrt(10.0_dp)/4.0_dp, 0.0_dp, sqrt(6.0_dp)/4.0_dp&
+      &], [7,7])
+
 
 contains
 

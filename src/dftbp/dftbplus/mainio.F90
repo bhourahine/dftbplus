@@ -47,6 +47,7 @@ module dftbp_dftbplus_mainio
   use dftbp_io_taggedoutput, only : tagLabels, TTaggedWriter
   use dftbp_math_blasroutines, only : hemv
   use dftbp_math_eigensolver, only : heev
+  use dftbp_math_matrixops, only : makeSimilarityTrans
   use dftbp_md_mdcommon, only : TMDOutput
   use dftbp_md_mdintegrator, only : state, TMdIntegrator
   use dftbp_reks_reks, only : reksTypes, setReksTargetEnergy, TReksCalc
@@ -58,7 +59,7 @@ module dftbp_dftbplus_mainio
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_linkedlist, only : elemShape, get, intoArray, len, TListCharLc, TListIntR1
   use dftbp_type_multipole, only : TMultipole
-  use dftbp_type_orbitals, only : getShellNames, orbitalNames
+  use dftbp_type_orbitals, only : getShellNames, orbitalNames, cubicNames, general2cubic
 #:if WITH_MPI
   use dftbp_extlibs_mpifx, only : mpifx_bcast, mpifx_recv, mpifx_send
 #:endif
@@ -2975,11 +2976,9 @@ contains
     !> Onsite mulliken population per atom
     real(dp), intent(in), optional :: qNetAtom(:)
 
-    real(dp), allocatable :: qOutputUpDown(:,:,:), qBlockOutUpDown(:,:,:,:), ev(:,:), ei(:)
-    real(dp) :: angularMomentum(3)
-    integer :: ang
-    integer :: nAtom
-    integer :: iAt, iSpin, iSp, iSh, iOrb, ii, kk
+    real(dp), allocatable :: ei(:), ev(:,:), qBlockOutUpDown(:,:,:,:), qOutputUpDown(:,:,:)
+    real(dp) :: angularMomentum(3), qfTmp(7,7)
+    integer :: ang, iAt, ii, iOrb, iSh, iSp, iSpin, kk, nAtom
     character(sc), allocatable :: shellNamesTmp(:)
     character(lc) :: strTmp
 
@@ -3065,11 +3064,27 @@ contains
               else
                 write(strtmp,"(A)")trim(shellNamesTmp(iSh))
               end if
-              do kk = 0, 2 * ang
-                write(fd, "(I5, 1X, I3, 1X, I3, 1X, I3, 1X, F16.8, 2X, A)") iAt, iSh, ang,&
-                    & kk - ang, qOutput(orb%posShell(iSh, iSp) + kk, iAt, iSpin),&
-                    & trim(strTmp)//trim(orbitalNames(kk-ang,ang))
-              end do
+              if (ang == 3) then
+                qfTmp(:,:) = 0.0_dp
+                do kk = 1, 7
+                  qfTmp(kk,kk) = qOutput(orb%posShell(iSh, iSp)+kk-1, iAt, iSpin)
+                end do
+                call makeSimilarityTrans(qfTmp, general2cubic)
+              end if
+              if (ang /= 3) then
+                do kk = 0, 2 * ang
+                  write(fd, "(I5, 1X, I3, 1X, I3, 1X, I3, 1X, F16.8, 2X, A)") iAt, iSh, ang,&
+                      & kk - ang, qOutput(orb%posShell(iSh, iSp) + kk, iAt, iSpin),&
+                      & trim(strTmp)//trim(orbitalNames(kk-ang,ang))
+                end do
+              else
+                do kk = 0, 2 * ang
+                  write(fd, "(I5, 1X, I3, 1X, I3, 1X, I3, 1X, F16.8, 2X, A, T50, A, F11.8, 2X, A)")&
+                      & iAt, iSh, ang, kk - ang, qOutput(orb%posShell(iSh, iSp) + kk, iAt, iSpin),&
+                      & trim(strTmp)//trim(orbitalNames(kk-ang,ang)), '( ', qfTmp(kk+1,kk+1),&
+                      & trim(strTmp)//trim(cubicNames(kk-ang))//' )'
+                end do
+              end if
             end do
             deallocate(shellNamesTmp)
           end do
