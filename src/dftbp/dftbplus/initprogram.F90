@@ -886,7 +886,7 @@ module dftbp_dftbplus_initprogram
     integer :: runId
 
     !> Frequency for saving restart info
-    integer :: restartFreq
+    integer :: restartGeomFreq
 
     !> Dispersion data and calculations
     class(TDispersionIface), allocatable :: dispersion
@@ -3120,7 +3120,7 @@ contains
       call error("Stop file '" // fStopDriver // "' already present at startup")
     end if
 
-    this%restartFreq = input%ctrl%restartFreq
+    this%restartGeomFreq = input%ctrl%restartGeomFreq
 
   #:if WITH_TRANSPORT
     if (this%geometryChanges%tLatOpt .and. this%tNegf) then

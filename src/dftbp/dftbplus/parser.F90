@@ -505,7 +505,7 @@ contains
       ! Geometry optimisation drivers
       ctrl%iGeoOpt = geoOptTypes%geometryoptimisation
       ctrl%tForces = .true.
-      ctrl%restartFreq = 1
+      ctrl%restartGeomFreq = 1
 
     case ("steepestdescent")
 
@@ -629,7 +629,7 @@ contains
       ctrl%tForces = .true.
       ctrl%tMD = .true.
 
-      call getChildValue(node, "MDRestartFrequency", ctrl%restartFreq, 1)
+      call getChildValue(node, "MDRestartFrequency", ctrl%restartGeomFreq, 1)
       call getChildValue(node, "MovedAtoms", buffer2, trim(atomsRange), child=child, &
           &multiple=.true.)
       call getSelectedAtomIndices(env%stdOut, child, char(buffer2), geom%speciesNames,&
@@ -883,7 +883,7 @@ contains
     if (present(isMaxLatStepNeeded)) isMaxLatStep = isMaxLatStepNeeded
 
     ctrl%tForces = .true.
-    ctrl%restartFreq = 1
+    ctrl%restartGeomFreq = 1
 
     call getChildValue(node, "LatticeOpt", ctrl%tLatOpt, .false.)
     if (ctrl%tLatOpt) then
@@ -4246,9 +4246,9 @@ contains
 
     if (.not.(ctrl%tMD.or.ctrl%isGeoOpt.or.allocated(ctrl%geoOpt))) then
       if (ctrl%tSCC) then
-        call getChildValue(node, "RestartFrequency", ctrl%restartFreq, 20)
+        call getChildValue(node, "RestartFrequency", ctrl%restartGeomFreq, 20)
       else
-        ctrl%restartFreq = 0
+        ctrl%restartGeomFreq = 0
       end if
     end if
     if (ctrl%tMD) then

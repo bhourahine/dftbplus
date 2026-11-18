@@ -185,7 +185,7 @@ contains
 
     !> Flag to write out geometries (and charge data if scc) when moving atoms about - in the case
     !! of drivers like conjugate gradient/steepest descent the geometries are written anyway
-    logical :: tWriteRestart
+    logical :: tWriteGeomRestart
 
     !> Lattice vectors returned by the optimizer
     real(dp) :: constrLatDerivs(9)
@@ -217,9 +217,9 @@ contains
 
     ! Main geometry loop
     geoOpt: do iGeoStep = 0, this%nGeoSteps
-      tWriteRestart = env%tGlobalLead .and. needsRestartWriting(this%geometryChanges%isgeoopt .or.&
+      tWriteGeomRestart = env%tGlobalLead .and. needsRestartWriting(this%geometryChanges%isgeoopt .or.&
           & allocated(this%geoOpt), this%geometryChanges%tMd, iGeoStep, this%nGeoSteps,&
-          & this%restartFreq)
+          & this%restartGeomFreq)
 
       if (.not. this%tRestartNoSC) then
         call printGeoStepInfo(env%stdOut, this%geometryChanges%tCoordOpt,&
@@ -245,7 +245,7 @@ contains
               & this%iEqBlockOnSite, this%iEqBlockOnSiteLS)
         end if
 
-        call processGeometry(this, env, iGeoStep, iLatGeoStep, tWriteRestart, tStopScc,&
+        call processGeometry(this, env, iGeoStep, iLatGeoStep, tWriteGeomRestart, tStopScc,&
             & tExitGeoOpt, errStatus)
         if (errStatus%hasError()) then
           call error(errStatus%message)
@@ -306,7 +306,7 @@ contains
       end if
     #:endif
 
-      tWriteCharges = allocated(this%qInput) .and. tWriteRestart .and. this%tMulliken&
+      tWriteCharges = allocated(this%qInput) .and. tWriteGeomRestart .and. this%tMulliken&
           & .and. this%tSccCalc .and. .not. this%geometryChanges%tDerivs&
           & .and. this%maxSccIter > 1 .and. this%deltaDftb%nDeterminant() == 1&
           & .and. this%tWriteCharges
@@ -330,7 +330,7 @@ contains
       end if
 
       if (this%tForces) then
-        call getNextGeometry(this, env, iGeoStep, tWriteRestart, constrLatDerivs, tCoordStep,&
+        call getNextGeometry(this, env, iGeoStep, tWriteGeomRestart, constrLatDerivs, tCoordStep,&
             & tGeomEnd, tStopDriver, iLatGeoStep, tempIon, tExitGeoOpt)
         if (tExitGeoOpt) then
           exit geoOpt
@@ -1001,7 +1001,7 @@ contains
           & diffElec)
       if (this%tNegf) call printSccHeader(env%stdOut)
 
-      tWriteSccRestart = env%tGlobalLead .and. needsSccRestartWriting(this%restartFreq,&
+      tWriteSccRestart = env%tGlobalLead .and. needsSccRestartWriting(this%restartGeomFreq,&
           & iGeoStep, iSccIter, this%minSccIter, this%maxSccIter, this%geometryChanges%tMd,&
           & this%geometryChanges%isgeoopt .or. allocated(this%geoOpt),&
           & this%geometryChanges%tDerivs, tConverged, this%tReadChrg, tStopScc) .and.&
@@ -1089,7 +1089,7 @@ contains
 
 
   !> Process current geometry
-  subroutine processGeometry(this, env, iGeoStep, iLatGeoStep, tWriteRestart, tStopScc,&
+  subroutine processGeometry(this, env, iGeoStep, iLatGeoStep, tWriteGeomRestart, tStopScc,&
       & tExitGeoOpt, errStatus)
 
     !> Global variables
@@ -1105,7 +1105,7 @@ contains
     integer, intent(in) :: iLatGeoStep
 
     !> Flag to write out geometries (and charge data if scc)
-    logical, intent(in) :: tWriteRestart
+    logical, intent(in) :: tWriteGeomRestart
 
     !> If scc driver should be stopped
     logical, intent(out) :: tStopScc
@@ -1153,7 +1153,7 @@ contains
     call this%electronicSolver%reset()
     tExitGeoOpt = .false.
 
-    if (this%geometryChanges%tMd .and. tWriteRestart .and. isFirstDet) then
+    if (this%geometryChanges%tMd .and. tWriteGeomRestart .and. isFirstDet) then
       if (iGeoStep == 0) then
         call openOutputFile(mdOut, .false., this%fdMd)
       end if
@@ -1416,7 +1416,7 @@ contains
                 & allocated(this%thirdOrd), this%isHybridXc, qNetAtom=this%qNetAtom,&
                 & isMdftb=allocated(this%quadrupoleMoment))
           end if
-          if (this%tWriteBandDat .and. tWriteRestart) then
+          if (this%tWriteBandDat .and. tWriteGeomRestart) then
             if (this%geometryChanges%tMd .and. iGeoStep /= 0) then
               call writeBandOut(bandOut, this%eigen, this%filling, this%kWeight,&
                   & isFileAppended=this%mdOutput%bandStructure)
@@ -1484,7 +1484,7 @@ contains
               & this%dangerousChanges, errStatus)
           if (errStatus%hasError()) call error(errStatus%message)
 
-          if (this%tWriteBandDat .and. tWriteRestart) then
+          if (this%tWriteBandDat .and. tWriteGeomRestart) then
             if (this%deltaDftb%nDeterminant() == 1) then
               if (this%geometryChanges%tMd .and. iGeoStep /= 0) then
                 ! the iGeoStep test is so that the initial step has a new file
@@ -1577,6 +1577,30 @@ contains
       end do lpSCC
 
     end if REKS_SCC
+
+    if (this%tWriteBandDat) then
+      if (this%deltaDftb%nDeterminant() == 1 .or. allocated(this%reks)) then
+        if (this%geometryChanges%tMd .and. iGeoStep > 0 .and. tWriteGeomRestart) then
+          ! the iGeoStep test is so that the initial step has a new file
+          call writeBandOut(bandOut, this%eigen, this%filling, this%kWeight,&
+              & isFileAppended=this%mdOutput%bandStructure)
+        else
+          call writeBandOut(bandOut, this%eigen, this%filling, this%kWeight)
+        end if
+      else
+        ! Multiple determinants
+        if (this%geometryChanges%tMd .and. iGeoStep > 0 .and. tWriteGeomRestart) then
+          ! the iGeoStep test is so that the initial step has a new file
+          call writeBandOut(this%deltaDftb%determinantName(this%deltaDftb%iDeterminant) //&
+              & '_' //  bandOut, this%eigen, this%filling, this%kWeight,&
+              & isFileAppended=this%mdOutput%bandStructure)
+        else
+          call writeBandOut(this%deltaDftb%determinantName(this%deltaDftb%iDeterminant) //&
+              & '_' //  bandOut, this%eigen, this%filling, this%kWeight)
+        end if
+      end if
+    end if
+
 
   #:if WITH_SCALAPACK
     if (this%isSparseReorderRequired) then
@@ -1753,7 +1777,7 @@ contains
     end if
 
     ! MD geometry files are written only later, once velocities for the current geometry are known
-    if ((this%geometryChanges%isgeoopt .or. allocated(this%geoOpt)) .and. tWriteRestart) then
+    if ((this%geometryChanges%isgeoopt .or. allocated(this%geoOpt)) .and. tWriteGeomRestart) then
       if (.not. (this%deltaDftb%isSpinPurify .and.&
           & this%deltaDftb%iDeterminant == determinants%triplet)) then
         call writeCurrentGeometry(this%geoOutFile, this%pCoord0Out, this%geometryChanges%tLatOpt,&
@@ -1870,7 +1894,7 @@ contains
         & .and. (.not. (this%geometryChanges%isgeoopt .or. allocated(this%geoOpt) .or.&
         & this%geometryChanges%tMd) .or. needsRestartWriting(this%geometryChanges%isgeoopt&
         & .or. allocated(this%geoOpt), this%geometryChanges%tMd, iGeoStep, this%nGeoSteps,&
-        & this%restartFreq))) then
+        & this%restartGeomFreq))) then
       call this%electrostatPot%evaluate(env, this%scc, this%eField)
       call writeEsp(this%electrostatPot, env, iGeoStep, this%nGeoSteps)
     end if
@@ -2059,7 +2083,7 @@ contains
 
 
   !> Next geometry step from driver
-  subroutine getNextGeometry(this, env, iGeoStep, tWriteRestart, constrLatDerivs,&
+  subroutine getNextGeometry(this, env, iGeoStep, tWriteGeomRestart, constrLatDerivs,&
       & tCoordStep, tGeomEnd, tStopDriver, iLatGeoStep, tempIon, tExitGeoOpt)
 
     !> Global variables
@@ -2072,7 +2096,7 @@ contains
     integer, intent(in) :: iGeoStep
 
     !> Flag to write out geometries (and charge data if scc)
-    logical, intent(in) :: tWriteRestart
+    logical, intent(in) :: tWriteGeomRestart
 
     !> Lattice vectors returned by the optimizer
     real(dp), intent(in) :: constrLatDerivs(:)
@@ -2201,7 +2225,7 @@ contains
       call printMdInfo(env%stdOut, this%tSetFillingTemp, this%eField, this%tPeriodic,&
           & this%tempElec, tempIon, this%intPressure, this%extPressure,&
           & this%dftbEnergy(this%deltaDftb%iFinal), this%temperatureProfile)
-      if (tWriteRestart) then
+      if (tWriteGeomRestart) then
         if (this%tPeriodic) then
           this%cellVol = abs(determinant33(this%latVec))
           this%dftbEnergy(this%deltaDftb%iFinal)%EGibbs =&
@@ -2719,8 +2743,8 @@ contains
 
 
   !> Decides, whether restart file should be written during the run.
-  function needsRestartWriting(isGeoOpt, tMd, iGeoStep, nGeoSteps, restartFreq)&
-      & result(tWriteRestart)
+  function needsRestartWriting(isGeoOpt, tMd, iGeoStep, nGeoSteps, restartGeomFreq)&
+      & result(tWriteGeomRestart)
 
     !> Are geometries being optimised
     logical, intent(in) :: isGeoOpt
@@ -2735,15 +2759,15 @@ contains
     integer, intent(in) :: nGeoSteps
 
     !> Frequency of restart in geometry steps
-    integer, intent(in) :: restartFreq
+    integer, intent(in) :: restartGeomFreq
 
     !> Should a restart file be written?
-    logical :: tWriteRestart
+    logical :: tWriteGeomRestart
 
-    if (restartFreq > 0 .and. (isGeoOpt .or. tMD)) then
-      tWriteRestart = (iGeoStep == nGeoSteps .or. (mod(iGeoStep, restartFreq) == 0))
+    if (restartGeomFreq > 0 .and. (isGeoOpt .or. tMD)) then
+      tWriteGeomRestart = (iGeoStep == nGeoSteps .or. (mod(iGeoStep, restartGeomFreq) == 0))
     else
-      tWriteRestart = .false.
+      tWriteGeomRestart = .false.
     end if
 
   end function needsRestartWriting
@@ -5772,11 +5796,11 @@ contains
 
 
   !> Whether restart information needs to be written in the current scc loop.
-  function needsSccRestartWriting(restartFreq, iGeoStep, iSccIter, minSccIter, maxSccIter, tMd,&
+  function needsSccRestartWriting(restartGeomFreq, iGeoStep, iSccIter, minSccIter, maxSccIter, tMd,&
       & isGeoOpt, tDerivs, tConverged, tReadChrg, tStopScc) result(tRestart)
 
     !> Frequency of charge  write out
-    integer, intent(in) :: restartFreq
+    integer, intent(in) :: restartGeomFreq
 
     !> Current geometry step
     integer, intent(in) :: iGeoStep
@@ -5814,14 +5838,14 @@ contains
     logical :: tEnoughIters, tRestartIter
 
     ! Do we need restart at all?
-    tRestart = (restartFreq > 0 .and. .not. (tMD .or. isGeoOpt .or. tDerivs) .and. maxSccIter > 1)
+    tRestart = (restartGeomFreq > 0 .and. .not. (tMD .or. isGeoOpt .or. tDerivs) .and. maxSccIter > 1)
     if (tRestart) then
 
       ! Do we have enough iterations already?
       tEnoughIters = (iSccIter >= minSccIter .or. tReadChrg .or. iGeoStep > 0)
 
       ! Is current iteration the right one for writing a restart file?
-      tRestartIter = (iSccIter == maxSccIter .or. tStopScc .or. mod(iSccIter, restartFreq) == 0)
+      tRestartIter = (iSccIter == maxSccIter .or. tStopScc .or. mod(iSccIter, restartGeomFreq) == 0)
 
       tRestart = (tConverged .or. (tEnoughIters .and. tRestartIter))
     end if

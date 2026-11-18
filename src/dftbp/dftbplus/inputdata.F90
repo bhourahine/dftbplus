@@ -489,7 +489,7 @@ module dftbp_dftbplus_inputdata
     logical :: tWriteTagged = .false.
 
     !> Nr. of SCC iterations without restart info
-    integer :: restartFreq  = 20
+    integer :: restartGeomFreq  = 20
     logical :: tWriteDetailedXML = .false.
     logical :: tWriteResultsTag = .false.
     logical :: tWriteDetailedOut = .true.
