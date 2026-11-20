@@ -217,6 +217,9 @@ module dftbp_dftbplus_initprogram
     !> Nr. of orbitals in the system
     integer :: nOrb
 
+    !> Hamiltonian matrix size (which may not be the number of spatial orbitals, nOrb)
+    integer :: sizeDenseHS
+
     !> Types of the atoms (nAllAtom)
     integer, allocatable :: species(:)
 
@@ -1527,6 +1530,11 @@ contains
     #:endif
     end select
     this%nOrb = this%orb%nOrb
+    if (this%t2Component) then
+      this%sizeDenseHS = 2 * this%nOrb
+    else
+      this%sizeDenseHS = this%nOrb
+    end if
 
     ! start by assuming stress can be calculated if periodic
     this%tStress = this%tPeriodic
@@ -1623,8 +1631,8 @@ contains
   #:endif
 
   #:if WITH_SCALAPACK
-    call initBlacs(input%ctrl%parallelOpts%blacsOpts, this%nAtom, this%nOrb, this%t2Component, env,&
-        & errStatus)
+    call initBlacs(input%ctrl%parallelOpts%blacsOpts, this%nAtom, this%sizeDenseHS,&
+        & this%t2Component, env, errStatus)
     if (errStatus%hasError()) then
       if (errStatus%code == -1) then
         call warning(env%stdOut, "Insufficient atoms for this number of MPI processors")
@@ -2116,8 +2124,7 @@ contains
       ! Would be using the ELSI matrix writing mechanism, so set this as always false
       this%tWriteHS = .false.
 
-      call initPartialDiag_(this%electronicSolver%partialDiag, input%ctrl,&
-          & this%denseDesc%fullSize, this%nEl, this%nSpin,&
+      call initPartialDiag_(this%electronicSolver%partialDiag, input%ctrl, this,&
           & this%electronicSolver%iSolver == electronicSolverTypes%elpa)
 
       call TElsiSolver_init(this%electronicSolver%elsi, input%ctrl%solver%elsi,&
@@ -5801,7 +5808,7 @@ contains
   #!
 
   !> Initialise parallel large matrix decomposition methods
-  subroutine initBlacs(blacsOpts, nAtom, nOrb, t2Component, env, errStatus)
+  subroutine initBlacs(blacsOpts, nAtom, sizeHS, t2Component, env, errStatus)
 
     !> BLACS settings
     type(TBlacsOpts), intent(in) :: blacsOpts
@@ -5809,8 +5816,8 @@ contains
     !> Number of atoms
     integer, intent(in) :: nAtom
 
-    !> Number of orbitals
-    integer, intent(in) :: nOrb
+    !> Size of hamiltonian matrix
+    integer, intent(in) :: sizeHS
 
     !> Is this a two component calculation
     logical, intent(in) :: t2Component
@@ -5821,13 +5828,6 @@ contains
     !> Operation status, if an error needs to be returned
     type(TStatus), intent(inout) :: errStatus
 
-    integer :: sizeHS
-
-    if (t2Component) then
-      sizeHS = 2 * nOrb
-    else
-      sizeHS = nOrb
-    end if
     call env%initBlacs(blacsOpts%blockSize, blacsOpts%blockSize, sizeHS, nAtom, errStatus)
     @:PROPAGATE_ERROR(errStatus)
 
@@ -7663,7 +7663,7 @@ contains
 
   !> Sets up the state counting for a partial diagonalisation, checking that the requested
   !! calculation does not need the states which would be left out in partial diagonalisation.
-  subroutine initPartialDiag_(partialDiag, ctrl, nOrb, nEl, nSpin, isEigenSolver)
+  subroutine initPartialDiag_(partialDiag, ctrl, this, isSuitableEigenSolver)
 
     !> State counting to initialise
     type(TPartialDiag), intent(out) :: partialDiag
@@ -7671,32 +7671,23 @@ contains
     !> Control structure
     type(TControl), intent(in) :: ctrl
 
-    !> Number of states of a full diagonalisation
-    integer, intent(in) :: nOrb
-
-    !> Number of electrons, per spin channel where these are separate
-    real(dp), intent(in) :: nEl(:)
-
-    !> Number of spin blocks in the Hamiltonian
-    integer, intent(in) :: nSpin
+    !> DftbPlusMain instance
+    class(TDftbPlusMain), intent(in) :: this
 
     !> Whether the solver in use returns individual eigenstates
-    logical, intent(in) :: isEigenSolver
+    logical, intent(in) :: isSuitableEigenSolver
 
-    integer :: nEmpty
+    integer :: nEmptyStates
 
-    nEmpty = -1
-    if (isEigenSolver .and. allocated(ctrl%solver%elpa)) then
-      nEmpty = ctrl%solver%elpa%nEmptyStates
+    nEmptyStates = -1
+    if (isSuitableEigenSolver .and. allocated(ctrl%solver%elpa)) then
+      nEmptyStates = ctrl%solver%elpa%nEmptyStates
     end if
 
-    if (nEmpty >= 0) then
+    if (nEmptyStates >= 0) then
       if (.not. ctrl%tScc) then
         call error("The number of states of a partial diagonalisation is adjusted during the&
             & self-consistent cycle, so it is not available for non-SCC calculations")
-      end if
-      if (nSpin == 4) then
-        call error("Partial diagonalisation is not available for non-collinear spin")
       end if
       if (allocated(ctrl%lrespini) .or. allocated(ctrl%ppRPA)) then
         call error("Excited state calculations need the complete set of states, so are not&
@@ -7736,7 +7727,7 @@ contains
       end if
     end if
 
-    call TPartialDiag_init(partialDiag, nEmpty, nOrb, nEl, nSpin)
+    call TPartialDiag_init(partialDiag, nEmptyStates, this%sizeDenseHS, this%nEl, this%nSpin)
 
   end subroutine initPartialDiag_
 

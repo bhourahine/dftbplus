@@ -217,12 +217,9 @@ contains
     case (1)
       ! two electrons per state
       nOccupied = ceiling(0.5_dp * sum(nEl))
-    case (2)
-      ! one electron per state, the channels being diagonalised separately
+    case (2, 4)
+      ! one electron per state
       nOccupied = ceiling(maxval(nEl))
-    case default
-      ! one electron per state of the combined Pauli problem
-      nOccupied = ceiling(sum(nEl))
     end select
 
     nOccupied = max(nOccupied, 1)

@@ -1,0 +1,59 @@
+Geometry = GenFormat {
+ 4  C
+ Fe
+    1  1    0.1526518771E-01   -0.3209004101E-01    0.1447770200E-01
+    2  1    0.1650434013E+01    0.1696995303E+01    0.1480361437E-01
+    3  1    0.1650564037E+01   -0.3168987980E-01    0.1650395529E+01
+    4  1    0.1451615234E-01    0.1696563858E+01    0.1650102435E+01
+}
+
+Hamiltonian = DFTB {
+  SCC = Yes
+  ShellResolvedSCC = Yes
+  SCCTolerance = 1.0E-8
+  MaxSCCIterations = 1000
+  Mixer = Anderson {}
+  MaxAngularMomentum = {
+    Fe = "d"
+  }
+  Charge = 0.0
+  SpinPolarisation = NonColinear { # each atom starts with a spin of ~1
+    InitialSpins = {
+      AtomSpin = {
+	Atoms = Fe
+	SpinPerAtom = {
+	  0.41 -0.41 0.82
+	}
+      }
+    }
+  }
+  SpinConstants = {
+    Fe = {
+           -0.013 -0.009 -0.003
+           -0.009 -0.011 -0.001
+           -0.003 -0.001 -0.015
+    }
+  }
+  Solver = ELPA {
+      EmptyStates = 4
+  }
+  Filling = MethfesselPaxton {
+    Temperature [Kelvin] = 500
+    Order = 2
+  }
+  SlaterKosterFiles = {
+    Fe-Fe = "slakos/origin/pbc-0-3/Fe-Fe.skf"
+  }
+}
+
+Options {
+  WriteAutotestTag = Yes
+}
+
+ParserOptions {
+  ParserVersion = 14
+}
+
+Parallel {
+  UseOmpThreads = No
+}

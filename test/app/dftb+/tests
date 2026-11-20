@@ -236,6 +236,7 @@ solvers/GaAs_2_ELPA2                   #? (WITH_ELSI or WITH_ELPA) and MPI_PROCS
 solvers/Si32C32_ELPA1                  #? (WITH_ELSI or WITH_ELPA) and MPI_PROCS <= 4 and OMP_THREADS == 1
 solvers/Si32C32_ELPA2                  #? (WITH_ELSI or WITH_ELPA) and MPI_PROCS <= 4 and OMP_THREADS == 1
 solvers/Si32C32_ELPA2_partial          #? WITH_ELSI and not WITH_ELPA and MPI_PROCS <= 4 and OMP_THREADS == 1
+solvers/Fe4_NC_ELPA2_partial           #? WITH_ELSI and not WITH_ELPA and MPI_PROCS <= 4 and OMP_THREADS == 1
 solvers/Fe4_ELPA_2group                #? (WITH_ELSI or WITH_ELPA) and MPI_PROCS <= 4 and MPI_PROCS % 2 == 0 and OMP_THREADS == 1
 solvers/Si384_ELPA1                    #? (WITH_ELSI or WITH_ELPA) and MPI_PROCS <= 4 and OMP_THREADS == 1
 solvers/Si384_ELPA2                    #? (WITH_ELSI or WITH_ELPA) and MPI_PROCS <= 4 and OMP_THREADS == 1
