@@ -26,7 +26,7 @@ module dftbp_dftb_hybridxc
       & getHfAnalyticalGammaValue_workhorse, getLrAnalyticalGammaValue_workhorse
   use dftbp_dftb_slakocont, only : TSlakoCont
   use dftbp_dftb_sparse2dense, only : getUnpackedOverlapPrime_kpts, getUnpackedOverlapPrime_real,&
-      & unpackHS, unpackHSdk
+      & unpackHS
   use dftbp_math_blasroutines, only : gemm, hemm, symm
   use dftbp_math_matrixops, only : adjointLowerTriangle
   use dftbp_math_simplealgebra, only : determinant33
@@ -7463,9 +7463,14 @@ contains
 
   !> Interface routine for obtaining numerical derivative of CAM range-separated contributions to
   !! the Hamiltonian with respect to crystal momentum (k)
+  !!
+  !! The derivatives are with respect to the cartesian components of k, hence the k-points are
+  !! displaced along the lattice vectors, dk_relative(:) = latVecs(iDir,:) * dk_cartesian / (2 pi).
+  !! The resulting matrices are in the cell (convention I) gauge of the k-space Hamiltonian.
+  !!
   subroutine getCamHamiltonian_dkpts(this, env, denseDesc, orb, ints, densityMatrix, neighbourList,&
       & nNeighbourSK, symNeighbourList, nNeighbourCamSym, iCellVec, cellVecs, rCellVecs,&
-      & iSparseStart, img2CentCell, kPoints, kWeights, HSqrCplxCam_dk, errStatus)
+      & iSparseStart, img2CentCell, kPoints, kWeights, latVecs, HSqrCplxCam_dk, errStatus)
 
     !> Class instance
     class(THybridXcFunc), intent(inout) :: this
@@ -7518,6 +7523,9 @@ contains
     !> The k-point weights
     real(dp), intent(in) :: kWeights(:)
 
+    !> Unit cell vectors
+    real(dp), intent(in) :: latVecs(:,:)
+
     !> Square (unpacked) Hamiltonian for all k-point/spin composite indices to be updated
     complex(dp), intent(out), allocatable :: HSqrCplxCam_dk(:,:,:,:)
 
@@ -7527,11 +7535,13 @@ contains
     !! Temporary displaced k-points for evaluation
     real(dp), allocatable :: kPointsDelta(:,:)
 
-    !! Finite difference step
+    !! Finite difference step (in cartesian units of inverse length)
     real(dp), parameter :: delta = epsilon(1.0_dp)**0.25_dp
 
     complex(dp), allocatable :: work(:,:,:)
     integer :: ii, iDir
+    !! Displacement of the relative k-coordinates for a cartesian step
+    real(dp) :: dkRel(3)
 
     @:ASSERT(allocated(densityMatrix%kPointPrime))
 
@@ -7539,10 +7549,13 @@ contains
 
     do iDir = 1, 3
 
+      !! Cartesian step of delta along iDir, expressed in relative k-coordinates
+      dkRel(:) = delta * latVecs(iDir, :) / (2.0_dp * pi)
+
       do ii = -1, 1, 2
 
         kPointsDelta = kPoints
-        kPointsDelta(iDir, :) = kPointsDelta(iDir, :) + real(ii,dp) * delta
+        kPointsDelta(:, :) = kPointsDelta + real(ii,dp) * spread(dkRel, 2, size(kPoints, dim=2))
 
         call getCamHamiltonian_kpts(this, env, denseDesc, orb, ints, densityMatrix, neighbourList,&
             & nNeighbourSK, symNeighbourList, nNeighbourCamSym, iCellVec, cellVecs, rCellVecs,&

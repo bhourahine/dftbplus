@@ -3459,7 +3459,7 @@ contains
           call dielectric(env, evaluateDielectricFn, parallelKS, eigen, filling, eigvecsCplx, ints,&
               & neighbourList, nNeighbourSK, symNeighbourList, nNeighbourCamSym, orb, denseDesc,&
               & iSparseStart, img2CentCell, kPoint, kWeight, coord, rCellVecs, cellVec, iCellVec,&
-              & latVecs, densityMatrix, hybridXc, taggedWriter, this%tWriteAutotest,&
+              & latVecs, recVecs2p, densityMatrix, hybridXc, taggedWriter, this%tWriteAutotest,&
               & this%tWriteResultsTag, dab, errStatus)
           @:PROPAGATE_ERROR(errStatus)
         end if

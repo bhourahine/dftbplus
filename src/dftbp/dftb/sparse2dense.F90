@@ -3691,10 +3691,15 @@ contains
 
   !> Derivative wrt to k of unpacked sparse matrix converted into square form (complex version)
   !!
+  !! The matrix is unfolded in the atom position gauge, i.e. with Bloch phases
+  !! exp(i k . (r_b + T - r_a)) built from the absolute (cartesian) positions of the two atoms
+  !! involved, and is differentiated with respect to the cartesian components of k. The k-vector
+  !! must therefore be passed in absolute units, k = 2 pi matmul(invLatVec, kPointRelative).
+  !!
   !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   !!
-  subroutine unpackHSdkBlacs_cmplx(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, coord,&
-      & iCellVec, cellVec, iSparseStart, img2CentCell, desc, square, iDir)
+  subroutine unpackHSdkBlacs_cmplx(myBlacs, orig, kCart, iNeighbour, nNeighbourSK, coord,&
+      & iSparseStart, img2CentCell, desc, square, iDir)
 
     !> BLACS matrix descriptor
     type(TBlacsEnv), intent(in) :: myBlacs
@@ -3702,8 +3707,8 @@ contains
     !> sparse matrix
     real(dp), intent(in) :: orig(:)
 
-    !> Relative coordinates of the K-point where the sparse matrix should be unfolded.
-    real(dp), intent(in) :: kPoint(:)
+    !> K-point in cartesian (absolute) units, i.e. 2 pi matmul(invLatVec, kPointRelative)
+    real(dp), intent(in) :: kCart(:)
 
     !> Neighbour list for each atom (First index from 0!)
     integer, intent(in) :: iNeighbour(0:, :)
@@ -3713,12 +3718,6 @@ contains
 
     !> List of all atomic coordinates
     real(dp), intent(in) :: coord(:,:)
-
-    !> Index of the cell translation vector for each atom.
-    integer, intent(in) :: iCellVec(:)
-
-    !> Relative coordinates of the cell translation vectors.
-    real(dp), intent(in) :: cellVec(:, :)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iSparseStart(0:, :)
@@ -3737,17 +3736,16 @@ contains
 
     complex(dp) :: phase
     integer :: iAtom1, iAtom2, iAtom2f, ii, iNeigh, iOrig, jj, nAtom, nOrb1, nOrb2
-    real(dp) :: kPoint2p(3), vec(3)
+    real(dp) :: vec(3)
 
     nAtom = size(iNeighbour, dim=2)
 
     @:ASSERT(nAtom > 0)
-    @:ASSERT(size(kPoint) == 3)
+    @:ASSERT(size(kCart) == 3)
     @:ASSERT(size(nNeighbourSK) == nAtom)
     @:ASSERT(size(desc%iAtomStart) == nAtom + 1)
 
     square(:, :) = cmplx(0, 0, dp)
-    kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     do iAtom1 = 1, nAtom
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
@@ -3758,7 +3756,7 @@ contains
         jj = desc%iAtomStart(iAtom2f)
         nOrb2 = desc%iAtomStart(iAtom2f + 1) - jj
         vec(:) = coord(:, iAtom2) - coord(:, iAtom1)
-        phase = imag * 2.0_dp * pi * vec(iDir) * exp(imag * dot_product(kPoint2p, vec))
+        phase = imag * vec(iDir) * exp(imag * dot_product(kCart, vec))
         call scalafx_addl2g(myBlacs%orbitalGrid, phase * reshape(orig(iOrig:iOrig+nOrb1*nOrb2-1),&
             & [nOrb2, nOrb1]), desc%blacsOrbSqr, jj, ii, square)
         if (iAtom1 /= iAtom2f) then
@@ -3775,10 +3773,15 @@ contains
   !> Second derivative wrt to k of unpacked sparse matrix converted into square form (complex
   !! version)
   !!
+  !! The matrix is unfolded in the atom position gauge, i.e. with Bloch phases
+  !! exp(i k . (r_b + T - r_a)) built from the absolute (cartesian) positions of the two atoms
+  !! involved, and is differentiated with respect to the cartesian components of k. The k-vector
+  !! must therefore be passed in absolute units, k = 2 pi matmul(invLatVec, kPointRelative).
+  !!
   !! Note: In contrast to the serial routines, both triangles of the resulting matrix are filled.
   !!
-  subroutine unpackHSd2kBlacs_cmplx(myBlacs, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec,&
-      & cellVec, iSparseStart, img2CentCell, desc, square, iDir, jDir)
+  subroutine unpackHSd2kBlacs_cmplx(myBlacs, orig, kCart, iNeighbour, nNeighbourSK, coord,&
+      & iSparseStart, img2CentCell, desc, square, iDir, jDir)
 
     !> BLACS matrix descriptor
     type(TBlacsEnv), intent(in) :: myBlacs
@@ -3786,8 +3789,8 @@ contains
     !> sparse matrix
     real(dp), intent(in) :: orig(:)
 
-    !> Relative coordinates of the K-point where the sparse matrix should be unfolded.
-    real(dp), intent(in) :: kPoint(:)
+    !> K-point in cartesian (absolute) units, i.e. 2 pi matmul(invLatVec, kPointRelative)
+    real(dp), intent(in) :: kCart(:)
 
     !> Neighbour list for each atom (First index from 0!)
     integer, intent(in) :: iNeighbour(0:, :)
@@ -3795,11 +3798,8 @@ contains
     !> Nr. of neighbours for each atom (incl. itself).
     integer, intent(in) :: nNeighbourSK(:)
 
-    !> Index of the cell translation vector for each atom.
-    integer, intent(in) :: iCellVec(:)
-
-    !> Relative coordinates of the cell translation vectors.
-    real(dp), intent(in) :: cellVec(:, :)
+    !> List of all atomic coordinates
+    real(dp), intent(in) :: coord(:,:)
 
     !> indexing array for the sparse Hamiltonian
     integer, intent(in) :: iSparseStart(0:, :)
@@ -3823,39 +3823,28 @@ contains
     integer :: nAtom
     integer :: iOrig, nOrb1, nOrb2, ii, jj
     integer :: iNeigh
-    integer :: iOldVec, iVec
     integer :: iAtom1, iAtom2, iAtom2f
-    real(dp) :: kPoint2p(3)
+    real(dp) :: vec(3)
 
     nAtom = size(iNeighbour, dim=2)
 
     @:ASSERT(nAtom > 0)
-    @:ASSERT(size(kPoint) == 3)
+    @:ASSERT(size(kCart) == 3)
     @:ASSERT(size(nNeighbourSK) == nAtom)
     @:ASSERT(size(desc%iAtomStart) == nAtom + 1)
 
     square(:, :) = cmplx(0, 0, dp)
-    kPoint2p(:) = 2.0_dp * pi * kPoint(:)
-    iOldVec = 0
-    phase = 1.0_dp
     do iAtom1 = 1, nAtom
       ii = desc%iAtomStart(iAtom1)
       nOrb1 = desc%iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
         iOrig = iSparseStart(iNeigh, iAtom1) + 1
         iAtom2 = iNeighbour(iNeigh, iAtom1)
-        iVec = iCellVec(iAtom2)
-        if (iVec == 0) then
-          cycle
-        end if
         iAtom2f = img2CentCell(iAtom2)
         jj = desc%iAtomStart(iAtom2f)
         nOrb2 = desc%iAtomStart(iAtom2f + 1) - jj
-        if (iVec /= iOldVec) then
-          phase = -4.0_dp * pi**2 * cellVec(iDir, iVec) * cellVec(jDir, iVec)&
-              & * exp(imag * dot_product(kPoint2p, cellVec(:, iVec)))
-          iOldVec = iVec
-        end if
+        vec(:) = coord(:, iAtom2) - coord(:, iAtom1)
+        phase = -vec(iDir) * vec(jDir) * exp(imag * dot_product(kCart, vec))
         call scalafx_addl2g(myBlacs%orbitalGrid, phase * reshape(orig(iOrig:iOrig+nOrb1*nOrb2-1),&
             & [nOrb2, nOrb1]), desc%blacsOrbSqr, jj, ii, square)
         if (iAtom1 /= iAtom2f) then
@@ -3872,11 +3861,16 @@ contains
 
   !> Derivative wrt to k of unpacked sparse matrix converted into square form (complex version)
   !!
+  !! The matrix is unfolded in the atom position gauge, i.e. with Bloch phases
+  !! exp(i k . (r_b + T - r_a)) built from the absolute (cartesian) positions of the two atoms
+  !! involved, and is differentiated with respect to the cartesian components of k. The k-vector
+  !! must therefore be passed in absolute units, k = 2 pi matmul(invLatVec, kPointRelative).
+  !!
   !! Note the non-on-site blocks are only filled in the lower triangle part of the matrix. To fill
   !! the matrix completely, apply the blockSymmetrizeHS subroutine.
   !!
-  subroutine unpackHSdk_cmplx(square, orig, kPoint, iNeighbour, nNeighbourSK, coord, iCellVec,&
-      & cellVec, iAtomStart, iSparseStart, img2CentCell, iDir)
+  subroutine unpackHSdk_cmplx(square, orig, kCart, iNeighbour, nNeighbourSK, coord, iAtomStart,&
+      & iSparseStart, img2CentCell, iDir)
 
     !> Square form matrix on exit wrt to partial k_iDir
     complex(dp), intent(out) :: square(:, :)
@@ -3884,8 +3878,8 @@ contains
     !> Sparse matrix
     real(dp), intent(in) :: orig(:)
 
-    !> Relative coordinates of the K-point where the sparse matrix should be unfolded.
-    real(dp), intent(in) :: kPoint(:)
+    !> K-point in cartesian (absolute) units, i.e. 2 pi matmul(invLatVec, kPointRelative)
+    real(dp), intent(in) :: kCart(:)
 
     !> Neighbour list for each atom (First index from 0!)
     integer, intent(in) :: iNeighbour(0:, :)
@@ -3895,12 +3889,6 @@ contains
 
     !> List of all atomic coordinates
     real(dp), intent(in) :: coord(:,:)
-
-    !> Index of the cell translation vector for each atom.
-    integer, intent(in) :: iCellVec(:)
-
-    !> Relative coordinates of the cell translation vectors.
-    real(dp), intent(in) :: cellVec(:, :)
 
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iAtomStart(:)
@@ -3916,19 +3904,18 @@ contains
 
     complex(dp) :: phase
     integer :: iAtom1, iAtom2, iAtom2f, ii, iNeigh, iOrig, iVec, jj, nAtom, nOrb1, nOrb2
-    real(dp) :: kPoint2p(3), vec(3)
+    real(dp) :: vec(3)
 
     nAtom = size(iNeighbour, dim=2)
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
     @:ASSERT(size(square, dim=1) == iAtomStart(nAtom+1) - 1)
-    @:ASSERT(all(shape(kPoint) == [3]))
+    @:ASSERT(all(shape(kCart) == [3]))
     @:ASSERT(all(shape(nNeighbourSK) == [nAtom]))
     @:ASSERT(size(iAtomStart) == nAtom + 1)
 
     square(:, :) = cmplx(0, 0, dp)
-    kPoint2p(:) = 2.0_dp * pi * kPoint(:)
     do iAtom1 = 1, nAtom
       ii = iAtomStart(iAtom1)
       nOrb1 = iAtomStart(iAtom1 + 1) - ii
@@ -3939,9 +3926,8 @@ contains
         jj = iAtomStart(iAtom2f)
         @:ASSERT(jj >= ii)
         nOrb2 = iAtomStart(iAtom2f + 1) - jj
-        iVec = iCellVec(iAtom2)
         vec(:) = coord(:, iAtom2) - coord(:, iAtom1)
-        phase = imag * 2.0_dp * pi * vec(iDir) * exp(imag * dot_product(kPoint2p, vec))
+        phase = imag * vec(iDir) * exp(imag * dot_product(kCart, vec))
         square(jj:jj+nOrb2-1, ii:ii+nOrb1-1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)&
             & + phase * reshape(orig(iOrig:iOrig+nOrb1*nOrb2-1), [nOrb2, nOrb1])
       end do
@@ -3953,11 +3939,16 @@ contains
   !> Second derivative wrt to k of unpacked sparse matrix converted into square form (complex
   !! version)
   !!
+  !! The matrix is unfolded in the atom position gauge, i.e. with Bloch phases
+  !! exp(i k . (r_b + T - r_a)) built from the absolute (cartesian) positions of the two atoms
+  !! involved, and is differentiated with respect to the cartesian components of k. The k-vector
+  !! must therefore be passed in absolute units, k = 2 pi matmul(invLatVec, kPointRelative).
+  !!
   !! Note the non-on-site blocks are only filled in the lower triangle part of the matrix. To fill
   !! the matrix completely, apply the blockSymmetrizeHS subroutine.
   !!
-  subroutine unpackHSd2k_cmplx(square, orig, kPoint, iNeighbour, nNeighbourSK, iCellVec, cellVec,&
-      & iAtomStart, iSparseStart, img2CentCell, iDir, jDir)
+  subroutine unpackHSd2k_cmplx(square, orig, kCart, iNeighbour, nNeighbourSK, coord, iAtomStart,&
+      & iSparseStart, img2CentCell, iDir, jDir)
 
     !> Square form matrix on exit differentiated wrt partial k_iDir partial k_jDir
     complex(dp), intent(out) :: square(:, :)
@@ -3965,8 +3956,8 @@ contains
     !> Sparse matrix
     real(dp), intent(in) :: orig(:)
 
-    !> Relative coordinates of the K-point where the sparse matrix should be unfolded.
-    real(dp), intent(in) :: kPoint(:)
+    !> K-point in cartesian (absolute) units, i.e. 2 pi matmul(invLatVec, kPointRelative)
+    real(dp), intent(in) :: kCart(:)
 
     !> Neighbour list for each atom (First index from 0!)
     integer, intent(in) :: iNeighbour(0:, :)
@@ -3974,11 +3965,8 @@ contains
     !> Nr. of neighbours for each atom (incl. itself).
     integer, intent(in) :: nNeighbourSK(:)
 
-    !> Index of the cell translation vector for each atom.
-    integer, intent(in) :: iCellVec(:)
-
-    !> Relative coordinates of the cell translation vectors.
-    real(dp), intent(in) :: cellVec(:, :)
+    !> List of all atomic coordinates
+    real(dp), intent(in) :: coord(:,:)
 
     !> Atom offset for the squared Hamiltonian
     integer, intent(in) :: iAtomStart(:)
@@ -3999,43 +3987,32 @@ contains
     integer :: nAtom
     integer :: iOrig, ii, jj
     integer :: iNeigh
-    integer :: iOldVec, iVec
     integer :: iAtom1, iAtom2, iAtom2f
     integer :: nOrb1, nOrb2
-    real(dp) :: kPoint2p(3)
+    real(dp) :: vec(3)
 
     nAtom = size(iNeighbour, dim=2)
 
     @:ASSERT(nAtom > 0)
     @:ASSERT(size(square, dim=1) == size(square, dim=2))
     @:ASSERT(size(square, dim=1) == iAtomStart(nAtom+1) - 1)
-    @:ASSERT(all(shape(kPoint) == [3]))
+    @:ASSERT(all(shape(kCart) == [3]))
     @:ASSERT(all(shape(nNeighbourSK) == [nAtom]))
     @:ASSERT(size(iAtomStart) == nAtom + 1)
 
     square(:, :) = cmplx(0, 0, dp)
-    kPoint2p(:) = 2.0_dp * pi * kPoint(:)
-    iOldVec = 0
-    phase = 1.0_dp
     do iAtom1 = 1, nAtom
       ii = iAtomStart(iAtom1)
       nOrb1 = iAtomStart(iAtom1 + 1) - ii
       do iNeigh = 0, nNeighbourSK(iAtom1)
         iOrig = iSparseStart(iNeigh, iAtom1) + 1
         iAtom2 = iNeighbour(iNeigh, iAtom1)
-        iVec = iCellVec(iAtom2)
-        if (iVec == 0) then
-          cycle
-        end if
         iAtom2f = img2CentCell(iAtom2)
         jj = iAtomStart(iAtom2f)
         @:ASSERT(jj >= ii)
         nOrb2 = iAtomStart(iAtom2f + 1) - jj
-        if (iVec /= iOldVec) then
-          phase = -4.0_dp * pi**2 * cellVec(iDir, iVec) * cellVec(jDir, iVec)&
-              & * exp(imag * dot_product(kPoint2p, cellVec(:, iVec)))
-          iOldVec = iVec
-        end if
+        vec(:) = coord(:, iAtom2) - coord(:, iAtom1)
+        phase = -vec(iDir) * vec(jDir) * exp(imag * dot_product(kCart, vec))
         square(jj:jj+nOrb2-1, ii:ii+nOrb1-1) = square(jj:jj+nOrb2-1, ii:ii+nOrb1-1)&
             & + phase * reshape(orig(iOrig:iOrig+nOrb1*nOrb2-1), [nOrb2, nOrb1])
       end do
