@@ -30,6 +30,18 @@ module dftbp_derivs_momentumelements
   private
   public :: momentumElements
 
+
+  !> Whether the Pulay term of the velocity operator is weighted with the mean of the two
+  !! eigenvalues, 1/2 (eps_a + eps_i), instead of with the eigenvalue of the occupied state alone.
+  !!
+  !! The mean is the only choice for which the momentum matrix is hermitian, p_ai = conjg(p_ia),
+  !! and the one for which the intra-cell part of the operator becomes exactly i omega_ai times
+  !! the Mulliken (length gauge) transition dipole sum_A tau_A q^A_ai. With the occupied
+  !! eigenvalue alone the whole overlap population of a bond is assigned to one of its two atoms,
+  !! which shortens the effective lever arm and loses oscillator strength (a factor 1 - S per
+  !! bond in a two-level dimer).
+  logical, parameter :: tSymmetricPulay = .true.
+
 contains
 
 
@@ -124,7 +136,10 @@ contains
 
     integer :: iAt, iK, iKS, iS, iCart, nOrbs, iTrans, nLocCol, nLocRow, iFil, iEmp, iOrb, ii, jj
     integer :: nAtom, nOrbAt
-    complex(dp), allocatable :: work(:,:), work2(:,:), dHamHyb_dk(:,:,:,:), hamHyb(:,:,:)
+    complex(dp), allocatable :: work(:,:), work2(:,:), workS(:,:), dHamHyb_dk(:,:,:,:)
+    complex(dp), allocatable :: hamHyb(:,:,:)
+    !! Eigenvalue weighting the Pulay term of the current transition
+    real(dp) :: epsPulay
     complex(dp), allocatable :: gaugeEigVecs(:,:), gaugePhase(:)
     integer, allocatable :: iOrb2Atom(:)
     real(dp), allocatable :: posOrb(:)
@@ -145,6 +160,7 @@ contains
 
     allocate(work(nLocCol, nLocRow))
     allocate(work2, mold=work)
+    allocate(workS, mold=work)
     allocate(gaugeEigVecs, mold=work)
     allocate(gaugePhase(nOrbs))
 
@@ -195,14 +211,12 @@ contains
       do iCart = 1, 3
 
         ! First term of (7) from 10.1103/PhysRevB.98.115115 since basis is non-orthogonal
-        ! Pulay term - e_i dS/dk |psi>
+        ! Pulay term dS/dk |psi>, kept separate from dH/dk |psi> so that its eigenvalue
+        ! weighting can be chosen per transition below
         work(:,:) = cmplx(0,0,dp)
         call unpackHSdk(work, ints%overlap, kCart, neighbourList%iNeighbour, nNeighbourSK,&
             & coord, denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
-        call hemm(work2, 'l', work, gaugeEigVecs)
-        do iOrb = 1, nOrbs
-          work2(:,iOrb) = -eigvals(iOrb, iK, iS) * work2(:,iOrb)
-        end do
+        call hemm(workS, 'l', work, gaugeEigVecs)
 
         ! dH/dk|psi>
         work(:,:) = cmplx(0,0,dp)
@@ -220,12 +234,18 @@ contains
                 & + imag * (posOrb(:) - posOrb(iOrb)) * hamHyb(:, iOrb, iKS))
           end do
         end if
-        call hemm(work2, 'l', work, gaugeEigVecs, beta=cmplx(1,0,dp))
+        call hemm(work2, 'l', work, gaugeEigVecs)
 
         do iTrans = 1, nTrans(iKS)
           iFil = getIA(iKS)%data(iTrans, 1)
           iEmp = getIA(iKS)%data(iTrans, 2)
-          pElement(iCart, iTrans, iKS) = dot_product(gaugeEigVecs(:,iEmp), work2(:,iFil))
+          if (tSymmetricPulay) then
+            epsPulay = 0.5_dp * (eigvals(iEmp, iK, iS) + eigvals(iFil, iK, iS))
+          else
+            epsPulay = eigvals(iFil, iK, iS)
+          end if
+          pElement(iCart, iTrans, iKS) = dot_product(gaugeEigVecs(:,iEmp), work2(:,iFil))&
+              & - epsPulay * dot_product(gaugeEigVecs(:,iEmp), workS(:,iFil))
         end do
 
         if (allocated(dab)) then
