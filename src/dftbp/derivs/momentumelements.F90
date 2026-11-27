@@ -30,14 +30,26 @@ module dftbp_derivs_momentumelements
   private
   public :: momentumElements
 
+
+  !> Whether the Pulay term of the velocity operator is weighted with the mean of the two
+  !! eigenvalues, 1/2 (eps_a + eps_i), instead of with the eigenvalue of the occupied state alone.
+  !!
+  !! The mean is the only choice for which the momentum matrix is hermitian, p_ai = conjg(p_ia),
+  !! and the one for which the intra-cell part of the operator becomes exactly i omega_ai times
+  !! the Mulliken (length gauge) transition dipole sum_A tau_A q^A_ai. With the occupied
+  !! eigenvalue alone the whole overlap population of a bond is assigned to one of its two atoms,
+  !! which shortens the effective lever arm and loses oscillator strength (a factor 1 - S per
+  !! bond in a two-level dimer).
+  logical, parameter :: tSymmetricPulay = .true.
+
 contains
 
 
   !> Calculate the momentum elements between occupied and virtual states
   subroutine momentumElements(env, pElement, parallelKS, eigvals, eigVecsCplx, ints, nTrans, getIA,&
       & wij, neighbourList, nNeighbourSK, symNeighbourList, nNeighbourCamSym, orb, denseDesc,&
-      & iSparseStart, img2CentCell, kPoint, kWeight, coord, rCellVecs, cellVec, iCellVec,&
-      & densityMatrix, hybridXc, dab, errStatus)
+      & iSparseStart, img2CentCell, kPoint, kWeight, coord, rCellVecs, cellVec, iCellVec, latVecs,&
+      & recVec2p, densityMatrix, hybridXc, dab, errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -104,6 +116,12 @@ contains
     !> Index for which unit cell atoms are associated with
     integer, intent(in) :: iCellVec(:)
 
+    !> Unit cell vectors
+    real(dp), intent(in) :: latVecs(:,:)
+
+    !> Reciprocal lattice vectors in units of 2 pi (i.e. the inverse lattice vectors)
+    real(dp), intent(in) :: recVec2p(:,:)
+
     !> Holds real and complex delta density matrices and pointers
     type(TDensityMatrix), intent(in) :: densityMatrix
 
@@ -117,9 +135,16 @@ contains
     type(TStatus), intent(out) :: errStatus
 
     integer :: iAt, iK, iKS, iS, iCart, nOrbs, iTrans, nLocCol, nLocRow, iFil, iEmp, iOrb, ii, jj
-    complex(dp), allocatable :: work(:,:), work2(:,:), dHamHyb_dk(:,:,:,:), gaugeEigVecs(:,:)
-    complex(dp) :: phase
-    real(dp) :: kVec(3)
+    integer :: nAtom, nOrbAt
+    complex(dp), allocatable :: work(:,:), work2(:,:), workS(:,:), dHamHyb_dk(:,:,:,:)
+    complex(dp), allocatable :: hamHyb(:,:,:)
+    !! Eigenvalue weighting the Pulay term of the current transition
+    real(dp) :: epsPulay
+    complex(dp), allocatable :: gaugeEigVecs(:,:), gaugePhase(:)
+    integer, allocatable :: iOrb2Atom(:)
+    real(dp), allocatable :: posOrb(:)
+    !! K-point in cartesian (absolute) units
+    real(dp) :: kCart(3)
 
   #:if WITH_SCALAPACK
 
@@ -135,11 +160,32 @@ contains
 
     allocate(work(nLocCol, nLocRow))
     allocate(work2, mold=work)
+    allocate(workS, mold=work)
+    allocate(gaugeEigVecs, mold=work)
+    allocate(gaugePhase(nOrbs))
+
+    nAtom = size(nNeighbourSK)
+
+    !! Map from basis functions to the atom they are centred on
+    allocate(iOrb2Atom(nOrbs))
+    allocate(posOrb(nOrbs))
+    do iAt = 1, nAtom
+      ii = denseDesc%iAtomStart(iAt)
+      jj = denseDesc%iAtomStart(iAt+1) - 1
+      iOrb2Atom(ii:jj) = iAt
+    end do
 
     if (allocated(hybridXc)) then
+      ! Derivatives of the non-local exchange contribution with respect to cartesian k
       call hybridXc%getCamHamiltonian_dkpts(env, denseDesc, orb, ints, densityMatrix,&
           & neighbourList, nNeighbourSK, symNeighbourList, nNeighbourCamSym, iCellVec, cellVec,&
-          & rCellVecs, iSparseStart, img2CentCell, kPoint, kWeight, dHamHyb_dk, errStatus)
+          & rCellVecs, iSparseStart, img2CentCell, kPoint, kWeight, latVecs, dHamHyb_dk, errStatus)
+      @:PROPAGATE_ERROR(errStatus)
+      ! The exchange operator is non-local, hence does not commute with the position operator and
+      ! contributes to the velocity operator also via i [R, H_cam] on gauge transformation
+      call hybridXc%getCamHamiltonian_kpts(env, denseDesc, orb, ints, densityMatrix,&
+          & neighbourList, nNeighbourSK, symNeighbourList, nNeighbourCamSym, iCellVec, cellVec,&
+          & rCellVecs, iSparseStart, img2CentCell, kPoint, kWeight, hamHyb, errStatus)
       @:PROPAGATE_ERROR(errStatus)
     end if
 
@@ -148,75 +194,84 @@ contains
       iK = parallelKS%localKS(1, iKS)
       iS = parallelKS%localKS(2, iKS)
 
-      gaugeEigVecs = eigVecsCplx(:,:,iKS)
-      ! Transform to better convention to evaluate optical matrix elements
-      kVec(:) = 2.0_dp * pi * kPoint(:,iK)
-      do iAt = 1, size(nNeighbourSK)
+      ! Transform into the atom position gauge (convention II) to evaluate optical matrix
+      ! elements, i.e. |c~> = V |c> with V = diag(exp(i k . R_atom)). Note that the k-vector is
+      ! needed in cartesian (absolute) units here, as it multiplies cartesian atomic positions
+      kCart(:) = 2.0_dp * pi * matmul(recVec2p, kPoint(:,iK))
+      do iAt = 1, nAtom
         ii = denseDesc%iAtomStart(iAt)
         jj = denseDesc%iAtomStart(iAt+1)-1
-        phase = exp(imag * dot_product(kVec, coord(:, iAt)))
-        gaugeEigVecs(ii:jj, :) = gaugeEigVecs(ii:jj, :) * phase
+        gaugePhase(ii:jj) = exp(imag * dot_product(kCart, coord(:, iAt)))
+      end do
+      gaugeEigVecs(:,:) = eigVecsCplx(:,:,iKS)
+      do iOrb = 1, nOrbs
+        gaugeEigVecs(:, iOrb) = gaugePhase * gaugeEigVecs(:, iOrb)
       end do
 
       do iCart = 1, 3
 
         ! First term of (7) from 10.1103/PhysRevB.98.115115 since basis is non-orthogonal
-        ! Pulay term - e_i dS/dk |psi>
+        ! Pulay term dS/dk |psi>, kept separate from dH/dk |psi> so that its eigenvalue
+        ! weighting can be chosen per transition below
         work(:,:) = cmplx(0,0,dp)
-        call unpackHSdk(work, ints%overlap, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
-            & coord, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
-        call hemm(work2, 'l', work, gaugeEigVecs)
-        do iOrb = 1, nOrbs
-          work2(:,iOrb) = -eigvals(iOrb, iK, iS) * work2(:,iOrb)
-        end do
+        call unpackHSdk(work, ints%overlap, kCart, neighbourList%iNeighbour, nNeighbourSK,&
+            & coord, denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
+        call hemm(workS, 'l', work, gaugeEigVecs)
 
         ! dH/dk|psi>
         work(:,:) = cmplx(0,0,dp)
-        call unpackHSdk(work, ints%hamiltonian(:,iS), kPoint(:,iK), neighbourList%iNeighbour,&
-            & nNeighbourSK, coord, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart,&
-            & img2CentCell, iCart)
+        call unpackHSdk(work, ints%hamiltonian(:,iS), kCart, neighbourList%iNeighbour,&
+            & nNeighbourSK, coord, denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
         if (allocated(hybridXc)) then
-          work(:,:) = work + dHamHyb_dk(:, :, iKS, iCart)
+          ! The CAM parts are evaluated in the cell (convention I) gauge, so transform them into
+          ! the same gauge as the analytical derivatives above,
+          !   dH^at/dk = V (dH^cell/dk + i [R, H^cell]) V^dagger
+          ! (only the lower triangle is needed, as the result is used by hemm below)
+          posOrb(:) = coord(iCart, iOrb2Atom)
+          do iOrb = 1, nOrbs
+            work(:, iOrb) = work(:, iOrb) + gaugePhase * conjg(gaugePhase(iOrb))&
+                & * (dHamHyb_dk(:, iOrb, iKS, iCart)&
+                & + imag * (posOrb(:) - posOrb(iOrb)) * hamHyb(:, iOrb, iKS))
+          end do
         end if
-        call hemm(work2, 'l', work, gaugeEigVecs, beta=cmplx(1,0,dp))
+        call hemm(work2, 'l', work, gaugeEigVecs)
 
         do iTrans = 1, nTrans(iKS)
           iFil = getIA(iKS)%data(iTrans, 1)
           iEmp = getIA(iKS)%data(iTrans, 2)
-          pElement(iCart, iTrans, iKS) = dot_product(gaugeEigVecs(:,iEmp), work2(:,iFil))
+          if (tSymmetricPulay) then
+            epsPulay = 0.5_dp * (eigvals(iEmp, iK, iS) + eigvals(iFil, iK, iS))
+          else
+            epsPulay = eigvals(iFil, iK, iS)
+          end if
+          pElement(iCart, iTrans, iKS) = dot_product(gaugeEigVecs(:,iEmp), work2(:,iFil))&
+              & - epsPulay * dot_product(gaugeEigVecs(:,iEmp), workS(:,iFil))
         end do
 
         if (allocated(dab)) then
           ! On-site dipole elements
 
           work(:,:) = cmplx(0,0,dp)
-          do iAt = 1, size(nNeighbourSK)
+          do iAt = 1, nAtom
             ii = denseDesc%iAtomStart(iAt)
             jj = denseDesc%iAtomStart(iAt+1)-1
-            work(ii:jj,ii:jj) = dab(orb%nOrbAtom(iAt), orb%nOrbAtom(iAt), iAt, iCart)
+            nOrbAt = orb%nOrbAtom(iAt)
+            work(ii:jj,ii:jj) = dab(:nOrbAt, :nOrbAt, iAt, iCart)
           end do
 
           call hemm(work2, 'l', work, gaugeEigVecs)
 
+          ! A dipole matrix element d contributes i omega_ai d to the velocity operator. Note, the
+          ! overlap weighting of the intra-atomic dipoles (i omega <a|S d|i>) is neglected here,
+          ! being of the same order as the approximations in the dipole elements themselves
           do iTrans = 1, nTrans(iKS)
             iFil = getIA(iKS)%data(iTrans, 1)
             iEmp = getIA(iKS)%data(iTrans, 2)
             pElement(iCart, iTrans, iKS) = pElement(iCart, iTrans, iKS)&
-                & + wij(iKS)%data(nTrans(iKS)) * dot_product(gaugeEigVecs(:,iEmp), work2(:,iFil))
+                & + imag * wij(iKS)%data(iTrans) * dot_product(gaugeEigVecs(:,iEmp), work2(:,iFil))
           end do
 
         end if
-
-        !do iTrans = 1, nTrans(iKS)
-        !  do iAt = 1, size(nNeighbourSK)
-        !    ii = denseDesc%iAtomStart(iAt)
-        !    jj = denseDesc%iAtomStart(iAt+1)-1
-        !    pElement(iCart, iTrans, iKS) = pElement(iCart, iTrans, iKS)&
-        !        & - imag * wij(iKS)%data(iTrans)&
-        !        & * dot_product(gaugeEigVecs(ii:jj, getIA(iKS)%data(iTrans,2)),&
-        !        & gaugeEigVecs(ii:jj, getIA(iKS)%data(iTrans,1))) * coord(iCart, iAt)
-        !  end do
-        !end do
 
       end do
 

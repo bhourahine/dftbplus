@@ -11,7 +11,7 @@
 !> Module for linear response calculations
 module dftbp_derivs_linearresponse
   use dftbp_common_accuracy, only : dp
-  use dftbp_common_constants, only : Hartree__eV
+  use dftbp_common_constants, only : Hartree__eV, pi
   use dftbp_common_environment, only : TEnvironment
   use dftbp_common_status, only : TStatus
   use dftbp_derivs_fermihelper, only : deltamn, invDiff, theta
@@ -19,6 +19,7 @@ module dftbp_derivs_linearresponse
   use dftbp_dftb_hybridxc, only : THybridXcFunc
   use dftbp_dftb_periodic, only : TNeighbourList
   use dftbp_io_taggedoutput, only : TTaggedWriter, tagLabels
+  use dftbp_math_simplealgebra, only : invert33
   use dftbp_type_commontypes, only : TOrbitals
   use dftbp_type_densedescr, only : TDenseDescr
   use dftbp_type_parallelks, only : TParallelKS
@@ -2340,6 +2341,8 @@ contains
     complex(dp), allocatable :: work3Local(:,:), eigvecsTransformed(:,:)
     logical :: isTransformed
     integer :: fdResults
+    !! Inverse lattice vectors and the k-point in cartesian (absolute) units
+    real(dp) :: recVec2p(3,3), kCart(3)
 
     type(TRotateDegen) :: transform
 
@@ -2360,6 +2363,10 @@ contains
     nOrbs = size(eigVals,dim=1)
     nSpin = size(eigVals,dim=3)
     nKpts = size(eigVals,dim=2)
+
+    !! Reciprocal lattice vectors in units of 2 pi, to obtain cartesian k-vectors
+    call invert33(recVec2p, latVec)
+    recVec2p(:,:) = transpose(recVec2p)
 
     allocate(dEi(nOrbs, nKpts, nSpin, 3))
     dEi(:,:,:,:) = 0.0_dp
@@ -2386,17 +2393,17 @@ contains
 
       call blocks%init(env%blacs%orbitalGrid, desc, "c")
 
+      kCart(:) = 2.0_dp * pi * matmul(recVec2p, kPoint(:,iK))
+
       do iCart = 1, 3
 
         eigvecsTransformed = eigVecsCplx(:,:,iKS)
 
-        call unpackHSdk(env%blacs, ham(:,iS), kPoint(:,iK), neighbourList%iNeighbour,&
-            & nNeighbourSK, coord, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc,&
-            & dHamSqr, iCart)
+        call unpackHSdk(env%blacs, ham(:,iS), kCart, neighbourList%iNeighbour,&
+            & nNeighbourSK, coord, iSparseStart, img2CentCell, denseDesc, dHamSqr, iCart)
 
-        call unpackHSdk(env%blacs, over, kPoint(:,iK), neighbourList%iNeighbour,&
-            & nNeighbourSK, coord, iCellVec, cellVec, iSparseStart, img2CentCell, denseDesc,&
-            & dOverSqr, iCart)
+        call unpackHSdk(env%blacs, over, kCart, neighbourList%iNeighbour,&
+            & nNeighbourSK, coord, iSparseStart, img2CentCell, denseDesc, dOverSqr, iCart)
 
         ! e_i |c_i>
         do ii = 1, blocks%getSize()
@@ -2511,13 +2518,18 @@ contains
 
     call TRotateDegen_init(transform)
 
-    call unpackHS(overSqr, over, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iCellVec,&
-        & cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
-
     do iKS = 1, parallelKS%nLocalKS
 
       iK = parallelKS%localKS(1, iKS)
       iS = parallelKS%localKS(2, iKS)
+
+      call unpackHS(overSqr, over, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK, iCellVec,&
+          & cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell)
+
+      !! Note: the derivatives below are evaluated in the atom position gauge, while the
+      !! eigenvectors are in the cell gauge of the k-space Hamiltonian. The resulting eigenvalue
+      !! derivatives (diagonal elements) are gauge invariant, the off-diagonal elements are not.
+      kCart(:) = 2.0_dp * pi * matmul(recVec2p, kPoint(:,iK))
 
       ! e_i <c_i|
       do iOrb = 1, nOrbs
@@ -2528,10 +2540,10 @@ contains
 
         dOverSqr(:,:) = cmplx(0,0,dp)
         dHamSqr(:,:) = cmplx(0,0,dp)
-        call unpackHSdk(dOverSqr, over, kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
-            & coord, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
-        call unpackHSdk(dHamSqr, ham(:,iS), kPoint(:,iK), neighbourList%iNeighbour, nNeighbourSK,&
-            & coord, iCellVec, cellVec, denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
+        call unpackHSdk(dOverSqr, over, kCart, neighbourList%iNeighbour, nNeighbourSK, coord,&
+            & denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
+        call unpackHSdk(dHamSqr, ham(:,iS), kCart, neighbourList%iNeighbour, nNeighbourSK, coord,&
+            & denseDesc%iAtomStart, iSparseStart, img2CentCell, iCart)
 
         ! form |c> H' - e S' <c|
         call hemm(workLocal, 'l', dHamSqr, eigVecsCplx(:,:,iKS))

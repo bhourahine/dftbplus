@@ -65,8 +65,8 @@ contains
   subroutine dielectric(env, settings, parallelKS, eigvals, filling, eigVecsCplx, ints,&
       & neighbourList, nNeighbourSK, symNeighbourList, nNeighbourCamSym, orb, denseDesc,&
       & iSparseStart, img2CentCell, kPoint, kWeight, coord, rCellVecs, cellVec, iCellVec, latVecs,&
-      & densityMatrix, hybridXc, taggedWriter, isAutotestWritten, isResultsTagWritten, dab,&
-      & errStatus)
+      & recVec2p, densityMatrix, hybridXc, taggedWriter, isAutotestWritten, isResultsTagWritten,&
+      & dab, errStatus)
 
     !> Environment settings
     type(TEnvironment), intent(inout) :: env
@@ -133,6 +133,9 @@ contains
 
     !> Unit cell vectors
     real(dp), intent(in) :: latVecs(:,:)
+
+    !> Reciprocal lattice vectors in units of 2 pi (i.e. the inverse lattice vectors)
+    real(dp), intent(in) :: recVec2p(:,:)
 
     !> Holds real and complex delta density matrices and pointers
     type(TDensityMatrix), intent(in) :: densityMatrix
@@ -267,7 +270,8 @@ contains
     call momentumElements(env, pElement, parallelKS, eigvals, eigVecsCplx, ints, nTrans, getIA,&
         & wij, neighbourList, nNeighbourSK, symNeighbourList, nNeighbourCamSym, orb, denseDesc,&
         & iSparseStart, img2CentCell, kPoint, kWeight, coord, rCellVecs, cellVec, iCellVec,&
-        & densityMatrix, hybridXc, dab, errStatus)
+        & latVecs, recVec2p, densityMatrix, hybridXc, dab, errStatus)
+    @:PROPAGATE_ERROR(errStatus)
 
     allocate(imChi(6, 0:nEgyPts), source = 0.0_dp)
 
